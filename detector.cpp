@@ -60,6 +60,10 @@ int main (int argc, char * argv[]) {
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
 	
+    while (true) {
+        
+        sleep(1);
+    }
     
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;

@@ -14,7 +14,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdio.h>  // perror(3)
 #include <stdlib.h> // exit()
+#include <signal.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -30,11 +32,71 @@ namespace fs = boost::filesystem;
 
 static pid_t nims_launch_process(const fs::path& absolute_path, const vector<string>& args)
 {
-    cout << string(__func__) + string(":\n\t") + absolute_path.string() << endl;
-    for (vector<string>::const_iterator it = args.begin(); it != args.end(); ++it)
-        cout << "\t\t" + *it << endl;
-    static pid_t pid = 0;
-    return ++pid;
+    char **env = environ;
+    char **argv = (char **)calloc(args.size() + 2, sizeof(char *));
+
+    // first arg is always the program we're executing
+    argv[0] = strdup(absolute_path.string().c_str());
+
+    // copy the remaining arguments as C strings
+    int argidx = 1;
+    for (vector<string>::const_iterator it = args.begin(); it != args.end(); ++it) {
+        argv[argidx] = strdup((*it).c_str());
+        argidx++;
+    }
+    
+    int blockpipe[2] = { -1, -1 };
+    if (pipe(blockpipe))
+        perror("failed to create blockpipe");
+    
+    // set child process group ID to be the same as parent
+    const pid_t pgid = getpgid(getpid());
+    
+    pid_t pid = fork();
+    if (0 == pid) {
+        
+        (void)setpgid(getpid(), pgid);
+        
+        // block until the parent finishes any setup
+        char ignored;
+        read(blockpipe[0], &ignored, 1);
+        close(blockpipe[0]);
+        
+        int ret = execve(argv[0], argv, env);
+        _exit(ret);
+        
+    }
+    else if (-1 == pid) {
+        int fork_error = errno;
+        
+        // all setup is complete, so now widow the pipe and exec in the child
+        close(blockpipe[0]);   
+        close(blockpipe[1]);
+    }
+    else {
+        // parent process
+        
+        // all setup is complete, so now widow the pipe and exec in the child
+        close(blockpipe[0]);   
+        close(blockpipe[1]);
+    }
+    
+    // free all of the strdup'ed args
+    char **freePtr = argv;
+    while (NULL != *freePtr) { 
+        free(*freePtr++);
+    }
+    free(argv);
+    
+    return pid;
+}
+
+volatile int sigint_received = 0;
+
+static void sig_handler(int sig)
+{
+    if (SIGINT == sig)
+        sigint_received++;
 }
 
 int main (int argc, char * argv[]) {
@@ -81,8 +143,13 @@ int main (int argc, char * argv[]) {
             app_args.push_back(app["args"][j].as<string>());
         fs::path name(app["name"].as<string>());
         const pid_t pid = nims_launch_process(bin_dir / name, app_args);
-        if (pid > 0)
+        if (pid > 0) {
             pids.push_back(pid);
+            cerr << "Launched " << name.string() << " as pid " << pid << endl;
+        }
+        else {
+            cerr << "Failed to launch " << name.string() << endl;
+        }
     }
     
     cout << "dumping config:" << "\n";
@@ -91,6 +158,36 @@ int main (int argc, char * argv[]) {
     cout << "launched processes: " << endl;
     for (vector<pid_t>::iterator it = pids.begin(); it != pids.end(); ++it) {
         cout << "pid: " << *it << endl;
+    }
+    
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT, sig_handler);
+    
+    while (true) {
+        
+        if (sigint_received) {
+            
+            cerr << "received SIGINT" << endl;
+            
+            for (vector<pid_t>::iterator it = pids.begin(); it != pids.end(); ++it) {
+                
+                const pid_t child_pid = *it;
+                // of course, this is a race condition if true and the child exits...
+                if (getpgid(getpid()) == getpgid(child_pid)) {
+                    cerr << "sending signal to child pid " << child_pid << endl;
+                    kill(child_pid, SIGINT);
+                }
+                else {
+                    cerr << "pid: " << child_pid << " is not part of this process group" << endl;
+                }
+            }
+            
+            //killpg(getpgrp(), SIGINT);
+            
+            exit(1);
+        }
+        
+        sleep(1);
     }
     
     /*
