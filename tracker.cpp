@@ -23,7 +23,7 @@ namespace po = boost::program_options;
 //namespace fs = boost::filesystem;
 
 
-int main (int argc, char * const argv[]) {
+int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
 	//

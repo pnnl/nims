@@ -19,20 +19,32 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
+#include "yaml-cpp/yaml.h"
+
 using namespace std;
 using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
+#define CFG_PATH "/home/amaxwell/NIMS/nims-source/config.yaml"
 
-int main (int argc, char * const argv[]) {
+static pid_t nims_launch_process(const fs::path& absolute_path, const vector<string>& args)
+{
+    cout << string(__func__) + string(":\n\t") + absolute_path.string() << endl;
+    for (vector<string>::const_iterator it = args.begin(); it != args.end(); ++it)
+        cout << "\t\t" + *it << endl;
+    static pid_t pid = 0;
+    return ++pid;
+}
+
+int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
 	//
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("cfg,c", po::value<string>()->default_value( "nimsconfig.txt" ),         "path to config file")
+	("cfg,c", po::value<string>()->default_value( CFG_PATH ),         "path to config file")
 	//("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;
@@ -56,23 +68,34 @@ int main (int argc, char * const argv[]) {
     }
 	
     fs::path cfgfilepath( options["cfg"].as<string>() );
-	//unsigned int bar = options["bar"].as<unsigned int>();
+    YAML::Node config = YAML::LoadFile(cfgfilepath.string());
+    fs::path bin_dir(config["BINARY_DIR"].as<string>());
     
-	//--------------------------------------------------------------------------
-	// DO STUFF
-	cout << endl << "Starting " << argv[0] << endl;
-	
-    pid_t pids[10]; // more than enough
-    // TODO:  Read list of processes from config file.
-    vector<string> proc_filenames;
-    proc_filenames.push_back("./ingester");
-    proc_filenames.push_back("./detector");
-    proc_filenames.push_back("./tracker");
+    YAML::Node applications = config["APPLICATIONS"];
+    vector<pid_t> pids;
     
-    for (int i=0; i<proc_filenames.size(); ++i) {
-        cout << proc_filenames[i] << endl;
+    for (int i = 0; i < applications.size(); i++) {
+        YAML::Node app = applications[i];
+        vector<string> app_args;
+        for (int j = 0; j < app["args"].size(); j++)
+            app_args.push_back(app["args"][j].as<string>());
+        fs::path name(app["name"].as<string>());
+        const pid_t pid = nims_launch_process(bin_dir / name, app_args);
+        if (pid > 0)
+            pids.push_back(pid);
     }
-	   
-	cout << endl << "Ending " << argv[0] << endl << endl;
+    
+    cout << "dumping config:" << "\n";
+    cout << config << "\n";
+    
+    cout << "launched processes: " << endl;
+    for (vector<pid_t>::iterator it = pids.begin(); it != pids.end(); ++it) {
+        cout << "pid: " << *it << endl;
+    }
+    
+    /*
+    Need to wait here?
+    */
+
     return 0;
 }

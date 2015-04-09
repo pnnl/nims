@@ -32,7 +32,7 @@ void cleanupiNotify(int fd, int wd)
     ( void ) close( fd );
 }
 
-int main (int argc, char * const argv[]) {
+int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
 	//

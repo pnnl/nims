@@ -1,0 +1,17 @@
+---
+
+BINARY_DIR: /home/amaxwell/NIMS/build-nims
+
+APPLICATIONS:
+    - name: detector
+      args:
+        - "--help"
+    - name: ingester
+      args:
+        - "--help"
+    - name: tracker
+      args:
+        - "--help"
+ 
+
+...
