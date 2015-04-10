@@ -1,7 +1,9 @@
 ---
 
-BINARY_DIR: /home/amaxwell/NIMS/build-nims
+# default to the same dir as the config file
+BINARY_DIR: .
 
+# "name" is a path relative to BINARY_DIR
 APPLICATIONS:
     - name: detector
       args:

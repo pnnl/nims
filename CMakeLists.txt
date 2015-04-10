@@ -33,3 +33,11 @@ target_link_libraries(tracker ${Boost_LIBRARIES})
 
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES})
 
+# only copies once
+# file(COPY ${PROJECT_SOURCE_DIR}/config.yaml
+#     DESTINATION ${CMAKE_BINARY_DIR}
+# )
+
+ADD_CUSTOM_COMMAND(TARGET nims
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${PROJECT_SOURCE_DIR}/config.yaml $<TARGET_FILE_DIR:nims>)

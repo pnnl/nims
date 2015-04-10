@@ -28,8 +28,6 @@ using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-#define CFG_PATH "/home/amaxwell/NIMS/nims-source/config.yaml"
-
 static pid_t nims_launch_process(const fs::path& absolute_path, const vector<string>& args)
 {
     char **env = environ;
@@ -106,7 +104,7 @@ int main (int argc, char * argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("cfg,c", po::value<string>()->default_value( CFG_PATH ),         "path to config file")
+	("cfg,c", po::value<string>()->default_value( "config.yaml" ),         "path to config file")
 	//("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;
