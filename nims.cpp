@@ -17,10 +17,18 @@
 #include <stdio.h>  // perror(3)
 #include <stdlib.h> // exit()
 #include <signal.h>
+#include <sys/resource.h>
+
+// for POSIX shared memory
+#include "nims_includes.h"
+#include <fcntl.h>    // O_* constants
+#include <unistd.h>   // sysconf
+#include <sys/mman.h> // mmap, shm_open
+#include <mqueue.h>
+#include <sys/epoll.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-
 #include "yaml-cpp/yaml.h"
 
 using namespace std;
@@ -47,6 +55,16 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
     if (pipe(blockpipe))
         perror("failed to create blockpipe");
     
+   /*
+    Figure out the max number of file descriptors for a process; getrlimit is not listed as
+    async-signal safe in the sigaction(2) man page, so we assume it's not safe to call after 
+    fork().  The fork(2) page says that child rlimits are set to zero.
+    */
+   int max_open_files = sysconf(_SC_OPEN_MAX);
+   struct rlimit open_file_limit;
+   if (getrlimit(RLIMIT_NOFILE, &open_file_limit) == 0)
+       max_open_files = (int)open_file_limit.rlim_cur;
+    
     // set child process group ID to be the same as parent
     const pid_t pgid = getpgid(getpid());
     
@@ -54,6 +72,14 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
     if (0 == pid) {
         
         (void)setpgid(getpid(), pgid);
+        
+        int j;
+        for (j = (STDERR_FILENO + 1); j < max_open_files; j++) {
+            
+            // don't close this until we're done reading from it!
+            if (blockpipe[0] != j)
+                (void) close(j);
+        }
         
         // block until the parent finishes any setup
         char ignored;
@@ -89,7 +115,78 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
     return pid;
 }
 
-volatile int sigint_received = 0;
+#if 0
+static void readFrameBuffer()
+{
+    static int64_t fbCount = 0;
+    
+    string sharedName("/framebuffer-");
+    sharedName += boost::lexical_cast<string>(fbCount++);
+    
+    /*
+     Create -rw------- since we don't need executable pages.
+     Using O_EXCL could be safer, but these can still exist
+     in /dev/shm after a program crash.
+    */
+    int fd = shm_open(sharedName.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+    
+    // !!! early return
+    if (-1 == fd) {
+        perror("shm_open() in ingester::processFile");
+        return -1;
+    }
+    
+    size_t mapLength = sizeForFrameBuffer(nfb);
+    assert(mapLength > sizeof(NIMSFrameBuffer));
+    
+    // !!! early return
+    // could use fallocate or posix_fallocate, but ftruncate is portable
+    if (0 != ftruncate(fd, mapLength)) {
+        perror("ftruncate() in ingest::processFile");
+        shm_unlink(sharedName.c_str());
+        return -1;
+    }
+
+    // mmap a shared framebuffer on the file descriptor we have from shm_open
+    NIMSFrameBuffer *sharedBuffer;
+    sharedBuffer = (NIMSFrameBuffer *)mmap(NULL, mapLength, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    
+    // !!! early return
+    if (MAP_FAILED == sharedBuffer) {
+        perror("mmap() in ingester::processFile");
+        shm_unlink(sharedName.c_str());
+        return -1;
+    }
+    
+    // copy data to the shared framebuffer
+    sharedBuffer->dataLength = nfb->dataLength;
+    memcpy(&sharedBuffer->data, nfb->data, nfb->dataLength);
+    
+    // create a message to notify the observer
+    NIMSIngestMessage msg;
+    msg.dataLength = sharedBuffer->dataLength;
+    msg.name = { '\0' };
+    
+    // this should never happen, unless we have fbCount with >200 digits
+    assert((sharedName.size() + 1) < sizeof(msg.name));
+    strcpy(msg.name, sharedName.c_str());
+    
+    // done with the region in this process; ok to do this?
+    // pretty sure we can't shm_unlink here
+    munmap(sharedBuffer, mapLength);
+    sharedBuffer = NULL;
+    
+    // why is the message a const char *?
+    if (mq_send(ingestMessageQueue, (const char *)&msg, sizeof(msg), 0) == -1) {
+        perror("mq_send in ingester::processFile");
+        return -1;
+    }
+    
+    return nfb->dataLength;
+}
+#endif
+
+static volatile int sigint_received = 0;
 
 static void sig_handler(int sig)
 {
@@ -161,7 +258,54 @@ int main (int argc, char * argv[]) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);
     
+    struct mq_attr attr;
+    memset(&attr, 0, sizeof(struct mq_attr));
+    // ??? I can set this at 300 in my test program, but this chokes if it's > 10. WTF?
+    attr.mq_maxmsg = 10;
+    attr.mq_msgsize = sizeof(NIMSIngestMessage);
+    attr.mq_flags = 0;
+    
+    /*
+      Now that all subprocesses are running, this message queue should already
+      exist, so we can open it read-only.
+     */
+    
+    mqd_t ingestMessageQueue = mq_open(MQ_INGEST_QUEUE, O_RDWR, S_IRUSR | S_IWUSR, &attr);
+    
+    int nfds, epollfd;
+    epollfd = epoll_create(1);
+    if (-1 == epollfd) {
+        perror("epollcreate() failed in nims");
+        exit(1);
+    }
+    
+#define MAX_EVENTS 10
+    struct epoll_event ev, events[MAX_EVENTS];
+    ev.events = EPOLLIN;
+    ev.data.fd = ingestMessageQueue;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ingestMessageQueue, &ev) == -1) {
+        perror("epoll_ctl() failed in nims");
+        exit(2);
+    }
+    
     while (true) {
+        
+        nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        if (-1 == nfds) {
+            perror("epoll_wait() failed in nims");
+            exit(3);
+        }
+        
+        for (int n = 0; n < nfds; ++n) {
+            
+            if (events[n].data.fd == ingestMessageQueue) {
+                
+                // Now eat all of the messages
+                NIMSIngestMessage msg;
+                while (mq_receive (ingestMessageQueue, (char *)&msg, sizeof(msg), NULL) != -1) 
+                     printf ("Received a message with length %d for name %s.\n", msg.dataLength, msg.name);
+            }
+        }
         
         if (sigint_received) {
             
@@ -187,6 +331,9 @@ int main (int argc, char * argv[]) {
         
         sleep(1);
     }
+    
+    close(epollfd);
+    mq_close(ingestMessageQueue);
     
     /*
     Need to wait here?
