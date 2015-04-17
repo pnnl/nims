@@ -9,7 +9,7 @@ APPLICATIONS:
       args:
     - name: ingester
       args:
-          - i
+          - -i
           - /tmp
     - name: tracker
       args:
