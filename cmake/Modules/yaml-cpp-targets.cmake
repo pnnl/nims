@@ -45,7 +45,7 @@ add_library(yaml-cpp STATIC IMPORTED)
 set_property(TARGET yaml-cpp APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(yaml-cpp PROPERTIES
   IMPORTED_LINK_INTERFACE_LANGUAGES_RELEASE "CXX"
-  IMPORTED_LOCATION_RELEASE "/home/amaxwell/NIMS/vendorsrc/yaml-cpp-release-0.5.2/build/libyaml-cpp.a"
+  IMPORTED_LOCATION_RELEASE "/usr/local/lib/libyaml-cpp.a"
   )
 
 # This file does not depend on other imported targets which have
