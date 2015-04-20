@@ -36,8 +36,12 @@ using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-static pid_t nims_launch_process(const fs::path& absolute_path, const vector<string>& args)
-{
+static volatile int sigint_received = 0;
+
+// !!! create NimsTask objects that are killable and track name/pid
+static pid_t LaunchProcess(const fs::path &absolute_path, 
+        const vector<string> &args)
+{    
     char **env = environ;
     char **argv = (char **)calloc(args.size() + 2, sizeof(char *));
 
@@ -46,7 +50,8 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
 
     // copy the remaining arguments as C strings
     int argidx = 1;
-    for (vector<string>::const_iterator it = args.begin(); it != args.end(); ++it) {
+    vector<string>::const_iterator it;
+    for (it = args.begin(); it != args.end(); ++it) {
         argv[argidx] = strdup((*it).c_str());
         argidx++;
     }
@@ -56,9 +61,10 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
         perror("failed to create blockpipe");
     
    /*
-    Figure out the max number of file descriptors for a process; getrlimit is not listed as
-    async-signal safe in the sigaction(2) man page, so we assume it's not safe to call after 
-    fork().  The fork(2) page says that child rlimits are set to zero.
+    Figure out the max number of file descriptors for a process; 
+    getrlimit is not listed as async-signal safe in the sigaction(2) 
+    man page, so we assume it's not safe to call after  fork().
+    The fork(2) page says that child rlimits are set to zero.
     */
    int max_open_files = sysconf(_SC_OPEN_MAX);
    struct rlimit open_file_limit;
@@ -89,15 +95,13 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
         int ret = execve(argv[0], argv, env);
         _exit(ret);
         
-    }
-    else if (-1 == pid) {
+    } else if (-1 == pid) {
         int fork_error = errno;
         
         // all setup is complete, so now widow the pipe and exec in the child
         close(blockpipe[0]);   
         close(blockpipe[1]);
-    }
-    else {
+    } else {
         // parent process
         
         // all setup is complete, so now widow the pipe and exec in the child
@@ -106,89 +110,60 @@ static pid_t nims_launch_process(const fs::path& absolute_path, const vector<str
     }
     
     // free all of the strdup'ed args
-    char **freePtr = argv;
-    while (NULL != *freePtr) { 
-        free(*freePtr++);
+    char **free_ptr = argv;
+    while (NULL != *free_ptr) { 
+        free(*free_ptr++);
     }
     free(argv);
     
     return pid;
 }
 
-#if 0
-static void readFrameBuffer()
-{
-    static int64_t fbCount = 0;
-    
-    string sharedName("/framebuffer-");
-    sharedName += boost::lexical_cast<string>(fbCount++);
-    
-    /*
-     Create -rw------- since we don't need executable pages.
-     Using O_EXCL could be safer, but these can still exist
-     in /dev/shm after a program crash.
-    */
-    int fd = shm_open(sharedName.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
+{        
+    int fd = shm_open(msg->shm_open_name, O_RDONLY, S_IRUSR);
     
     // !!! early return
     if (-1 == fd) {
-        perror("shm_open() in ingester::processFile");
-        return -1;
+        perror("shm_open() in nims::ProcessSharedFramebufferMessage");
+        return;
     }
     
-    size_t mapLength = sizeForFrameBuffer(nfb);
-    assert(mapLength > sizeof(NIMSFrameBuffer));
-    
-    // !!! early return
-    // could use fallocate or posix_fallocate, but ftruncate is portable
-    if (0 != ftruncate(fd, mapLength)) {
-        perror("ftruncate() in ingest::processFile");
-        shm_unlink(sharedName.c_str());
-        return -1;
-    }
+    // size of mmap region
+    assert(msg->mapped_data_length > sizeof(NimsFramebuffer));
+    cout << "shared data name: " << msg->shm_open_name << endl;
 
     // mmap a shared framebuffer on the file descriptor we have from shm_open
-    NIMSFrameBuffer *sharedBuffer;
-    sharedBuffer = (NIMSFrameBuffer *)mmap(NULL, mapLength, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    NimsFramebuffer *shared_buffer;
+    shared_buffer = (NimsFramebuffer *)mmap(NULL, msg->mapped_data_length,
+            PROT_READ, MAP_PRIVATE, fd, 0);
     
+    close(fd);
+
     // !!! early return
-    if (MAP_FAILED == sharedBuffer) {
-        perror("mmap() in ingester::processFile");
-        shm_unlink(sharedName.c_str());
-        return -1;
+    if (MAP_FAILED == shared_buffer) {
+        perror("mmap() in nims::ProcessSharedFramebufferMessage");
+        shm_unlink(msg->shm_open_name);
+    } else {
+
+        assert(shared_buffer->data_length + sizeof(NimsFramebuffer) 
+                <= msg->mapped_data_length);
+
+        // !!! extract the shared content as a C string for debugging _ONLY_
+        char *content = (char *)malloc(shared_buffer->data_length + 1);
+        memset(content, '\0', shared_buffer->data_length + 1);
+        memcpy(content, &shared_buffer->data, shared_buffer->data_length);
+        cout << "shared data name " << msg->shm_open_name << endl;
+        cout << "shared data length " << shared_buffer->data_length << endl;
+        cout << "shared data content " << content << endl;
+        free(content);
+
+        munmap(shared_buffer, msg->mapped_data_length);
+        shm_unlink(msg->shm_open_name);
     }
-    
-    // copy data to the shared framebuffer
-    sharedBuffer->dataLength = nfb->dataLength;
-    memcpy(&sharedBuffer->data, nfb->data, nfb->dataLength);
-    
-    // create a message to notify the observer
-    NIMSIngestMessage msg;
-    msg.dataLength = sharedBuffer->dataLength;
-    msg.name = { '\0' };
-    
-    // this should never happen, unless we have fbCount with >200 digits
-    assert((sharedName.size() + 1) < sizeof(msg.name));
-    strcpy(msg.name, sharedName.c_str());
-    
-    // done with the region in this process; ok to do this?
-    // pretty sure we can't shm_unlink here
-    munmap(sharedBuffer, mapLength);
-    sharedBuffer = NULL;
-    
-    // why is the message a const char *?
-    if (mq_send(ingestMessageQueue, (const char *)&msg, sizeof(msg), 0) == -1) {
-        perror("mq_send in ingester::processFile");
-        return -1;
-    }
-    
-    return nfb->dataLength;
 }
-#endif
 
-static volatile int sigint_received = 0;
-
-static void sig_handler(int sig)
+static void SigintHandler(int sig)
 {
     if (SIGINT == sig)
         sigint_received++;
@@ -201,7 +176,7 @@ int main (int argc, char * argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("cfg,c", po::value<string>()->default_value( "config.yaml" ),         "path to config file")
+	("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
 	//("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;
@@ -224,6 +199,7 @@ int main (int argc, char * argv[]) {
         return 0;
     }
 	
+    // !!! should probably move this to an options class
     fs::path cfgfilepath( options["cfg"].as<string>() );
     YAML::Node config = YAML::LoadFile(cfgfilepath.string());
     fs::path bin_dir(config["BINARY_DIR"].as<string>());
@@ -237,7 +213,7 @@ int main (int argc, char * argv[]) {
         for (int j = 0; j < app["args"].size(); j++)
             app_args.push_back(app["args"][j].as<string>());
         fs::path name(app["name"].as<string>());
-        const pid_t pid = nims_launch_process(bin_dir / name, app_args);
+        const pid_t pid = LaunchProcess(bin_dir / name, app_args);
         if (pid > 0) {
             pids.push_back(pid);
             cerr << "Launched " << name.string() << " as pid " << pid << endl;
@@ -247,22 +223,19 @@ int main (int argc, char * argv[]) {
         }
     }
     
-    cout << "dumping config:" << "\n";
-    cout << config << "\n";
-    
     cout << "launched processes: " << endl;
     for (vector<pid_t>::iterator it = pids.begin(); it != pids.end(); ++it) {
         cout << "pid: " << *it << endl;
     }
     
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGINT, sig_handler);
+    signal(SIGINT, SigintHandler);
     
     struct mq_attr attr;
     memset(&attr, 0, sizeof(struct mq_attr));
     // ??? I can set this at 300 in my test program, but this chokes if it's > 10. WTF?
     attr.mq_maxmsg = 10;
-    attr.mq_msgsize = sizeof(NIMSIngestMessage);
+    attr.mq_msgsize = sizeof(NimsIngestMessage);
     attr.mq_flags = 0;
     
     /*
@@ -270,74 +243,100 @@ int main (int argc, char * argv[]) {
       exist, so we can open it read-only.
      */
     
-    mqd_t ingestMessageQueue = mq_open(MQ_INGEST_QUEUE, O_RDWR, S_IRUSR | S_IWUSR, &attr);
+    mqd_t ingest_message_queue;
+    ingest_message_queue = mq_open(MQ_INGEST_QUEUE, O_RDONLY, S_IRUSR, &attr);
+#warning this fails
+    if (-1 == ingest_message_queue) {
+        perror("failed to create ingest_message_queue");
+        exit(1);
+    }
     
-    int nfds, epollfd;
-    epollfd = epoll_create(1);
+    int epollfd = epoll_create(1);
     if (-1 == epollfd) {
         perror("epollcreate() failed in nims");
         exit(1);
     }
-    
-#define MAX_EVENTS 10
-    struct epoll_event ev, events[MAX_EVENTS];
+        
+    // monitor our ingest queue descriptor
+    struct epoll_event ev;
     ev.events = EPOLLIN;
-    ev.data.fd = ingestMessageQueue;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ingestMessageQueue, &ev) == -1) {
+    ev.data.fd = ingest_message_queue;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ingest_message_queue, &ev) == -1) {
         perror("epoll_ctl() failed in nims");
         exit(2);
     }
     
     while (true) {
         
-        nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        cerr << "entering epoll" << endl;
+        // no particular reason for 10, but it was in sample code that I grabbed
+#define EVENT_MAX 10
+        struct epoll_event events[EVENT_MAX];
+        
+        // pass -1 for timeout to block indefinitely
+        int nfds = epoll_wait(epollfd, events, EVENT_MAX, -1);
+        cerr << "epoll_wait returned" << endl;
+        
+        // handle error condition first, in case we're exiting on a signal
         if (-1 == nfds) {
-            perror("epoll_wait() failed in nims");
-            exit(3);
+            
+            if (EINTR == errno && sigint_received) {
+            
+                cerr << "received SIGINT" << endl;
+                
+                vector<pid_t>::iterator it;
+                for (it = pids.begin(); it != pids.end(); ++it) {
+                
+                    const pid_t child_pid = *it;
+                    // of course, this is a race condition if true and the child exits...
+                    if (getpgid(getpid()) == getpgid(child_pid)) {
+                        cerr << "sending signal to child " << child_pid << endl;
+                        kill(child_pid, SIGINT);
+                    } else {
+                        cerr << "pid " << child_pid << " not in group" << endl;
+                    }
+                }
+            
+                //killpg(getpgrp(), SIGINT);
+            
+                break;
+            } else {
+                // unhandled signal or some other error
+                perror("epoll_wait() failed in nims");
+                exit(3);
+            }
+        
         }
         
         for (int n = 0; n < nfds; ++n) {
             
-            if (events[n].data.fd == ingestMessageQueue) {
+            if (events[n].data.fd == ingest_message_queue) {
                 
-                // Now eat all of the messages
-                NIMSIngestMessage msg;
-                while (mq_receive (ingestMessageQueue, (char *)&msg, sizeof(msg), NULL) != -1) 
-                     printf ("Received a message with length %d for name %s.\n", msg.dataLength, msg.name);
+                /*
+                 Process a single message per loop; this avoids blocking
+                 on mq_receive, since we don't get SIGINT if we do while().
+                 Queued messages are still processed, though; I tested this
+                 by tickling the ingester several times, then launching nims
+                 to see it process all of the enqueued messages.
+                */
+                NimsIngestMessage msg;
+                if (mq_receive (ingest_message_queue, (char *)&msg, 
+                        sizeof(msg), NULL) != -1) 
+                    ProcessSharedFramebufferMessage(&msg);
+                
+            } else {
+                cerr << "*** ERROR *** Monitoring file descriptor with no event handler" << endl;
             }
         }
         
-        if (sigint_received) {
-            
-            cerr << "received SIGINT" << endl;
-            
-            for (vector<pid_t>::iterator it = pids.begin(); it != pids.end(); ++it) {
-                
-                const pid_t child_pid = *it;
-                // of course, this is a race condition if true and the child exits...
-                if (getpgid(getpid()) == getpgid(child_pid)) {
-                    cerr << "sending signal to child pid " << child_pid << endl;
-                    kill(child_pid, SIGINT);
-                }
-                else {
-                    cerr << "pid: " << child_pid << " is not part of this process group" << endl;
-                }
-            }
-            
-            //killpg(getpgrp(), SIGINT);
-            
-            exit(1);
-        }
-        
-        sleep(1);
     }
     
     close(epollfd);
-    mq_close(ingestMessageQueue);
+    mq_close(ingest_message_queue);
     
     /*
     Need to wait here?
     */
 
-    return 0;
+    return sigint_received;
 }

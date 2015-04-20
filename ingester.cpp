@@ -36,109 +36,119 @@ namespace fs = boost::filesystem;
 #define EVENT_SIZE ( sizeof(struct inotify_event) )
 #define BUF_LEN ( 1024 * (EVENT_SIZE + 16) )
 
-static mqd_t ingestMessageQueue;
+static mqd_t ingest_message_queue;
 static volatile int sigint_received = 0;
 
 /*
  Mmap doesn't technically require rounding up to a page boundary
- for the length you pass in, but we'll do that anyway.
+ for the length you pass in, but we'll do that anyway. If other
+ components start sharing memory, we can make this external.
 */
-static size_t sizeForFrameBuffer(const NIMSFrameBuffer *nfb)
+static size_t SizeForFramebuffer(const NimsFramebuffer *nfb)
 {
-    static size_t pageSize = 0;
-    if (0 == pageSize)
-        pageSize = sysconf(_SC_PAGE_SIZE);
+    static size_t page_size = 0;
+    if (0 == page_size)
+        page_size = sysconf(_SC_PAGE_SIZE);
 
-    assert(pageSize > 0);
-    const size_t len = nfb->dataLength + sizeof(NIMSFrameBuffer);
-    const size_t numberOfPages = len / pageSize + 1;
-    return pageSize * numberOfPages;
+    assert(page_size > 0);
+    const size_t len = nfb->data_length + sizeof(NimsFramebuffer);
+    const size_t number_of_pages = len / page_size + 1;
+    return page_size * number_of_pages;
 }
 
-static size_t shareFrameBufferAndNotify(const NIMSFrameBuffer *nfb)
+static size_t ShareFrameBufferAndNotify(const NimsFramebuffer *nfb)
 {
-    static int64_t fbCount = 0;
+    static int64_t framebuffer_name_count = 0;
     
-    string sharedName("/framebuffer-");
-    sharedName += boost::lexical_cast<string>(fbCount++);
+    string shared_name(FRAMEBUFFER_SHM_PREFIX);
+    shared_name += boost::lexical_cast<string>(framebuffer_name_count++);
     
     /*
      Create -rw------- since we don't need executable pages.
      Using O_EXCL could be safer, but these can still exist
      in /dev/shm after a program crash.
     */
-    int fd = shm_open(sharedName.c_str(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+    int fd = shm_open(shared_name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 
+            S_IRUSR | S_IWUSR);
     
     // !!! early return
     if (-1 == fd) {
-        perror("shm_open() in ingester::processFile");
+        perror("shm_open() in ingester::ShareFrameBufferAndNotify");
         return -1;
     }
     
-    size_t mapLength = sizeForFrameBuffer(nfb);
-    assert(mapLength > sizeof(NIMSFrameBuffer));
+    size_t map_length = SizeForFramebuffer(nfb);
+    assert(map_length > sizeof(NimsFramebuffer));
     
     // !!! early return
     // could use fallocate or posix_fallocate, but ftruncate is portable
-    if (0 != ftruncate(fd, mapLength)) {
-        perror("ftruncate() in ingest::processFile");
-        shm_unlink(sharedName.c_str());
+    if (0 != ftruncate(fd, map_length)) {
+        perror("ftruncate() in ingest::ShareFrameBufferAndNotify");
+        shm_unlink(shared_name.c_str());
         return -1;
     }
 
     // mmap a shared framebuffer on the file descriptor we have from shm_open
-    NIMSFrameBuffer *sharedBuffer;
-    sharedBuffer = (NIMSFrameBuffer *)mmap(NULL, mapLength, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    NimsFramebuffer *shared_buffer;
+    shared_buffer = (NimsFramebuffer *)mmap(NULL, map_length, 
+            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    
+    close(fd);
     
     // !!! early return
-    if (MAP_FAILED == sharedBuffer) {
-        perror("mmap() in ingester::processFile");
-        shm_unlink(sharedName.c_str());
+    if (MAP_FAILED == shared_buffer) {
+        perror("mmap() in ingester::ShareFrameBufferAndNotify");
+        shm_unlink(shared_name.c_str());
         return -1;
     }
-    
+        
     // copy data to the shared framebuffer
-    sharedBuffer->dataLength = nfb->dataLength;
-    memcpy(&sharedBuffer->data, nfb->data, nfb->dataLength);
+    shared_buffer->data_length = nfb->data_length;
+    memcpy(&shared_buffer->data, nfb->data, nfb->data_length);
     
     // create a message to notify the observer
-    NIMSIngestMessage msg;
-    msg.dataLength = sharedBuffer->dataLength;
-    msg.name = { '\0' };
+    NimsIngestMessage msg;
+    msg.mapped_data_length = map_length;
+    msg.shm_open_name = { '\0' };
     
-    // this should never happen, unless we have fbCount with >200 digits
-    assert((sharedName.size() + 1) < sizeof(msg.name));
-    strcpy(msg.name, sharedName.c_str());
+    // Shouldn't happen unless we have framebuffer_name_count with >200 digits
+    assert((shared_name.size() + 1) < sizeof(msg.shm_open_name));
+    strcpy(msg.shm_open_name, shared_name.c_str());
+
+    cout << "shared name: " << shared_name << endl;
+    cout << "data length: " << shared_buffer->data_length << endl;
+    cout << "mmap length: " << map_length << endl;
     
     // done with the region in this process; ok to do this?
     // pretty sure we can't shm_unlink here
-    munmap(sharedBuffer, mapLength);
-    sharedBuffer = NULL;
+    munmap(shared_buffer, map_length);
+    close(fd);
+    shared_buffer = NULL;
     
     // why is the message a const char *?
-    if (mq_send(ingestMessageQueue, (const char *)&msg, sizeof(msg), 0) == -1) {
-        perror("mq_send in ingester::processFile");
+    if (mq_send(ingest_message_queue, (const char *)&msg, sizeof(msg), 0) == -1) {
+        perror("mq_send in ingester::ShareFrameBufferAndNotify");
         return -1;
     }
     
-    return nfb->dataLength;
+    return nfb->data_length;
 }
 
 // returns length of data copied to shared memory
-static size_t processFile( string & watchDirectory, string & fileName )
+static size_t ProcessFile( string &watchDirectory, string &fileName )
 {    
     cout << "process file: " << fileName << " in dir: " << watchDirectory << endl;
     
     // do transformation into frame buffer object
         
-    NIMSFrameBuffer nfb;
+    NimsFramebuffer nfb;
 
     // test data; ignore constness here
-    const char *testData = "this is only a test";
-    nfb.dataLength = strlen(testData) + 1;
-    nfb.data = (void *)testData;
+    const char *test_data = "this is only a test";
+    nfb.data_length = strlen(test_data) + 1;
+    nfb.data = (void *)test_data;
     
-    return shareFrameBufferAndNotify(&nfb);
+    return ShareFrameBufferAndNotify(&nfb);
 }
 
 static void sig_handler(int sig)
@@ -147,18 +157,19 @@ static void sig_handler(int sig)
         sigint_received++;
 }
 
-static void initializeMessageQueue()
+static void InitializeIngestMessageQueue()
 {
     struct mq_attr attr;
     memset(&attr, 0, sizeof(struct mq_attr));
     // ??? I can set this at 300 in my test program, but this chokes if it's > 10. WTF?
     attr.mq_maxmsg = 10;
-    attr.mq_msgsize = sizeof(NIMSIngestMessage);
+    attr.mq_msgsize = sizeof(NimsIngestMessage);
     attr.mq_flags = 0;
     
-    ingestMessageQueue = mq_open(MQ_INGEST_QUEUE, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR, &attr);
-    if (-1 == ingestMessageQueue){
-        perror("mq_open in ingester::initializeMessageQueue");
+    ingest_message_queue = mq_open(MQ_INGEST_QUEUE, O_RDWR | O_CREAT,
+            S_IRUSR | S_IWUSR, &attr);
+    if (-1 == ingest_message_queue){
+        perror("mq_open in ingester::InitializeIngestMessageQueue");
         exit(2);
     }
 }
@@ -201,7 +212,7 @@ int main (int argc, char * argv[]) {
 	// TODO: make sure input path exists
     clog << "Watching directory " << inputDirectory << endl;
     
-    initializeMessageQueue();
+    InitializeIngestMessageQueue();
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);
 	
@@ -264,7 +275,7 @@ int main (int argc, char * argv[]) {
                     if( !(event->mask & IN_ISDIR) ) {
                         clog << "Found file: " << event->name << endl;
                         string eventName(event->name);
-                        processFile( watchDirectory, eventName );
+                        ProcessFile(watchDirectory, eventName);
                     }
                 }
             }
@@ -279,7 +290,7 @@ int main (int argc, char * argv[]) {
     inotify_rm_watch(fd, cd);
     close(fd);
     
-    mq_close(ingestMessageQueue);
+    mq_close(ingest_message_queue);
     mq_unlink(MQ_INGEST_QUEUE);
     
 	cout << endl << "Ending " << argv[0] << endl << endl;

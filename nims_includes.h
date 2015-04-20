@@ -14,10 +14,13 @@
  - dataLength is the length in bytes of the data
    member, not of the entire structure.
 */
-typedef struct __attribute__ ((__packed__)) _NIMSFrameBuffer {
-    size_t  dataLength;
-    void    *data;
-} NIMSFrameBuffer;
+typedef struct __attribute__ ((__packed__)) _NimsFramebuffer {
+    size_t  data_length;
+    void   *data;
+} NimsFramebuffer;
+
+// shared memory will be created at /dev/shm/framebuffer-N
+#define FRAMEBUFFER_SHM_PREFIX "/nims-framebuffer-"
 
 /*
  A notification that the frame buffer at shared
@@ -30,9 +33,9 @@ typedef struct __attribute__ ((__packed__)) _NIMSFrameBuffer {
    buffer resides.
 */
 #define MQ_INGEST_QUEUE "/nims_ingest_queue"
-typedef struct __attribute__ ((__packed__)) _NIMSIngestMessage {
-    size_t dataLength;
-    char   name[NAME_MAX];
-} NIMSIngestMessage;
+typedef struct __attribute__ ((__packed__)) _NimsIngestMessage {
+    size_t mapped_data_length;
+    char   shm_open_name[NAME_MAX];
+} NimsIngestMessage;
 
 #endif /* _NIMS_INCLUDES_H */
