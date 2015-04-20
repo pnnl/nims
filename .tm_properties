@@ -1,1 +1,8 @@
 exclude = '{$exclude,*.o,*~}'
+
+[ source ]
+softWrap            = false
+wrapColumn          = 80
+softTabs            = true
+tabSize             = 2
+
