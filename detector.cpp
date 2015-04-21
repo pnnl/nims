@@ -15,6 +15,7 @@
 
 //#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include "queues.h"
 
 using namespace std;
 //using namespace cv;
@@ -59,6 +60,7 @@ int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
+    SubprocessCheckin(getpid());
 	
     while (true) {
         

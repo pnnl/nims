@@ -24,7 +24,7 @@
 #include <fcntl.h>    // O_* constants
 #include <unistd.h>   // sysconf
 #include <sys/mman.h> // mmap, shm_open
-#include <mqueue.h>
+#include "queues.h"
 #include <sys/epoll.h>
 
 #include <boost/filesystem.hpp>
@@ -36,7 +36,8 @@ using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-static volatile int sigint_received = 0;
+static volatile sig_atomic_t sigint_received = 0;
+static vector<pid_t> * child_pids = NULL;
 
 // !!! create NimsTask objects that are killable and track name/pid
 static pid_t LaunchProcess(const fs::path &absolute_path, 
@@ -58,7 +59,7 @@ static pid_t LaunchProcess(const fs::path &absolute_path,
     
     int blockpipe[2] = { -1, -1 };
     if (pipe(blockpipe))
-        perror("failed to create blockpipe");
+        perror("nims: failed to create blockpipe");
     
    /*
     Figure out the max number of file descriptors for a process; 
@@ -96,7 +97,7 @@ static pid_t LaunchProcess(const fs::path &absolute_path,
         _exit(ret);
         
     } else if (-1 == pid) {
-        int fork_error = errno;
+        perror("nims::LaunchProcess fork()");
         
         // all setup is complete, so now widow the pipe and exec in the child
         close(blockpipe[0]);   
@@ -166,7 +167,112 @@ static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
 static void SigintHandler(int sig)
 {
     if (SIGINT == sig)
-        sigint_received++;
+        sigint_received = 1;
+}
+
+static void SignalChildProcesses(const int sig)
+{
+    cerr << "running nims::SignalChildProcesses" << endl;
+
+    // !!! early return if it hasn't been created yet
+    if (NULL == child_pids) return;
+    
+    vector<pid_t>::iterator it;
+    for (it = child_pids->begin(); it != child_pids->end(); ++it) {
+    
+        const pid_t child_pid = *it;
+        // of course, this is a race condition if true and the child exits...
+        if (getpgid(getpid()) == getpgid(child_pid)) {
+            cerr << "sending signal to child " << child_pid << endl;
+            kill(child_pid, sig);
+        } else {
+            cerr << "pid " << child_pid << " not in group" << endl;
+        }
+    }
+    fflush(stderr);
+}
+
+/*
+  Will not be called if the program terminates abnormally due to
+  a signal, but it will be called if we call exit() anywhere.
+  This avoids cleaning up child processes after a failure.
+*/
+static void ExitHandler()
+{
+    cerr << "running nims::ExitHandler" << endl;
+    SignalChildProcesses(SIGINT);
+    fflush(stderr);
+}
+
+static void LaunchProcessesFromConfig(const YAML::Node &config)
+{
+    fs::path bin_dir(config["BINARY_DIR"].as<string>());
+    
+    YAML::Node applications = config["APPLICATIONS"];
+    child_pids = new vector<pid_t>;
+    
+    mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
+    if (-1 == mq) {
+        cerr << "nims: failed to create message queue" << endl;
+        exit(1);
+    }
+    
+    for (int i = 0; i < applications.size(); i++) {
+        YAML::Node app = applications[i];
+        vector<string> app_args;
+        for (int j = 0; j < app["args"].size(); j++)
+            app_args.push_back(app["args"][j].as<string>());
+        fs::path name(app["name"].as<string>());
+        const pid_t pid = LaunchProcess(bin_dir / name, app_args);
+        if (pid > 0) {
+            child_pids->push_back(pid);
+            cerr << "Launched " << name.string() << " as pid " << pid << endl;
+        }
+        else {
+            cerr << "Failed to launch " << name.string() << endl;
+        }
+    }
+    
+    cout << "launched processes: " << endl;
+    vector<pid_t>::iterator it;
+    for (it = child_pids->begin(); it != child_pids->end(); ++it) {
+        cout << "pid: " << *it << endl;
+    }
+
+    /*
+      Ensure that all processes are launched before continuing. This
+      is a way to sidestep some race conditions, but also ensures
+      that we're starting with a consistent state (all programs
+      and queues running) before we start waiting for messages.
+    */
+#define CHECKIN_TIME_LIMIT_SECONDS 10
+    struct timespec timeout;
+    timeout.tv_sec = time(NULL) + CHECKIN_TIME_LIMIT_SECONDS;
+    timeout.tv_nsec = 0;
+
+    pid_t checkin_pid;
+    int remaining = applications.size();
+    cerr << "waiting for tasks to check in..." << endl;
+    do { 
+        
+        if (mq_timedreceive(mq, (char *)&checkin_pid, sizeof(pid_t), NULL, 
+                &timeout) == -1) {
+            
+            if (ETIMEDOUT == errno) {
+                cerr << "subtask(s) failed to checkin after 10 seconds" << endl;
+                exit(errno);
+            }
+            cerr << "failed to receive checkin message" << endl;
+            exit(errno);
+        }
+
+    } while(--remaining);
+    
+    time_t dt = timeout.tv_sec - CHECKIN_TIME_LIMIT_SECONDS - time(NULL);
+    cerr << "all tasks checked in after " << dt << " seconds" << endl;
+    
+    mq_close(mq);
+    mq_unlink(MQ_SUBPROCESS_CHECKIN_QUEUE);
 }
 
 int main (int argc, char * argv[]) {
@@ -198,74 +304,59 @@ int main (int argc, char * argv[]) {
         cerr << desc << endl;
         return 0;
     }
-	
-    // !!! should probably move this to an options class
+
+    /*
+     Use atexit to guarantee cleanup when we exit, primarily with
+     nonzero status because of some error condition. I'd like to
+     avoid zombies and unmanaged child processes.
+    */
+    atexit(ExitHandler);
+    
+    // some default registrations for cleanup
+    struct sigaction new_action, old_action;
+    new_action.sa_handler = SigintHandler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGINT, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGINT, &new_action, NULL);
+    
+    // ignore SIGPIPE
+    new_action.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGPIPE, &new_action, NULL);  
+	    
     fs::path cfgfilepath( options["cfg"].as<string>() );
     YAML::Node config = YAML::LoadFile(cfgfilepath.string());
-    fs::path bin_dir(config["BINARY_DIR"].as<string>());
     
-    YAML::Node applications = config["APPLICATIONS"];
-    vector<pid_t> pids;
+    // launch all default processes listed in the config file
+    LaunchProcessesFromConfig(config);
     
-    for (int i = 0; i < applications.size(); i++) {
-        YAML::Node app = applications[i];
-        vector<string> app_args;
-        for (int j = 0; j < app["args"].size(); j++)
-            app_args.push_back(app["args"][j].as<string>());
-        fs::path name(app["name"].as<string>());
-        const pid_t pid = LaunchProcess(bin_dir / name, app_args);
-        if (pid > 0) {
-            pids.push_back(pid);
-            cerr << "Launched " << name.string() << " as pid " << pid << endl;
-        }
-        else {
-            cerr << "Failed to launch " << name.string() << endl;
-        }
-    }
-    
-    cout << "launched processes: " << endl;
-    for (vector<pid_t>::iterator it = pids.begin(); it != pids.end(); ++it) {
-        cout << "pid: " << *it << endl;
-    }
-    
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGINT, SigintHandler);
-    
-    struct mq_attr attr;
-    memset(&attr, 0, sizeof(struct mq_attr));
-    // ??? I can set this at 300 in my test program, but this chokes if it's > 10. WTF?
-    attr.mq_maxmsg = 10;
-    attr.mq_msgsize = sizeof(NimsIngestMessage);
-    attr.mq_flags = 0;
-    
-    /*
-      Now that all subprocesses are running, this message queue should already
-      exist, so we can open it read-only.
-     */
-    
-    mqd_t ingest_message_queue;
-    ingest_message_queue = mq_open(MQ_INGEST_QUEUE, O_RDONLY, S_IRUSR, &attr);
-#warning this fails
-    if (-1 == ingest_message_queue) {
-        perror("failed to create ingest_message_queue");
+    // launching subprocesses may or may not create this
+    mqd_t ingest_queue = CreateMessageQueue(sizeof(NimsIngestMessage),
+            MQ_INGEST_QUEUE);
+
+    if (-1 == ingest_queue) {
+        cerr << "nims: failed to create message queue" << endl;
         exit(1);
     }
-    
+     
     int epollfd = epoll_create(1);
     if (-1 == epollfd) {
-        perror("epollcreate() failed in nims");
+        perror("nims: epollcreate() failed");
         exit(1);
     }
         
     // monitor our ingest queue descriptor
     struct epoll_event ev;
     ev.events = EPOLLIN;
-    ev.data.fd = ingest_message_queue;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ingest_message_queue, &ev) == -1) {
-        perror("epoll_ctl() failed in nims");
+    ev.data.fd = ingest_queue;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ingest_queue, &ev) == -1) {
+        perror("nims: epoll_ctl() failed");
         exit(2);
     }
-    
+
     while (true) {
         
         cerr << "entering epoll" << endl;
@@ -282,27 +373,13 @@ int main (int argc, char * argv[]) {
             
             if (EINTR == errno && sigint_received) {
             
-                cerr << "received SIGINT" << endl;
-                
-                vector<pid_t>::iterator it;
-                for (it = pids.begin(); it != pids.end(); ++it) {
-                
-                    const pid_t child_pid = *it;
-                    // of course, this is a race condition if true and the child exits...
-                    if (getpgid(getpid()) == getpgid(child_pid)) {
-                        cerr << "sending signal to child " << child_pid << endl;
-                        kill(child_pid, SIGINT);
-                    } else {
-                        cerr << "pid " << child_pid << " not in group" << endl;
-                    }
-                }
-            
-                //killpg(getpgrp(), SIGINT);
-            
+                // atexit will call SignalChildProcesses
+                cerr << "nims: received SIGINT" << endl;            
                 break;
+                
             } else {
                 // unhandled signal or some other error
-                perror("epoll_wait() failed in nims");
+                perror("nims: epoll_wait() failed");
                 exit(3);
             }
         
@@ -310,7 +387,7 @@ int main (int argc, char * argv[]) {
         
         for (int n = 0; n < nfds; ++n) {
             
-            if (events[n].data.fd == ingest_message_queue) {
+            if (events[n].data.fd == ingest_queue) {
                 
                 /*
                  Process a single message per loop; this avoids blocking
@@ -320,7 +397,7 @@ int main (int argc, char * argv[]) {
                  to see it process all of the enqueued messages.
                 */
                 NimsIngestMessage msg;
-                if (mq_receive (ingest_message_queue, (char *)&msg, 
+                if (mq_receive (ingest_queue, (char *)&msg, 
                         sizeof(msg), NULL) != -1) 
                     ProcessSharedFramebufferMessage(&msg);
                 
@@ -332,11 +409,12 @@ int main (int argc, char * argv[]) {
     }
     
     close(epollfd);
-    mq_close(ingest_message_queue);
+    mq_close(ingest_queue);
+    mq_unlink(MQ_INGEST_QUEUE);
     
-    /*
-    Need to wait here?
-    */
+    // just in case we screw up and call SignalChildProcesses twice...
+    delete child_pids;
+    child_pids = NULL;
 
     return sigint_received;
 }

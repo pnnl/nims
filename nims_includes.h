@@ -1,3 +1,13 @@
+/*
+ *  Nekton Interaction Monitoring System (NIMS)
+ *
+ *  nims_includes.h
+ *  
+ *  Created by Adam Maxwell on 04/16/2015.
+ *  Copyright 2015 Pacific Northwest National Laboratory. All rights reserved.
+ *
+ */
+
 #ifndef _NIMS_INCLUDES_H
 #define _NIMS_INCLUDES_H 1
 
@@ -37,5 +47,7 @@ typedef struct __attribute__ ((__packed__)) _NimsIngestMessage {
     size_t mapped_data_length;
     char   shm_open_name[NAME_MAX];
 } NimsIngestMessage;
+
+#define MQ_SUBPROCESS_CHECKIN_QUEUE "/nims_subprocess_checkin_queue"
 
 #endif /* _NIMS_INCLUDES_H */

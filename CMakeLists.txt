@@ -22,10 +22,10 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${YAML_CPP_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
 
-add_executable(ingester ingester.cpp)
-add_executable(detector detector.cpp)
-add_executable(tracker tracker.cpp)
-add_executable(nims nims.cpp)
+add_executable(ingester ingester.cpp queues.cpp)
+add_executable(detector detector.cpp queues.cpp)
+add_executable(tracker tracker.cpp queues.cpp)
+add_executable(nims nims.cpp queues.cpp)
 
 #target_link_libraries(ingester ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # Can't figure out which finder has Linux realtime, which
@@ -33,10 +33,10 @@ add_executable(nims nims.cpp)
 target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 
 #target_link_libraries(detector ${OpenCV_LIBS} ${Boost_LIBRARIES})
-target_link_libraries(detector ${Boost_LIBRARIES})
+target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 
 #target_link_libraries(tracker ${OpenCV_LIBS} ${Boost_LIBRARIES})
-target_link_libraries(tracker ${Boost_LIBRARIES})
+target_link_libraries(tracker ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 
