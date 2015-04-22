@@ -111,8 +111,9 @@ static size_t ShareFrameBuffer(const NimsFramebuffer *nfb,
     shared_buffer = NULL;
         
     // create a message to notify the observer
-    ingest_message->mapped_data_length = map_length;
-    ingest_message->shm_open_name = { '\0' };
+    NimsIngestMessage msg;
+    msg.mapped_data_length = map_length;
+    msg.shm_open_name[0] = '\0';
     
     // Shouldn't happen unless we have framebuffer_name_count with >200 digits
     assert((shared_name.size() + 1) < sizeof(ingest_message->shm_open_name));
@@ -203,6 +204,7 @@ int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
+
 	
 	// TODO: make sure input path exists
     clog << "Watching directory " << inputDirectory << endl;
