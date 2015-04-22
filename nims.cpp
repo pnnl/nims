@@ -17,10 +17,8 @@
 #include <stdio.h>  // perror(3)
 #include <stdlib.h> // exit()
 #include <signal.h>
-#include <sys/resource.h>
 
 // for POSIX shared memory
-#include "nims_includes.h"
 #include <fcntl.h>    // O_* constants
 #include <unistd.h>   // sysconf
 #include <sys/mman.h> // mmap, shm_open
@@ -31,94 +29,16 @@
 #include <boost/program_options.hpp>
 #include "yaml-cpp/yaml.h"
 
+#include "nims_includes.h"
+#include "task.h"
+
 using namespace std;
 using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-static volatile sig_atomic_t sigint_received = 0;
-static vector<pid_t> * child_pids = NULL;
-
-// !!! create NimsTask objects that are killable and track name/pid
-static pid_t LaunchProcess(const fs::path &absolute_path, 
-        const vector<string> &args)
-{    
-    char **env = environ;
-    char **argv = (char **)calloc(args.size() + 2, sizeof(char *));
-
-    // first arg is always the program we're executing
-    argv[0] = strdup(absolute_path.string().c_str());
-
-    // copy the remaining arguments as C strings
-    int argidx = 1;
-    vector<string>::const_iterator it;
-    for (it = args.begin(); it != args.end(); ++it) {
-        argv[argidx] = strdup((*it).c_str());
-        argidx++;
-    }
-    
-    int blockpipe[2] = { -1, -1 };
-    if (pipe(blockpipe))
-        perror("nims: failed to create blockpipe");
-    
-   /*
-    Figure out the max number of file descriptors for a process; 
-    getrlimit is not listed as async-signal safe in the sigaction(2) 
-    man page, so we assume it's not safe to call after  fork().
-    The fork(2) page says that child rlimits are set to zero.
-    */
-   int max_open_files = sysconf(_SC_OPEN_MAX);
-   struct rlimit open_file_limit;
-   if (getrlimit(RLIMIT_NOFILE, &open_file_limit) == 0)
-       max_open_files = (int)open_file_limit.rlim_cur;
-    
-    // set child process group ID to be the same as parent
-    const pid_t pgid = getpgid(getpid());
-    
-    pid_t pid = fork();
-    if (0 == pid) {
-        
-        (void)setpgid(getpid(), pgid);
-        
-        int j;
-        for (j = (STDERR_FILENO + 1); j < max_open_files; j++) {
-            
-            // don't close this until we're done reading from it!
-            if (blockpipe[0] != j)
-                (void) close(j);
-        }
-        
-        // block until the parent finishes any setup
-        char ignored;
-        read(blockpipe[0], &ignored, 1);
-        close(blockpipe[0]);
-        
-        int ret = execve(argv[0], argv, env);
-        _exit(ret);
-        
-    } else if (-1 == pid) {
-        perror("nims::LaunchProcess fork()");
-        
-        // all setup is complete, so now widow the pipe and exec in the child
-        close(blockpipe[0]);   
-        close(blockpipe[1]);
-    } else {
-        // parent process
-        
-        // all setup is complete, so now widow the pipe and exec in the child
-        close(blockpipe[0]);   
-        close(blockpipe[1]);
-    }
-    
-    // free all of the strdup'ed args
-    char **free_ptr = argv;
-    while (NULL != *free_ptr) { 
-        free(*free_ptr++);
-    }
-    free(argv);
-    
-    return pid;
-}
+static volatile sig_atomic_t sigint_received_ = 0;
+static vector<nims::Task *> *child_tasks_ = NULL;
 
 static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
 {        
@@ -167,7 +87,7 @@ static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
 static void SigintHandler(int sig)
 {
     if (SIGINT == sig)
-        sigint_received = 1;
+        sigint_received_ = 1;
 }
 
 static void SignalChildProcesses(const int sig)
@@ -175,21 +95,16 @@ static void SignalChildProcesses(const int sig)
     cerr << "running nims::SignalChildProcesses" << endl;
 
     // !!! early return if it hasn't been created yet
-    if (NULL == child_pids) return;
+    if (NULL == child_tasks_) return;
     
-    vector<pid_t>::iterator it;
-    for (it = child_pids->begin(); it != child_pids->end(); ++it) {
-    
-        const pid_t child_pid = *it;
-        // of course, this is a race condition if true and the child exits...
-        if (getpgid(getpid()) == getpgid(child_pid)) {
-            cerr << "sending signal to child " << child_pid << endl;
-            kill(child_pid, sig);
-        } else {
-            cerr << "pid " << child_pid << " not in group" << endl;
+    vector<nims::Task *>::iterator it;
+    for (it = child_tasks_->begin(); it != child_tasks_->end(); ++it) {
+        nims::Task *t = *it;
+        if (getpgid(getpid()) == getpgid(t->get_pid())) {
+            cerr << "sending signal to child " << t->get_pid() << endl;
+            t->signal(sig);
         }
     }
-    fflush(stderr);
 }
 
 /*
@@ -209,7 +124,7 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     fs::path bin_dir(config["BINARY_DIR"].as<string>());
     
     YAML::Node applications = config["APPLICATIONS"];
-    child_pids = new vector<pid_t>;
+    child_tasks_ = new vector<nims::Task *>;
     
     mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
     if (-1 == mq) {
@@ -223,10 +138,10 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
         for (int j = 0; j < app["args"].size(); j++)
             app_args.push_back(app["args"][j].as<string>());
         fs::path name(app["name"].as<string>());
-        const pid_t pid = LaunchProcess(bin_dir / name, app_args);
-        if (pid > 0) {
-            child_pids->push_back(pid);
-            cerr << "Launched " << name.string() << " as pid " << pid << endl;
+        nims::Task *Task = new nims::Task(bin_dir / name, app_args);
+        if (Task->launch()) {
+            child_tasks_->push_back(Task);
+            cerr << "Launched " << name.string() << " pid " << Task->get_pid() << endl;
         }
         else {
             cerr << "Failed to launch " << name.string() << endl;
@@ -234,9 +149,9 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     }
     
     cout << "launched processes: " << endl;
-    vector<pid_t>::iterator it;
-    for (it = child_pids->begin(); it != child_pids->end(); ++it) {
-        cout << "pid: " << *it << endl;
+    vector<nims::Task *>::iterator it;
+    for (it = child_tasks_->begin(); it != child_tasks_->end(); ++it) {
+        cout << "pid: " << (*it)->get_pid() << endl;
     }
 
     /*
@@ -371,13 +286,13 @@ int main (int argc, char * argv[]) {
         // handle error condition first, in case we're exiting on a signal
         if (-1 == nfds) {
             
-            if (EINTR == errno && sigint_received) {
+            if (EINTR == errno && sigint_received_) {
             
                 // atexit will call SignalChildProcesses
                 cerr << "nims: received SIGINT" << endl;            
                 break;
                 
-            } else {
+            } else if (EINTR != errno) {
                 // unhandled signal or some other error
                 perror("nims: epoll_wait() failed");
                 exit(3);
@@ -413,8 +328,8 @@ int main (int argc, char * argv[]) {
     mq_unlink(MQ_INGEST_QUEUE);
     
     // just in case we screw up and call SignalChildProcesses twice...
-    delete child_pids;
-    child_pids = NULL;
+    delete child_tasks_;
+    child_tasks_ = NULL;
 
-    return sigint_received;
+    return sigint_received_;
 }

@@ -25,7 +25,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 add_executable(ingester ingester.cpp queues.cpp)
 add_executable(detector detector.cpp queues.cpp)
 add_executable(tracker tracker.cpp queues.cpp)
-add_executable(nims nims.cpp queues.cpp)
+add_executable(nims nims.cpp queues.cpp task.cpp)
 add_executable(test_frame_buffer test_frame_buffer.cpp)
 
 #target_link_libraries(ingester ${OpenCV_LIBS} ${Boost_LIBRARIES})
