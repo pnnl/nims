@@ -9,7 +9,7 @@ add_definitions("-std=c++0x")
 
 # find yaml cmake config
 # http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
-#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
 #find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
@@ -26,6 +26,7 @@ add_executable(ingester ingester.cpp queues.cpp)
 add_executable(detector detector.cpp queues.cpp)
 add_executable(tracker tracker.cpp queues.cpp)
 add_executable(nims nims.cpp queues.cpp)
+add_executable(test_frame_buffer test_frame_buffer.cpp)
 
 #target_link_libraries(ingester ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # Can't figure out which finder has Linux realtime, which
