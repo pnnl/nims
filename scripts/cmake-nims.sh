@@ -9,7 +9,10 @@ YAML_SRC=$(pwd)/../../vendorsrc/yaml-cpp-release-0.5.2
 
 if ! [ -d "$YAML_SRC" ]; then
     echo "*** checking out and configuring vendorsrc ***"
+    pushd .
+    cd ../../
     svn co https://subversion.pnnl.gov/svn/NIMS/vendorsrc
+    popd
 fi
 
 if ! [ -d "$YAML_SRC/build" ]; then
