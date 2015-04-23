@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Create absolute paths, using the trunk/scripts directory
 # as the base. This will put build products alongside the

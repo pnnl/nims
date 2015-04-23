@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # System Startup for NIMS
 # to be installed in /etc/init.d
