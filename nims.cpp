@@ -52,7 +52,8 @@ static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
     
     // size of mmap region
     assert(msg->mapped_data_length > sizeof(NimsFramebuffer));
-    cout << "shared data name: " << msg->shm_open_name << endl;
+    cout << "expected mmap data name: " << msg->shm_open_name << endl;
+    cout << "expected mmap data size: " << msg->mapped_data_length << endl;
 
     // mmap a shared framebuffer on the file descriptor we have from shm_open
     NimsFramebuffer *shared_buffer;
@@ -74,7 +75,6 @@ static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
         char *content = (char *)malloc(shared_buffer->data_length + 1);
         memset(content, '\0', shared_buffer->data_length + 1);
         memcpy(content, &shared_buffer->data, shared_buffer->data_length);
-        cout << "shared data name " << msg->shm_open_name << endl;
         cout << "shared data length " << shared_buffer->data_length << endl;
         cout << "shared data content " << content << endl;
         free(content);
@@ -274,14 +274,14 @@ int main (int argc, char * argv[]) {
 
     while (true) {
         
-        cerr << "entering epoll" << endl;
+        cerr << "### entering epoll" << endl;
         // no particular reason for 10, but it was in sample code that I grabbed
 #define EVENT_MAX 10
         struct epoll_event events[EVENT_MAX];
         
         // pass -1 for timeout to block indefinitely
         int nfds = epoll_wait(epollfd, events, EVENT_MAX, -1);
-        cerr << "epoll_wait returned" << endl;
+        cerr << "### epoll_wait returned" << endl;
         
         // handle error condition first, in case we're exiting on a signal
         if (-1 == nfds) {

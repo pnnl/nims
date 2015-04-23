@@ -109,15 +109,11 @@ static size_t ShareFrameBuffer(const NimsFramebuffer *nfb,
     // pretty sure we can't shm_unlink here
     munmap(shared_buffer, map_length);
     shared_buffer = NULL;
-        
-    // create a message to notify the observer
-    NimsIngestMessage msg;
-    msg.mapped_data_length = map_length;
-    msg.shm_open_name[0] = '\0';
     
     // Shouldn't happen unless we have framebuffer_name_count with >200 digits
     assert((shared_name.size() + 1) < sizeof(ingest_message->shm_open_name));
     strcpy(ingest_message->shm_open_name, shared_name.c_str());
+    ingest_message->mapped_data_length = map_length;
 
     cout << "shared name: " << shared_name << endl;
     cout << "data length: " << nfb->data_length << endl;
@@ -141,6 +137,8 @@ static size_t ProcessFile(string &watchDirectory, string &fileName)
     nfb.data = (void *)test_data;
     
     NimsIngestMessage msg;
+    msg.mapped_data_length = 0;
+    
     size_t len = ShareFrameBuffer(&nfb, &msg);
     
     if (len > 0) {
