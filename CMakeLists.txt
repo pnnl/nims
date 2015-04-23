@@ -49,3 +49,7 @@ target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 ADD_CUSTOM_COMMAND(TARGET nims
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${PROJECT_SOURCE_DIR}/config.yaml $<TARGET_FILE_DIR:nims>)
+
+ADD_CUSTOM_COMMAND(TARGET nims
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${PROJECT_SOURCE_DIR}/scripts/nims.sh $<TARGET_FILE_DIR:nims>)
