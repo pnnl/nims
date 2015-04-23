@@ -1,8 +1,11 @@
 #!/bin/sh
 
-BUILD_DIR=../../nims-build
-SOURCE_DIR=../nims-source
-YAML_SRC=vendorsrc/yaml-cpp-release-0.5.2
+# Create absolute paths, using the trunk/scripts directory
+# as the base. This will put build products alongside the
+# source checkout directories.
+BUILD_DIR=$(pwd)/../../nims-build
+SOURCE_DIR=$(pwd)/../../nims-source
+YAML_SRC=$(pwd)/../../vendorsrc/yaml-cpp-release-0.5.2
 
 if ! [ -d "$YAML_SRC" ]; then
     echo "*** checking out and configuring vendorsrc ***"
@@ -32,5 +35,5 @@ fi
 
 # boost and cmake is FUBAR on RHEL6
 # passing -DBoost_NO_BOOST_CMAKE=ON works around this
-cmake ../$SOURCE_DIR -DBoost_NO_BOOST_CMAKE=ON -DCMAKE_BUILD_TYPE=Debug && make
+cmake $SOURCE_DIR -DBoost_NO_BOOST_CMAKE=ON -DCMAKE_BUILD_TYPE=Debug && make
 popd

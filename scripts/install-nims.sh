@@ -1,7 +1,6 @@
 #!/bin/sh
 
 BUILD_DIR=../../nims-build
-SOURCE_DIR=../nims-source
 
 # this is here for embedded systems work, where the
 # IP address is used for multiple hosts
@@ -40,8 +39,10 @@ if ! [ $? = 0 ]; then
     exit 1
 fi
 
-copy_to_bin nims-build/config.yaml
-copy_to_bin nims-build/nims
-copy_to_bin nims-build/detector
-copy_to_bin nims-build/ingester
-copy_to_bin nims-build/tracker
+copy_to_bin $BUILD_DIR/nims-build/config.yaml
+copy_to_bin $BUILD_DIR/nims-build/nims.sh
+
+copy_to_bin $BUILD_DIR/nims-build/nims
+copy_to_bin $BUILD_DIR/nims-build/detector
+copy_to_bin $BUILD_DIR/nims-build/ingester
+copy_to_bin $BUILD_DIR/nims-build/tracker
