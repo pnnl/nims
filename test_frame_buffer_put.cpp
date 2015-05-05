@@ -10,6 +10,8 @@
 #include <iostream> // cout, cin, cerr
 //#include <fstream>  // ifstream, ofstream
 #include <string>   // for strings
+#include <thread>
+#include <chrono>
 
 
 //#include <boost/filesystem.hpp>
@@ -22,7 +24,6 @@ using namespace boost;
 namespace po = boost::program_options;
 //namespace fs = boost::filesystem;
 
-
 int main (int argc, char * const argv[]) {
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
@@ -30,8 +31,7 @@ int main (int argc, char * const argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("foo,f", po::value<string>()->default_value( "" ),         "a string value")
-	("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
+	("buffer,b", po::value<string>()->default_value( "test" ),    "name of frame buffer")
 	;
 	po::variables_map options;
     try
@@ -53,19 +53,37 @@ int main (int argc, char * const argv[]) {
         return 0;
     }
 	
-    string foo = options["foo"].as<string>();
-	unsigned int bar = options["bar"].as<unsigned int>();
+    string buffer_name = options["buffer"].as<string>();
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
 	
 	Frame new_frame;
-	FrameBufferInterface frame_buffer;
+	try 
+	{
+	FrameBufferInterface fb(buffer_name,true); // create as the writer
+	//if (!fb.IsOpen())
+	//{
+	    //perror(argv[0]);
+	    //return -1;
+	//}
 	int frame_index = -1;
-	
-	frame_index = frame_buffer.PutNewFrame(new_frame);
+	std::this_thread::sleep_for (std::chrono::seconds(10));
+	for (int k=0; k<7; ++k)
+	{
+	    frame_index = fb.PutNewFrame(new_frame);
+	    cout << argv[0] << ": " << "put frame " << frame_index << endl;
+	    std::this_thread::sleep_for (std::chrono::seconds(1));
+	}
 	   
+    }
+	//catch( const std::exception& e )
+	catch( int e )
+	{
+        //cerr << argv[0] << e.what() << endl;
+        cerr << argv[0] << " ERROR:  " << e << endl;
+	}
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
 }

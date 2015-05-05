@@ -10,6 +10,12 @@
 #ifndef __NIMS_FRAMEBUFFER_H__
 #define __NIMS_FRAMEBUFFER_H__
 
+#include <mqueue.h> // POSIX message queue
+#include <limits.h> // for NAME_MAX
+#include <string>   // for strings
+#include <thread>   // for threads
+#include <iostream> // clog
+
 const int kMaxBeams = 512;
 const int kMaxSamples = 20000;
 
@@ -58,10 +64,12 @@ struct Frame
 {
     FrameHeader header;
     float *data;
+    size_t data_size;
     
     Frame()
     {
         data = nullptr;
+        data_size = 0;
     };
     
 }; // struct Frame
@@ -75,21 +83,36 @@ struct Frame
 class FrameBufferInterface
 {
 	public:
-	    FrameBufferInterface();
+	    FrameBufferInterface(const std::string &fb_name, bool writer=false);
 	    ~FrameBufferInterface();
+	    
+	    // Call immediately following construction to test
+	    // that the interface was properly initialized.
+	    bool IsOpen() { return (mqw_ != -1 || mqr_ != -1); };
 	    
 	    // Put a new frame into the buffer.  Returns the
 	    // index of the new frame.
-	    int PutNewFrame(const Frame &new_frame); 
+	    long PutNewFrame(const Frame &new_frame); 
 	    
 	    // Get the next frame in the buffer, "next" meaning
 	    // relative to the last frame that was retrieved by the
 	    // calling process.  Returns the index of the frame.
-	    int GetNextFrame(Frame* next_frame);
+	    long GetNextFrame(Frame* next_frame);
 	    
 	    
     private:
+        void ConnectReaders();  // thread function run by writer
     
+        std::string fb_name_;    // unique name for this frame buffer
+        std::string shm_prefix_; // framebuffer shared memory path name prefix
+        std::string mqw_name_;    // writer message queue name
+        mqd_t mqw_;                // writer message queue (FIFO)
+        std::thread t_;            // writer's connection service thread
+        std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer 
+        std::string mqr_name_prefix_;    // reader message queue name
+        mqd_t mqr_;                // reader message queue, only used by reader
+
+
 }; // class FrameBufferInterface
 
 

@@ -30,8 +30,8 @@ int main (int argc, char * const argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("foo,f", po::value<string>()->default_value( "" ),         "a string value")
-	("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
+	("buffer,b", po::value<string>()->default_value( "test" ),    "name of frame buffer")
+	//("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;
     try
@@ -53,18 +53,27 @@ int main (int argc, char * const argv[]) {
         return 0;
     }
 	
-    string foo = options["foo"].as<string>();
-	unsigned int bar = options["bar"].as<unsigned int>();
+    string buffer_name = options["buffer"].as<string>();
+	//unsigned int bar = options["bar"].as<unsigned int>();
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
 	
 	Frame *next_frame;
-	FrameBufferInterface frame_buffer;
+	FrameBufferInterface fb(buffer_name);
+	if (!fb.IsOpen())
+	{
+	    perror(argv[0]);
+	    return -1;
+	}
+
 	int frame_index = -1;
+	while (frame_index = fb.GetNextFrame(next_frame) != -1)
+	{
+	    cout << argv[0] << ": " << "got frame " << frame_index << endl;
+	}
 	
-	frame_index = frame_buffer.GetNextFrame(next_frame);
 	   
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
