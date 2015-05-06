@@ -60,20 +60,20 @@ int main (int argc, char * const argv[]) {
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
 	
-	Frame *next_frame;
-	FrameBufferInterface fb(buffer_name);
-	if (!fb.IsOpen())
+    try
+    {
+        FrameBufferInterface fb(buffer_name);
+        Frame *next_frame;
+        int frame_index = -1;
+        while (frame_index = fb.GetNextFrame(next_frame) != -1)
+        {
+            cout << argv[0] << ": " << "got frame " << frame_index << endl;
+        }
+    }
+	catch( const std::exception& e )
 	{
-	    perror(argv[0]);
-	    return -1;
+        cerr << argv[0] << ":  " << e.what() << endl;
 	}
-
-	int frame_index = -1;
-	while (frame_index = fb.GetNextFrame(next_frame) != -1)
-	{
-	    cout << argv[0] << ": " << "got frame " << frame_index << endl;
-	}
-	
 	   
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;

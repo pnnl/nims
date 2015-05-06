@@ -74,21 +74,28 @@ struct Frame
     
 }; // struct Frame
 
-// The FrameBuffer is a global system entity that
-// acts as a FIFO queue for raw sonar data.  As a new
-// data frame is ingested into the system, it is stored 
-// in the FrameBuffer until all the processes that 
-// consume frames have consumed it.  This class provides
-// an interface for processes to the global entity.
+// The FrameBufferInterface is an interface for accessing
+// the data from a particular sonar device.  Each sonar
+// device will have its own FrameBufferInterace.  One
+// process (the ingester) will instatiate  a FrameBufferInterface
+// with writer=true.  This process will put new frames
+// in the buffer as data arrives from the device.  Other
+// processes will instantiate a FrameBufferInterface as readers
+// (writer=false).  The reader processess will consume frames in the
+// order that they arrived in the buffer, with each frame
+// remaining in the buffer until all the reader processes
+// have consumed it, or some set amount of time expires.
 class FrameBufferInterface
 {
 	public:
+    // Each sonar device has a unique name.
 	    FrameBufferInterface(const std::string &fb_name, bool writer=false);
 	    ~FrameBufferInterface();
-	    
+	   
+    // NOTE: Don't need this now because constructor throws exception.
 	    // Call immediately following construction to test
 	    // that the interface was properly initialized.
-	    bool IsOpen() { return (mqw_ != -1 || mqr_ != -1); };
+	    //bool IsOpen() { return (mqw_ != -1 || mqr_ != -1); };
 	    
 	    // Put a new frame into the buffer.  Returns the
 	    // index of the new frame.
@@ -101,7 +108,7 @@ class FrameBufferInterface
 	    
 	    
     private:
-        void ConnectReaders();  // thread function run by writer
+        void HandleMessages();  // thread function run by writer
     
         std::string fb_name_;    // unique name for this frame buffer
         std::string shm_prefix_; // framebuffer shared memory path name prefix
@@ -110,6 +117,7 @@ class FrameBufferInterface
         std::thread t_;            // writer's connection service thread
         std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer 
         std::string mqr_name_prefix_;    // reader message queue name
+    std::string mqr_name_;
         mqd_t mqr_;                // reader message queue, only used by reader
 
 

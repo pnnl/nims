@@ -7,11 +7,12 @@
  *  Copyright 2015 Pacific Northwest National Laboratory. All rights reserved.
  *
  */
-#include <iostream> // cout, cin, cerr
+#include <iostream>   // cout, cin, cerr
 //#include <fstream>  // ifstream, ofstream
-#include <string>   // for strings
-#include <thread>
-#include <chrono>
+#include <string>     // for strings
+#include <thread>     // sleep
+#include <chrono>     // time stuff
+#include <exception>  // exception class
 
 
 //#include <boost/filesystem.hpp>
@@ -78,12 +79,11 @@ int main (int argc, char * const argv[]) {
 	}
 	   
     }
-	//catch( const std::exception& e )
-	catch( int e )
+	catch( const std::exception& e )
 	{
-        //cerr << argv[0] << e.what() << endl;
-        cerr << argv[0] << " ERROR:  " << e << endl;
+        cerr << argv[0] << e.what() << endl;
 	}
+    
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
 }
