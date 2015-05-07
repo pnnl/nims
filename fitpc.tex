@@ -1,0 +1,184 @@
+\documentclass[11pt]{article}
+
+\usepackage{lmodern}
+
+\usepackage{xcolor}
+\usepackage{listings}
+\lstdefinestyle{BashInputStyle}{
+  language=sh,
+  basicstyle=\footnotesize\ttfamily,
+  showstringspaces=false,
+  %numbers=left,
+  numberstyle=\tiny,
+  numbersep=3pt,
+  frame=tb,
+  columns=fullflexible,
+  backgroundcolor=\color{yellow!20},
+  linewidth=0.9\linewidth,
+  xleftmargin=0.1\linewidth
+}
+
+\newcommand{\path}[1]{{\small\bfseries\ttfamily{#1}}}
+\newcommand{\shell}[1]{{\small\bfseries\ttfamily{#1}}}
+
+\begin{document}
+\lstset{language=bash}
+\lstset{style=BashInputStyle}
+
+\section{Initial Setup}
+
+This part applies to nims2, since that's the one that I set up
+from scratch.
+Plugged ethernet cable into port nearest the edge, and registered
+on the PNNL network by trying to get to google.com using Firefox. 
+In the network control panel, set the
+dhcp client ID to ``nims2'' so PNNL's DNS server picks it up.
+
+Setting the hostname requires changing it in \path{/etc/hosts}
+\begin{lstlisting}
+    sudo echo nims2 > /etc/hostname
+\end{lstlisting}
+and also editing \path{/etc/hosts} to point 127.0.1.1 at nims2:
+\begin{lstlisting}
+    127.0.0.1	localhost
+    127.0.1.1	nims1
+\end{lstlisting}
+
+I changed the editor from \shell{nano} to \shell{vim.tiny}, as follows. 
+This affects commands like \shell{visudo} and \shell{vipw}, after I
+screwed up the \path{/etc/sudoers} file by not realizing that it
+had invoked \shell{nano}.
+\begin{lstlisting}
+sudo update-alternatives --config editor
+There are 3 choices for the alternative editor (providing /usr/bin/editor).
+
+  Selection    Path               Priority   Status
+------------------------------------------------------------
+* 0            /bin/nano           40        auto mode
+  1            /bin/ed            -100       manual mode
+  2            /bin/nano           40        manual mode
+  3            /usr/bin/vim.tiny   10        manual mode
+\end{lstlisting}
+
+For remote access, we also need to install the SSH server:
+\begin{lstlisting}
+    apt-get install openssh-server
+\end{lstlisting}
+At this point, it's basically functional on the network, and
+accessible as a headless server.
+
+\section{Users and Groups}
+
+I added a \shell{nims} user and \shell{amaxwell} user,
+for the NIMS executables and my user, respectively, using
+\lstinline$adduser foo$ 
+(which creates home directories and
+sets up permissions appropriately). The \shell{nims} user's
+password is the same as that of \shell{owner}.
+I then set
+my user up with \shell{sudo} access via
+\lstinline$sudo visudo$, 
+which invokes the \shell{vi} editor.
+After adding the line 
+\begin{lstlisting}
+    amaxwell ALL=(ALL) ALL
+\end{lstlisting}
+at the end of the file, \shell{amaxwell} can execute commands
+as root.
+
+I edited \path{/etc/passwd} manually to change UID and GID
+of \shell{nims} as follows:
+\begin{lstlisting}
+    nims:x:200:200:NIMS user,,,:/home/nims:/bin/bash
+\end{lstlisting}
+Next, I edited \path{/etc/group} manually to change the
+\shell{nims} group ID to 200 (this group was automatically
+created by \lstinline$adduser nims$):
+\begin{lstlisting}
+    nims:x:200:
+\end{lstlisting}
+This signifies that \shell{nims} is a system user, and prepares
+us for future usage of groups for filesystem permissions. Finally,
+\begin{lstlisting}
+    sudo chown nims:nims /home/nims
+\end{lstlisting}
+to fix the mess we just made with user and group ID.
+
+\section{Configuration}
+
+To set timezone:
+\begin{lstlisting}
+    dpkg-reconfigure tzdata
+\end{lstlisting}
+and follow the menu prompts. I set this to Los\_Angeles, which is
+the tzdata name for Pacific time. Next, to install NTP support:
+\begin{lstlisting}
+    apt-get install system-config-date
+    apt-get install ntp
+    sudo system-config-date
+\end{lstlisting}
+Edit \path{/etc/ntp.conf} to include
+\begin{lstlisting}
+    server time.apple.com iburst
+    server 130.20.248.2 iburst prefer
+    server 130.20.128.83 iburst prefer
+\end{lstlisting}
+since our network blocks outside NTP servers. Note that this will
+likely need to change for deployment; ideally, we'd have a GPS
+receiver onboard. Reboot or restart the ntp service after changing
+the config file.
+
+\section{Startup}
+The following script in \path{/etc/init.d} is used to
+start the NIMS binaries.
+\begin{lstlisting}
+    #!/bin/sh
+
+    # System Startup for NIMS
+    # to be installed in /etc/init.d
+
+    APPLICATION_PATH=/home/nims/bin
+
+    killproc() {
+            pid=`pidof $1`
+            [ "$pid" != "" ] && kill -9 $pid
+    }
+
+    case $1 in
+
+       start)
+          echo "Starting NIMS applications."
+          if [ -e $APPLICATION_PATH/nims ]; then
+              pushd .
+              cd $APPLICATION_PATH
+              $APPLICATION_PATH/nims &
+              popd
+          fi
+          ;; 
+
+       stop)
+          echo "Stopping NIMS (Normal Mode)"
+          killall nims
+          ;;
+
+       *)
+         echo "Usage: nims.sh  {start|stop}"
+         exit 1
+         ;;
+    esac
+
+    exit 0
+\end{lstlisting}
+To activate it, we use
+\begin{lstlisting}
+    sudo service nims start|stop
+\end{lstlisting}
+from the command prompt. Eventually we'll set it to run at boot with
+\begin{lstlisting}
+    # set to start in runlevels [2-5] at S99, stop in [0,1,6] at K1
+    # was using S99 only in testing (K number = 100 - S number)
+    /usr/sbin/update-rc.d nims start 99 2 3 4 5 . stop 1 0 1 6 .
+\end{lstlisting}
+or similar.
+
+\end{document}
