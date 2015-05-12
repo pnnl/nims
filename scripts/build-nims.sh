@@ -3,14 +3,14 @@
 # Create absolute paths, using the trunk/scripts directory
 # as the base. This will put build products alongside the
 # source checkout directories.
-BUILD_DIR=$(pwd)/../../nims-build
-SOURCE_DIR=$(pwd)/../../nims-source
-YAML_SRC=$(pwd)/../../vendorsrc/yaml-cpp-release-0.5.2
+BUILD_DIR=$(pwd)/../nims-build
+SOURCE_DIR=$(pwd)/../nims-source
+YAML_SRC=$(pwd)/../vendorsrc/yaml-cpp-release-0.5.2
 
 if ! [ -d "$YAML_SRC" ]; then
     echo "*** checking out and configuring vendorsrc ***"
     pushd .
-    cd ../../
+    cd ..
     svn co https://subversion.pnnl.gov/svn/NIMS/vendorsrc
     popd
 fi

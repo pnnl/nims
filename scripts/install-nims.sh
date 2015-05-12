@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BUILD_DIR=../../nims-build
+BUILD_DIR=../nims-build
 
 # this is here for embedded systems work, where the
 # IP address is used for multiple hosts
