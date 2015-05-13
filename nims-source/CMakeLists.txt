@@ -39,6 +39,7 @@ add_executable(tracker tracker.cpp queues.cpp)
 add_executable(nims nims.cpp queues.cpp task.cpp)
 add_executable(test_frame_buffer_put test_frame_buffer_put.cpp frame_buffer.cpp)
 add_executable(test_frame_buffer_get test_frame_buffer_get.cpp frame_buffer.cpp)
+add_executable(test_frame_buffer test_frame_buffer.cpp)
 
 #target_link_libraries(ingester ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # Can't figure out which finder has Linux realtime, which

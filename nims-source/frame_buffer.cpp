@@ -75,22 +75,19 @@ static size_t SizeForFramebuffer(const Frame &f)
     return page_size * number_of_pages;
 }
 
-// Constructor
-FrameBufferInterface::FrameBufferInterface(const std::string &fb_name, bool writer)
+//-----------------------------------------------------------------------------
+// FrameBufferWriter Constructor
+FrameBufferWriter::FrameBufferWriter(const std::string &fb_name)
 : fb_name_(fb_name)
 { 
     shm_prefix_ = "/nims_" + fb_name_ + "-";
     mqw_name_ = "/nims_" + fb_name_ + "-connect";
     mqw_ = -1;
-    mqr_name_prefix_ = "/nims_" + fb_name_ + "-mq-";
-    mqr_ = -1;
    
    clog << "max messsage size is " << kMaxMessageSize << endl;
    
     // There must be one and only one instance of a writer for 
     // a FrameBufferInterface with a particular name.
-    if (writer)
-    {
         // Create the message queue for receiving reader messages.
         struct mq_attr attr;
         attr.mq_flags = 0; // block on mq_send and mq_receive
@@ -109,61 +106,13 @@ FrameBufferInterface::FrameBufferInterface(const std::string &fb_name, bool writ
         
         // Start thread for servicing reader connections
         clog << "starting connection thread" << endl;
-        t_ = std::thread(&FrameBufferInterface::HandleMessages, this);
+        t_ = std::thread(&FrameBufferWriter::HandleMessages, this);
     
-    } else // reader
-    {
-         // create the message queue for reading new data messages
-        //std::string mqr_name(mqr_name_prefix_);
-        mqr_name_ = mqr_name_prefix_ + boost::lexical_cast<std::string>(getpid());
-        struct mq_attr attr;
-        attr.mq_flags = 0;
-        attr.mq_maxmsg = 8; //TODO:  Define max number of buffered frames
-        attr.mq_msgsize = kMaxMessageSize;
-        clog << "creating reader message queue " << mqr_name_ << endl;
-        mqr_ = mq_open(mqr_name_.c_str(),O_RDONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
-        if (mqr_ == -1) 
-        {
-            BadReaderQueue e;
-            throw e;
-            return;
-        }
+} // FrameBufferWriter Constructor
 
-       // connect to the writer and send reader queue name
-       clog << "opening writer queue" << endl;
-       mqw_ = mq_open(mqw_name_.c_str(), O_WRONLY);
-       if (mqw_ == -1) 
-       {
-           // clean up
-           mq_close(mqr_);
-           mq_unlink(mqr_name_.c_str());
-           
-           BadWriterQueue e;
-           throw e;
-           return;
-       }
-       clog << "sending connection message" << endl;
-       if (-1 == mq_send(mqw_, mqr_name_.c_str(), mqr_name_.size(), 0))
-       {
-           // clean up
-           mq_close(mqr_);
-           mq_unlink(mqr_name_.c_str());
-           
-           BadWriterQueue e;
-           throw e;
-           return;
-       }
-       mq_close(mqw_);
-       mqw_ = -1;
-      
-        // is this blocking?
-       //mq_unlink(mqr_name.c_str()); // queue will be destroyed when writer closes it
- 
-    } // reader
-} // Constructor
-
-// Destructor
-FrameBufferInterface::~FrameBufferInterface()
+//-----------------------------------------------------------------------------
+// FrameBufferWriter Destructor
+FrameBufferWriter::~FrameBufferWriter()
 {
     // wait for connection thread to return
     if (t_.joinable())
@@ -178,21 +127,17 @@ FrameBufferInterface::~FrameBufferInterface()
     }
     
     // close reader message queues
-    if (mqr_ != -1) 
-    {
-        mq_close(mqr_);
-        mq_unlink(mqr_name_.c_str());
-
-    }
     for (int k=0; k<mq_readers_.size(); ++k) mq_close(mq_readers_[k]);
     
     // clean up shared memory
     
-} // Destructor
+} // FrameBufferWriter Destructor
 
+
+//-----------------------------------------------------------------------------
 // Put a new frame into the buffer.  Returns the
 // index of the new frame.
-long FrameBufferInterface::PutNewFrame(const Frame &new_frame)
+long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
 {
     static int64_t framebuffer_frame_count = 0;
     
@@ -262,16 +207,116 @@ long FrameBufferInterface::PutNewFrame(const Frame &new_frame)
 
     return framebuffer_frame_count; 
     
-} // PutNewFrame
+} // FrameBufferWriter::PutNewFrame
 	    
+//-----------------------------------------------------------------------------	    
+void FrameBufferWriter::HandleMessages()
+{
+    char msg[kMaxMessageSize];
+    mqd_t mqr;
+    ssize_t numbytes; 
+    
+    while(1)
+    {
+        // Wait for a message.
+        numbytes = mq_receive(mqw_, msg, kMaxMessageSize, 0);
+        if (-1 == numbytes) 
+        {
+            perror("connection thread");
+            clog << "connection thread returning" << endl;
+            return;
+        }
+        msg[numbytes] = '\0';
+        clog << "got a message with " << numbytes << " bytes: " << msg << endl;
+        if (numbytes==1 && msg[0] == 'x') return;
+        
+        // Open reader message queue.
+        clog << "opening message queue " << msg << endl;
+        mqr = mq_open(msg,O_WRONLY);
+        mq_readers_.push_back(mqr); // Add it to the list.
+    }
+    
+} // ConnectReaders
+
+//-----------------------------------------------------------------------------
+// *******  FrameBufferReader  ********
+//-----------------------------------------------------------------------------
+// FrameBufferReader Constructor
+FrameBufferReader::FrameBufferReader(const std::string &fb_name)
+: fb_name_(fb_name)
+{ 
+    mqw_name_ = "/nims_" + fb_name_ + "-connect";
+    mqw_ = -1;
+    mqr_ = -1;
+   
+   clog << "max messsage size is " << kMaxMessageSize << endl;
+   
+         // create the message queue for reading new data messages
+        //std::string mqr_name(mqr_name_prefix_);
+        mqr_name_ = "/nims_" + fb_name_ + "-mq-" + boost::lexical_cast<std::string>(getpid());
+        struct mq_attr attr;
+        attr.mq_flags = 0;
+        attr.mq_maxmsg = 8; //TODO:  Define max number of buffered frames
+        attr.mq_msgsize = kMaxMessageSize;
+        clog << "creating reader message queue " << mqr_name_ << endl;
+        mqr_ = mq_open(mqr_name_.c_str(),O_RDONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
+        if (mqr_ == -1) 
+        {
+            BadReaderQueue e;
+            throw e;
+            return;
+        }
+
+       // connect to the writer and send reader queue name
+       clog << "opening writer queue" << endl;
+       mqw_ = mq_open(mqw_name_.c_str(), O_WRONLY);
+       // TODO:  Should probably wait and try again and eventually time out.
+       if (mqw_ == -1) 
+       {
+           // clean up
+           mq_close(mqr_);
+           mq_unlink(mqr_name_.c_str());
+           
+           BadWriterQueue e;
+           throw e;
+           return;
+       }
+       clog << "sending connection message" << endl;
+       if (-1 == mq_send(mqw_, mqr_name_.c_str(), mqr_name_.size(), 0))
+       {
+           // clean up
+           mq_close(mqr_);
+           mq_unlink(mqr_name_.c_str());
+           
+           BadWriterQueue e;
+           throw e;
+           return;
+       }
+       mq_close(mqw_);
+       mqw_ = -1;
+      
+} // FrameBufferReader Constructor 
+
+// FrameBufferReader Destructor
+FrameBufferReader::~FrameBufferReader()
+{
+        mq_close(mqr_);
+        mq_unlink(mqr_name_.c_str()); // TODO: make sure this doesn't block
+
+    // clean up shared memory
+    
+} // FrameBufferReader Destructor
+
+//-----------------------------------------------------------------------------
 // Get the next frame in the buffer, "next" meaning
 // relative to the last frame that was retrieved by the
 // calling process.  Returns the index of the frame.
-long FrameBufferInterface::GetNextFrame(Frame* next_frame)
+long FrameBufferReader::GetNextFrame(Frame* next_frame)
 {
+    // Note this will block until there's a message from the writer.
     FrameMsg msg;
     mq_receive(mqr_, (char *)&msg, sizeof(msg), 0);
-    
+    cout << "getting " << msg.shm_open_name << endl;
     int fd = shm_open(msg.shm_open_name, O_RDONLY, S_IRUSR);
     
     // !!! early return
@@ -304,34 +349,6 @@ long FrameBufferInterface::GetNextFrame(Frame* next_frame)
     
     return msg.frame_number;
     
-} // GetNextFrame
+} // FrameBufferReader::GetNextFrame
 	    
-	    
-void FrameBufferInterface::HandleMessages()
-{
-    char msg[kMaxMessageSize];
-    mqd_t mqr;
-    ssize_t numbytes; 
-    
-    while(1)
-    {
-        // Wait for a message.
-        numbytes = mq_receive(mqw_, msg, kMaxMessageSize, 0);
-        if (-1 == numbytes) 
-        {
-            perror("connection thread");
-            clog << "connection thread returning" << endl;
-            return;
-        }
-        msg[numbytes] = '\0';
-        clog << "got a message with " << numbytes << " bytes: " << msg << endl;
-        if (numbytes==1 && msg[0] == 'x') return;
-        
-        // Open reader message queue.
-        clog << "opening message queue " << msg << endl;
-        mqr = mq_open(msg,O_WRONLY);
-        mq_readers_.push_back(mqr); // Add it to the list.
-    }
-    
-} // ConnectReaders
 

@@ -62,7 +62,7 @@ int main (int argc, char * const argv[]) {
 	
     try
     {
-        FrameBufferInterface fb(buffer_name);
+        FrameBufferReader fb(buffer_name);
         Frame *next_frame;
         int frame_index = -1;
         while (frame_index = fb.GetNextFrame(next_frame) != -1)

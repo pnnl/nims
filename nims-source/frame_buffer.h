@@ -85,12 +85,12 @@ struct Frame
 // order that they arrived in the buffer, with each frame
 // remaining in the buffer until all the reader processes
 // have consumed it, or some set amount of time expires.
-class FrameBufferInterface
+class FrameBufferWriter
 {
 	public:
     // Each sonar device has a unique name.
-	    FrameBufferInterface(const std::string &fb_name, bool writer=false);
-	    ~FrameBufferInterface();
+	    FrameBufferWriter(const std::string &fb_name);
+	    ~FrameBufferWriter();
 	   
     // NOTE: Don't need this now because constructor throws exception.
 	    // Call immediately following construction to test
@@ -101,12 +101,6 @@ class FrameBufferInterface
 	    // index of the new frame.
 	    long PutNewFrame(const Frame &new_frame); 
 	    
-	    // Get the next frame in the buffer, "next" meaning
-	    // relative to the last frame that was retrieved by the
-	    // calling process.  Returns the index of the frame.
-	    long GetNextFrame(Frame* next_frame);
-	    
-	    
     private:
         void HandleMessages();  // thread function run by writer
     
@@ -116,12 +110,36 @@ class FrameBufferInterface
         mqd_t mqw_;                // writer message queue (FIFO)
         std::thread t_;            // writer's connection service thread
         std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer 
-        std::string mqr_name_prefix_;    // reader message queue name
-    std::string mqr_name_;
+ 
+
+}; // class FrameBufferWriter
+
+class FrameBufferReader
+{
+	public:
+    // Each sonar device has a unique name.
+	    FrameBufferReader(const std::string &fb_name);
+	    ~FrameBufferReader();
+	   
+    // NOTE: Don't need this now because constructor throws exception.
+	    // Call immediately following construction to test
+	    // that the interface was properly initialized.
+	    //bool IsOpen() { return (mqw_ != -1 || mqr_ != -1); };
+	    
+	    // Get the next frame in the buffer, "next" meaning
+	    // relative to the last frame that was retrieved by the
+	    // calling process.  Returns the index of the frame.
+	    long GetNextFrame(Frame* next_frame);
+	    
+	    
+    private:
+        std::string fb_name_;    // unique name for this frame buffer
+         std::string mqw_name_;    // writer message queue name
+        mqd_t mqw_;                // writer message queue (FIFO)
+        std::string mqr_name_;
         mqd_t mqr_;                // reader message queue, only used by reader
 
 
-}; // class FrameBufferInterface
-
+}; // class FrameBufferReader
 
 #endif // __NIMS_FRAMEBUFFER_H__

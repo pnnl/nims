@@ -63,7 +63,7 @@ int main (int argc, char * const argv[]) {
 	Frame new_frame;
 	try 
 	{
-	FrameBufferInterface fb(buffer_name,true); // create as the writer
+	FrameBufferWriter fb(buffer_name); // create as the writer
 	//if (!fb.IsOpen())
 	//{
 	    //perror(argv[0]);
