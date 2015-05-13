@@ -66,4 +66,4 @@ ADD_CUSTOM_COMMAND(TARGET nims
 
 ADD_CUSTOM_COMMAND(TARGET nims
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PROJECT_SOURCE_DIR}/scripts/nims.sh $<TARGET_FILE_DIR:nims>)
+        ${PROJECT_SOURCE_DIR}/../scripts/nims.sh $<TARGET_FILE_DIR:nims>)
