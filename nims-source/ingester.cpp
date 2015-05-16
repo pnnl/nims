@@ -19,6 +19,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
+#include "data_source_m3.h"
+
 using namespace std;
 //using namespace cv;
 using namespace boost;
@@ -31,12 +33,18 @@ namespace fs = boost::filesystem;
 static volatile int sigint_received = 0;
 
 // returns length of data copied to shared memory
-static size_t ProcessFile(string &watchDirectory, string &fileName)
+static size_t ProcessFile(const string &watchDirectory, const string &fileName)
 {    
     cout << "processing file " << fileName << " in dir " << watchDirectory << endl;
-    
-    
-    return 0;
+    DataSourceM3 input(string(watchDirectory + "/" + fileName));
+    if ( !input.is_open() ) 
+    {
+       cout << "file NOT open. :(" << endl;
+       return 0;
+    }
+    cout << "file is open!" << endl;
+    input.GetPing();
+    return 1;
 }
 
 static void sig_handler(int sig)
@@ -49,6 +57,8 @@ int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
 	//
+	// TODO:  Make one input arg, the path of the config file.  Then get other 
+	//        params from config file.
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
@@ -144,7 +154,7 @@ int main (int argc, char * argv[]) {
                         clog << "Found new directory: " << watchDirectory << endl;
                     }
                 } 
-                if( event->mask & IN_CLOSE_WRITE ) {
+                if( event->mask & IN_CLOSE_WRITE ) { // TODO: Only seems to process one file
                     if( !(event->mask & IN_ISDIR) ) {
                         clog << "Found file: " << event->name << endl;
                         string eventName(event->name);
