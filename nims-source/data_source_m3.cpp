@@ -254,6 +254,64 @@ typedef struct
 
 typedef struct
 {
+    INT16U  iTXSpatialPhaseIndex;
+    INT16U  wXDCRType;
+    INT8U   TXPhase_C0;
+    INT8U   TXPhase_C1;
+    INT8U   TXPhase_C2;
+    INT8U   TXPhase_C3;
+    INT8U   TXAmp_C0;
+    INT8U   TXAmp_C1;
+    INT8U   TXAmp_C2;
+    INT8U   TXAmp_C3;
+    INT16U  nNumImages;
+    INT16U  TxPwr;
+    INT8U   reserved[28];    
+} BF_Hdr_SpatialPhase_Struct;
+
+typedef struct
+{
+    INT32U  dwSubArrayFrequency;
+    float   fFocalTolerance;
+    INT16U  nNumFocalZones;
+    INT16U  iImageIndex;
+    INT16U  nNumBeams;
+    INT8U   reserved[30];
+} BF_Hdr_Image_Struct;
+
+typedef struct
+{
+    INT8U   iFocalZoneIndex;
+    INT8U   reserved[3];
+    float   fNearEdge;
+    float   fFarEdge;
+    float   fCenter;
+    INT8U   reserved2[8];    
+} BF_Hdr_Image_Focal_Zone_Struct;
+
+typedef struct
+{
+    INT16U  iBeamIndex;
+    INT8U   reserved[2];
+    float   fBeamAngle;
+    float   fBeamOrigin_X;
+    float   fBeamOrigin_Y;
+    float   fBeamOrigin_Z;
+    INT8U   reserved2[4];    
+} BF_Hdr_Beam_Struct;
+
+typedef struct
+{
+    INT8U   iFocalZoneIndex;
+    INT8U   nStartElement;
+    INT8U   nEndElement;
+    INT8U   nAzimuthWeightingType;
+    INT8U   nAzimuthWeightingCoef;
+    INT8U   reserved[3];
+} BF_Hdr_Beam_Focal_Zone_Struct;
+
+typedef struct
+{
 	INT32U	dwVersion;
     INT32U  dwSonarID;
 	INT32U	dwBFPacketID;	
@@ -337,7 +395,96 @@ typedef struct
     INT32U reserved[10];
 } Footer_Struct;
 
+typedef struct
+{
+    INT32U  iBeamIndex;
+    float   fBeamAngle;
+    float   fBeamOrigin_X;
+    float   fBeamOrigin_Y;
+    float   fBeamOrigin_Z;
+    INT16U  nStartElement;
+    INT16U  nEndElement;
+ 
+} Beam_Struct;
 
+// TODO:  Make this cleaner -- overloaded function, member function, something more object oriented
+bool valid_packet(const Packet_Header_Struct &packet_header, const Header_Struct& header, const BF_Hdr_Struct& bf_header, const Ping_Hdr_Struct ping_header)
+{
+    switch (packet_header.data_type)
+    {
+        case PKT_DATA_TYPE_OLD_HDR:
+            /****** Old Data Format ******/
+            if (header.nNumElements > MAX_NUM_ELEMENTS)
+            {
+                clog << "Num elements = " << header.nNumElements << endl;;
+                cerr << "ERROR: number of elements exceeds max" << endl;
+                return false;
+            }
+            
+            if (header.nNumRangeCells > MAX_NUM_RANGE_CELLS)
+            {
+                clog << "Num range cells = " << header.nNumRangeCells << endl;
+                cerr << "ERROR: number of range cells exceeds max" << endl;
+                return false;
+            }
+            
+            if (header.dwReferencePulse[0] > MAX_LENGTH_REF_PULSE)
+            {
+                clog << "Ref Pulse length = " << header.dwReferencePulse[0] << endl;
+                cerr << "ERROR: Ref Pulse length exceeds max" << endl;
+                return false;
+            }
+            
+            if (header.nNumBeams[0] > MAX_NUM_BEAMS)
+            {
+                clog << "Number of Beams = " << header.nNumBeams[0] << endl;
+                cerr << "ERROR: Number of beams exceeds max" << endl;
+                return false;
+            }
+            
+            break;
+            
+        case PKT_DATA_TYPE_PING_HDR:
+            /****** New Data Format ******/
+            if (bf_header.wNumElements > MAX_NUM_ELEMENTS)
+            {
+                clog << "Num elements = " << bf_header.wNumElements << endl;
+                cerr << "ERROR: number of elements exceeds max" << endl;
+                return false;
+            }
+            
+            if (bf_header.wNumTxSpatialPhases > MAX_NUM_SPATIAL_PHASES)
+            {
+                clog << "Num spatial phases = " << bf_header.wNumTxSpatialPhases << endl;
+                cerr << "ERROR: number of spatial phases exceeds max" << endl;
+                return false;
+            }
+            
+            
+            if (ping_header.nNumRawSamples > MAX_NUM_RANGE_CELLS)
+            {
+                clog << "Num range cells = " << ping_header.nNumRawSamples << endl;
+                cerr << "ERROR: number of range cells exceeds max" << endl;
+                return false;
+            }
+            
+            if (ping_header.dwReferencePulse[0] > MAX_LENGTH_REF_PULSE)
+            {
+                clog << "Ref Pulse length = " << ping_header.dwReferencePulse[0] << endl;
+                cerr << "ERROR: Ref Pulse length exceeds max" << endl;
+                return false;
+            }
+            
+            break;
+            
+        default:
+            cerr << "Error: incorrect packet data type" << endl;
+            return false;
+            break;
+    }
+    return true;
+
+} //valid_packet
 
 //-----------------------------------------------------------------------------
 // DataSourceM3::GetPing
@@ -350,10 +497,19 @@ void DataSourceM3::GetPing()
     Packet_Header_Struct packet_header;
     Header_Struct        header;
     BF_Hdr_Struct        bf_header;
-    
+    BF_Hdr_SpatialPhase_Struct       bf_hdr_spatial_phase;
+    BF_Hdr_Image_Struct              bf_hdr_image;
+    BF_Hdr_Image_Focal_Zone_Struct   bf_hdr_image_focal_zone;
+    BF_Hdr_Beam_Struct               bf_hdr_beam;
+    Beam_Struct                      hdr_beam[MAX_NUM_BEAMS];
+    BF_Hdr_Beam_Focal_Zone_Struct    bf_hdr_beam_focal_zone;
+   
     Ping_Hdr_Struct       ping_header;
     Generic_Hdr_Struct    generic_header;
     Footer_Struct         footer;
+
+    INT16U TXSpatialPhaseIndex[MAX_NUM_SPATIAL_PHASES];
+    INT16U NumImages[MAX_NUM_SPATIAL_PHASES];
 
     memset(&packet_header, 0, sizeof(Packet_Header_Struct));
     memset(&header,        0, sizeof(Header_Struct));
@@ -383,11 +539,13 @@ void DataSourceM3::GetPing()
             cerr << "ERROR: failed to find header sync words" << endl;
             return;
     }
-    cout << "packet type is " << packet_header.data_type << endl;
+    cout << "packet type is " << std::hex << packet_header.data_type << endl;
     
     switch (packet_header.data_type)
     {
         case PKT_DATA_TYPE_OLD_HDR:
+        {
+            clog << "PKT_DATA_TYPE_OLD_HDR" << endl;
             /* Extract the header and read it */
             memset(&header, 0, sizeof(Header_Struct));
             //memcpy(&header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Header_Struct));
@@ -414,113 +572,201 @@ void DataSourceM3::GetPing()
                             + num_bytes_ref_pulse + num_bytes_raw_data;
                 
             //curr_ping++;
-            break; // PKT_DATA_TYPE_OLD_HDR
+        }  
+        break; // PKT_DATA_TYPE_OLD_HDR
+           
+        case PKT_DATA_TYPE_BF_HDR:
+        {
+           clog << "PKT_DATA_TYPE_BF_HDR" << endl;
+           memset(&bf_header, 0, sizeof(BF_Hdr_Struct));
+            //memcpy(&bf_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(BF_Hdr_Struct));
+            input_.read((char *)&bf_header, sizeof(bf_header));
             
-            case PKT_DATA_TYPE_BF_HDR:
-                memset(&bf_header, 0, sizeof(BF_Hdr_Struct));
-                //memcpy(&bf_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(BF_Hdr_Struct));
-                input_.read((char *)&bf_header, sizeof(bf_header));
-                
-                DEBUG_PRINT_2("BF Packet ID        = ", bf_header.dwPacketID);
-                
-                //if (bf_hdr2_ptr)
-                //{
-                //    mxFree(bf_hdr2_ptr);
-                //    bf_hdr2_ptr = 0;
-                //}
-                char* bf_hdr2_ptr = nullptr;
-                bf_hdr2_ptr = (char *)malloc(packet_header.packet_body_size);
-                INT32U bf_hdr2_offset = 0;
-                
-                //memcpy(bf_hdr2_ptr,
-                 //      bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(BF_Hdr_Struct),
-                  //     packet_header.packet_body_size);
-                input_.read(bf_hdr2_ptr, packet_header.packet_body_size);
-                
-                footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
-
-				if (bf_header.wNumElements > MAX_NUM_ELEMENTS)
-				{
-					DEBUG_PRINT_2("Num elements = ", bf_header.wNumElements);
-					free(bf_hdr2_ptr);
-					ERROR_MSG_EXIT("ERROR: number of elements exceeds max");
-				}
+            DEBUG_PRINT_2("BF Packet ID        = ", bf_header.dwPacketID);
             
-				if (bf_header.wNumTxSpatialPhases > MAX_NUM_SPATIAL_PHASES)
-				{
-					DEBUG_PRINT_2("Num spatial phases = ", bf_header.wNumTxSpatialPhases);
-					free(bf_hdr2_ptr);
-					ERROR_MSG_EXIT("ERROR: number of spatial phases exceeds max");
-				}
-/*
-				// Loop over spatial phases to get number of images only, other fields are filled in PKT_DATA_TYPE_PING_HDR 
-				for (nn = 0; nn < bf_header.wNumTxSpatialPhases; nn++)
-				{
-					memcpy(&bf_hdr_spatial_phase,
-						   bf_hdr2_ptr + bf_hdr2_offset,
-						   sizeof(BF_Hdr_SpatialPhase_Struct));
-					bf_hdr2_offset += sizeof(BF_Hdr_SpatialPhase_Struct);
+            //if (bf_hdr2_ptr)
+            //{
+            //    mxFree(bf_hdr2_ptr);
+            //    bf_hdr2_ptr = 0;
+            //}
+            char* bf_hdr2_ptr = nullptr;
+            bf_hdr2_ptr = (char *)malloc(packet_header.packet_body_size);
+            INT32U bf_hdr2_offset = 0;
+            
+            //memcpy(bf_hdr2_ptr,
+             //      bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(BF_Hdr_Struct),
+              //     packet_header.packet_body_size);
+            input_.read(bf_hdr2_ptr, packet_header.packet_body_size);
+            
+            footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
 
-					TXSpatialPhaseIndex[nn] = bf_hdr_spatial_phase.iTXSpatialPhaseIndex;
-					NumImages[nn] = bf_hdr_spatial_phase.nNumImages;
-                
-					if (bf_hdr_spatial_phase.nNumImages > MAX_NUM_IMAGES)
+			if (bf_header.wNumElements > MAX_NUM_ELEMENTS)
+			{
+				DEBUG_PRINT_2("Num elements = ", bf_header.wNumElements);
+				free(bf_hdr2_ptr);
+				ERROR_MSG_EXIT("ERROR: number of elements exceeds max");
+			}
+        
+			if (bf_header.wNumTxSpatialPhases > MAX_NUM_SPATIAL_PHASES)
+			{
+				DEBUG_PRINT_2("Num spatial phases = ", bf_header.wNumTxSpatialPhases);
+				free(bf_hdr2_ptr);
+				ERROR_MSG_EXIT("ERROR: number of spatial phases exceeds max");
+			}
+
+			// Loop over spatial phases to get number of images only, 
+			// other fields are filled in PKT_DATA_TYPE_PING_HDR 
+			for (int nn = 0; nn < bf_header.wNumTxSpatialPhases; nn++)
+			{
+				memcpy(&bf_hdr_spatial_phase,
+					   bf_hdr2_ptr + bf_hdr2_offset,
+					   sizeof(BF_Hdr_SpatialPhase_Struct));
+				bf_hdr2_offset += sizeof(BF_Hdr_SpatialPhase_Struct);
+
+				TXSpatialPhaseIndex[nn] = bf_hdr_spatial_phase.iTXSpatialPhaseIndex;
+				NumImages[nn] = bf_hdr_spatial_phase.nNumImages;
+            
+				if (bf_hdr_spatial_phase.nNumImages > MAX_NUM_IMAGES)
+				{
+					DEBUG_PRINT_2("Num Images = ",  bf_hdr_spatial_phase.nNumImages);
+					ERROR_MSG_EXIT("Error: num images exceeds max");
+				}
+
+				for (int mm = 0; mm < bf_hdr_spatial_phase.nNumImages; mm++)
+				{ // Loop over the images 
+
+					memcpy(&bf_hdr_image, bf_hdr2_ptr + bf_hdr2_offset, 
+					  sizeof(BF_Hdr_Image_Struct));
+					bf_hdr2_offset += sizeof(BF_Hdr_Image_Struct);
+
+					if (bf_hdr_image.nNumFocalZones > MAX_NUM_FOCAL_ZONES)
 					{
-						DEBUG_PRINT_2("Num Images = ",  bf_hdr_spatial_phase.nNumImages);
-						ERROR_MSG_EXIT("Error: num images exceeds max");
+						DEBUG_PRINT_4("Image Num = ", mm, "Num Focal Zones = ",
+						 bf_hdr_image.nNumFocalZones);
+						ERROR_MSG_EXIT("Error: num focal zones exceeds max");
 					}
 
-					for (mm = 0; mm < bf_hdr_spatial_phase.nNumImages; mm++)
-					{ // Loop over the images 
+			        for (int ii = 0; ii < bf_hdr_image.nNumFocalZones; ii++)
+			        { // Loop over the focal zones 
+				        memcpy(&bf_hdr_image_focal_zone,
+						        bf_hdr2_ptr + bf_hdr2_offset,
+						        sizeof(BF_Hdr_Image_Focal_Zone_Struct));
+				        bf_hdr2_offset += sizeof(BF_Hdr_Image_Focal_Zone_Struct);
+			        } // END loop over the focal zones 
 
-						memcpy(&bf_hdr_image, bf_hdr2_ptr + bf_hdr2_offset, sizeof(BF_Hdr_Image_Struct));
-						bf_hdr2_offset += sizeof(BF_Hdr_Image_Struct);
+			        if (bf_hdr_image.nNumBeams > MAX_NUM_BEAMS)
+			        {
+				        DEBUG_PRINT_2("Num Beams = %d\n",  bf_hdr_image.nNumBeams);
+				        ERROR_MSG_EXIT("Error: number of beams exceeds max");
+			        }
 
-						if (bf_hdr_image.nNumFocalZones > MAX_NUM_FOCAL_ZONES)
-						{
-							//mexPrintf("Image Num = %d, Num Focal Zones = %d\n",  mm, bf_hdr_image.nNumFocalZones);
-							ERROR_MSG_EXIT("Error: num focal zones exceeds max");
-						}
+				    for (int ii = 0; ii < bf_hdr_image.nNumBeams; ii++)
+				    { // Loop over the focal beams 
+					    memcpy(&bf_hdr_beam,
+							    bf_hdr2_ptr + bf_hdr2_offset,
+							    sizeof(BF_Hdr_Beam_Struct));
+					    bf_hdr2_offset += sizeof(BF_Hdr_Beam_Struct);
 
-						for (ii = 0; ii < bf_hdr_image.nNumFocalZones; ii++)
-						{ // Loop over the focal zones 
-							memcpy(&bf_hdr_image_focal_zone,
-									bf_hdr2_ptr + bf_hdr2_offset,
-									sizeof(BF_Hdr_Image_Focal_Zone_Struct));
-							bf_hdr2_offset += sizeof(BF_Hdr_Image_Focal_Zone_Struct);
-						} // END loop over the focal zones 
-
-						if (bf_hdr_image.nNumBeams > MAX_NUM_BEAMS)
-						{
-							DEBUG_PRINT_2("Num Beams = %d\n",  bf_hdr_image.nNumBeams);
-							ERROR_MSG_EXIT("Error: number of beams exceeds max");
-						}
-
-						for (ii = 0; ii < bf_hdr_image.nNumBeams; ii++)
-						{ // Loop over the focal beams 
-							memcpy(&bf_hdr_beam,
-									bf_hdr2_ptr + bf_hdr2_offset,
-									sizeof(BF_Hdr_Beam_Struct));
-							bf_hdr2_offset += sizeof(BF_Hdr_Beam_Struct);
-
-							for (jj = 0; jj < bf_hdr_image.nNumFocalZones; jj++)
-							{ // Loop over the focal zones
-								memcpy(&bf_hdr_beam_focal_zone,
-										bf_hdr2_ptr + bf_hdr2_offset,
-										sizeof(BF_Hdr_Beam_Focal_Zone_Struct));
-								bf_hdr2_offset += sizeof(BF_Hdr_Beam_Focal_Zone_Struct);
-							} // END loop over the focal zones  
-						} // END loop over the beams  
-					} // END loop over the images  
-				} // END loop over the spatial phases  
+					    for (int jj = 0; jj < bf_hdr_image.nNumFocalZones; jj++)
+					    { // Loop over the focal zones
+						    memcpy(&bf_hdr_beam_focal_zone,
+								    bf_hdr2_ptr + bf_hdr2_offset,
+								    sizeof(BF_Hdr_Beam_Focal_Zone_Struct));
+						    bf_hdr2_offset += sizeof(BF_Hdr_Beam_Focal_Zone_Struct);
+					    } // END loop over the focal zones  
+				    } // END loop over the beams  
+			    } // END loop over the images  
+		    } // END loop over the spatial phases  
 				
-	*/
-	        free(bf_hdr2_ptr);
-				break;			           
-                
-     } // switch (packet_header.data_type)
+            free(bf_hdr2_ptr);
+            }
+	        break; // PKT_DATA_TYPE_BF_HDR
+	        		           
+        case PKT_DATA_TYPE_PING_HDR:
+        {
+            clog << "PKT_DATA_TYPE_PING_HDR" << endl;
+            memset(&ping_header, 0, sizeof(Ping_Hdr_Struct));
+            //memcpy(&ping_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Ping_Hdr_Struct));
+            
+			if (ping_header.dwBFPacketID != bf_header.dwPacketID)
+            {
+                cerr << "BF Packet ID =  " << bf_header.dwPacketID << "vs. "
+                 << ping_header.dwBFPacketID << endl;
+                ERROR_MSG_EXIT("Beamformer Packet ID Mismatch!");
+            }
+
+			/* find TX Spatial Phase index */
+			int PhaseSeqIndex = -1;
+			for (int nn = 0; nn < bf_header.wNumTxSpatialPhases; nn++)
+			{
+				if (ping_header.nPhaseSeqIndex == TXSpatialPhaseIndex[nn])
+				{
+					PhaseSeqIndex = nn;
+					break;
+				}
+			}
+
+			if (PhaseSeqIndex < 0)
+            {
+                DEBUG_PRINT_2("bf_header.wNumTxSpatialPhases = %u\n", bf_header.wNumTxSpatialPhases);
+                ERROR_MSG_EXIT("Ping header iPhaseSeqIndex does not match TXSpatialPhaseIndex in BF header!");
+            }
+
+			num_bytes_ref_pulse = 0;   				
+			for (int nn = 0; nn < NumImages[PhaseSeqIndex]; nn++)
+			{
+				num_bytes_ref_pulse += sizeof(Ipp32fc_Type)*(ping_header.dwReferencePulse[nn]); 
+			}
+
+            num_bytes_raw_data = sizeof(Ipp16sc_Type)*(ping_header.nNumRawSamples)*(bf_header.wNumElements);
+            
+            DEBUG_PRINT_2("Ping Header Version = %u\n", ping_header.dwVersion);
+            DEBUG_PRINT_2("num_bytes_ref_pulse = %u\n", num_bytes_ref_pulse);
+            DEBUG_PRINT_2("num_bytes_raw_data  = %u\n", num_bytes_raw_data);
+            DEBUG_PRINT_2("BF Packet ID        = %u\n", ping_header.dwBFPacketID);
+            DEBUG_PRINT_2("Ping Counter          %u\n", ping_header.dwPingCounter);
+            DEBUG_PRINT_2("Num Raw Samples     = %u\n", ping_header.nNumRawSamples);
+            DEBUG_PRINT_2("Num Elements        = %u\n", bf_header.wNumElements);
+            
+            DEBUG_PRINT_2("PRF                 = %f\n", ping_header.fPulseRepFreq);
+            
+//                 DEBUG_PRINT_4("Rotator Angles: %f %f %f\n", ping_header.fRotatorAngle[0], ping_header.fRotatorAngle[1], ping_header.fRotatorAngle[2]);
+            
+//                 DEBUG_PRINT_2("Compass            = %f\n", ping_header.fCompassHeading);
+//                 DEBUG_PRINT_2("Magnetic Variation = %f\n", ping_header.fMagneticVariation);
+            DEBUG_PRINT_2("Pitch              = %f\n", ping_header.fPitch);
+            DEBUG_PRINT_2("Roll               = %f\n", ping_header.fRoll);
+//                 DEBUG_PRINT_2("Depth              = %f\n", ping_header.fDepth);
+//                 
+//                 DEBUG_PRINT_2("Temperature        = %f\n", ping_header.fTemperature);
+//                 DEBUG_PRINT_2("Latitude           = %f\n", ping_header.dbLatitude);
+//                 DEBUG_PRINT_2("Longitude          = %f\n", ping_header.dbLongitude);
+//                 DEBUG_PRINT_2("TXWST              = %f\n", ping_header.fTXWST);
+//                 DEBUG_PRINT_2("Pulse Length       = %f\n", ping_header.dwPulseLength);
+//                 
+//                 DEBUG_PRINT_2("Internal Compass   = %f\n", ping_header.fInternalSensorHeading);
+//                 DEBUG_PRINT_2("Internal Pitch     = %f\n", ping_header.fInternalSensorPitch);
+//                 DEBUG_PRINT_2("Internal Roll      = %f\n", ping_header.fInternalSensorRoll);
+//                 
+//                 DEBUG_PRINT_2("Local Time Offset  = %f\n", ping_header.fLocalTimeOffset);
+            
+            footer_offset = sizeof(Packet_Header_Struct) + sizeof(Ping_Hdr_Struct) + num_bytes_ref_pulse + num_bytes_raw_data;
+            
+            //curr_ping++;
+        }      
+        break; // PKT_DATA_TYPE_PING_HDR
+            
+        default:
+            ERROR_MSG_EXIT( "Error: incorrect packet data type");
+            break;
+
+    } // switch (packet_header.data_type)
                 
 
+    if ( !valid_packet(packet_header, header, bf_header, ping_header) )
+    {
+        ERROR_MSG_EXIT( "Error: Invalid packet");
+    }
 
 } //  DataSourceM3::GetPing
 

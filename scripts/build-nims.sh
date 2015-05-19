@@ -3,27 +3,31 @@
 # Create absolute paths, using the trunk/scripts directory
 # as the base. This will put build products alongside the
 # source checkout directories.
-BUILD_DIR=$(pwd)/../nims-build
+BUILD_DIR=$(pwd)/../build
 SOURCE_DIR=$(pwd)/../nims-source
 YAML_SRC=$(pwd)/../vendorsrc/yaml-cpp-release-0.5.2
 
-if ! [ -d "$YAML_SRC" ]; then
-    echo "*** checking out and configuring vendorsrc ***"
-    pushd .
-    cd ..
-    svn co https://subversion.pnnl.gov/svn/NIMS/vendorsrc
-    popd
-fi
+# TODO:  need to check version of yaml lib
+if ! [ -f "/usr/local/lib/libyaml-cpp.a" ]; then
+    echo "*** building libyaml-cpp.a ***"
+    if ! [ -d "$YAML_SRC" ]; then
+        echo "*** checking out and configuring vendorsrc ***"
+        pushd .
+        cd ..
+        svn co https://subversion.pnnl.gov/svn/NIMS/vendorsrc
+        popd
+    fi
 
-if ! [ -d "$YAML_SRC/build" ]; then
-    echo "*** configuring yaml-cpp ***"
-    pushd .
-    cd "$YAML_SRC"
-    mkdir build
-    cd build
-    cmake ../ && make
-    echo "*** You now need to run 'sudo make install' in $(pwd) ***"
-    exit 0
+    if ! [ -d "$YAML_SRC/build" ]; then
+        echo "*** configuring yaml-cpp ***"
+        pushd .
+        cd "$YAML_SRC"
+        mkdir build
+        cd build
+        cmake ../ && make
+        echo "*** You now need to run 'sudo make install' in $(pwd) ***"
+        exit 0
+    fi
 fi
 
 pushd .
