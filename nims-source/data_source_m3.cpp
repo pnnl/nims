@@ -58,6 +58,7 @@ using namespace std;
 #define PKT_DATA_TYPE_PING_HDR  	(INT16U)0x100B
 #define PKT_DATA_TYPE_GENERIC_HDR   (INT16U)0x100C
 
+#define MAX_GENERIC_BYTES	(int)(64*1024)
 #define MAX_NUM_IMAGES          (int)8
 #define MUM_CUSTOM_TEXT_MAX_LETTERS (int)32
 #define MAX_NUM_ELEMENTS        (int)128
@@ -521,10 +522,22 @@ void DataSourceM3::GetPing()
    INT32U num_bytes_ref_pulse = 0;
     INT32U num_bytes_raw_data = 0;
     INT32U footer_offset = 0;
+    
+    int sensor_data_search = 1; // TODO: understand "generic sensor data" better
+	int sensor_data_found = 0;
+	char generic_str[MAX_GENERIC_BYTES+1];
+    memset(generic_str, 0, MAX_GENERIC_BYTES+1);
+    INT32U num_bytes_generic_data = 0;
+    
+    bool got_ping = false;
+    
+    while ( !got_ping) {
 
     /* Extract the packet header */
     //memcpy(&packet_header, bfr_ptr, sizeof(Packet_Header_Struct));
-     input_.read((char *)&packet_header, sizeof(packet_header));   
+     input_.read((char *)&packet_header, sizeof(packet_header));
+     if ( !input_.good() ) return; // TODO: more sophisticated error checking
+        
     /* Check header sync words */
     if ((packet_header.sync_word_1 != HDR_SYNC_INT16U_1) ||
          (packet_header.sync_word_2 != HDR_SYNC_INT16U_2) ||
@@ -549,8 +562,10 @@ void DataSourceM3::GetPing()
             /* Extract the header and read it */
             memset(&header, 0, sizeof(Header_Struct));
             //memcpy(&header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Header_Struct));
-            input_.read((char *)&header, sizeof(header)); 
-               
+            input_.read((char *)&header, sizeof(header));
+            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+
+            
             if ((header.EIQMode==1) && (header.nNumImages>1)) 
             { //for fast EIQ mode, because it has 4 reference pulses for each ping
                 num_bytes_ref_pulse = 
@@ -568,10 +583,12 @@ void DataSourceM3::GetPing()
             DEBUG_PRINT_2("num_bytes_raw_data = ", num_bytes_raw_data);
             DEBUG_PRINT_2("header.dwPingCounter = ", header.dwPingCounter);
                 
-            footer_offset = sizeof(Packet_Header_Struct) + sizeof(Header_Struct) 
-                            + num_bytes_ref_pulse + num_bytes_raw_data;
-                
+            //footer_offset = sizeof(Packet_Header_Struct) + sizeof(Header_Struct)
+            //                + num_bytes_ref_pulse + num_bytes_raw_data;
+            footer_offset = num_bytes_ref_pulse + num_bytes_raw_data;
+            
             //curr_ping++;
+            got_ping = true;
         }  
         break; // PKT_DATA_TYPE_OLD_HDR
            
@@ -581,7 +598,8 @@ void DataSourceM3::GetPing()
            memset(&bf_header, 0, sizeof(BF_Hdr_Struct));
             //memcpy(&bf_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(BF_Hdr_Struct));
             input_.read((char *)&bf_header, sizeof(bf_header));
-            
+            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+
             DEBUG_PRINT_2("BF Packet ID        = ", bf_header.dwPacketID);
             
             //if (bf_hdr2_ptr)
@@ -596,9 +614,13 @@ void DataSourceM3::GetPing()
             //memcpy(bf_hdr2_ptr,
              //      bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(BF_Hdr_Struct),
               //     packet_header.packet_body_size);
-            input_.read(bf_hdr2_ptr, packet_header.packet_body_size);
-            
-            footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
+            streampos pos = input_.tellg();
+            input_.read((char *)bf_hdr2_ptr, packet_header.packet_body_size);
+            input_.seekg(pos);
+            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+
+            //footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
+            footer_offset = packet_header.packet_body_size - sizeof(BF_Hdr_Struct);
 
 			if (bf_header.wNumElements > MAX_NUM_ELEMENTS)
 			{
@@ -680,6 +702,7 @@ void DataSourceM3::GetPing()
 				
             free(bf_hdr2_ptr);
             }
+            // NOTE:  Don't set got_ping = true because need to read another packet
 	        break; // PKT_DATA_TYPE_BF_HDR
 	        		           
         case PKT_DATA_TYPE_PING_HDR:
@@ -687,7 +710,9 @@ void DataSourceM3::GetPing()
             clog << "PKT_DATA_TYPE_PING_HDR" << endl;
             memset(&ping_header, 0, sizeof(Ping_Hdr_Struct));
             //memcpy(&ping_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Ping_Hdr_Struct));
-            
+            input_.read((char *)&ping_header, sizeof(ping_header));
+            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+
 			if (ping_header.dwBFPacketID != bf_header.dwPacketID)
             {
                 cerr << "BF Packet ID =  " << bf_header.dwPacketID << "vs. "
@@ -708,7 +733,7 @@ void DataSourceM3::GetPing()
 
 			if (PhaseSeqIndex < 0)
             {
-                DEBUG_PRINT_2("bf_header.wNumTxSpatialPhases = %u\n", bf_header.wNumTxSpatialPhases);
+                DEBUG_PRINT_2("bf_header.wNumTxSpatialPhases = ", bf_header.wNumTxSpatialPhases);
                 ERROR_MSG_EXIT("Ping header iPhaseSeqIndex does not match TXSpatialPhaseIndex in BF header!");
             }
 
@@ -720,22 +745,22 @@ void DataSourceM3::GetPing()
 
             num_bytes_raw_data = sizeof(Ipp16sc_Type)*(ping_header.nNumRawSamples)*(bf_header.wNumElements);
             
-            DEBUG_PRINT_2("Ping Header Version = %u\n", ping_header.dwVersion);
-            DEBUG_PRINT_2("num_bytes_ref_pulse = %u\n", num_bytes_ref_pulse);
-            DEBUG_PRINT_2("num_bytes_raw_data  = %u\n", num_bytes_raw_data);
-            DEBUG_PRINT_2("BF Packet ID        = %u\n", ping_header.dwBFPacketID);
-            DEBUG_PRINT_2("Ping Counter          %u\n", ping_header.dwPingCounter);
-            DEBUG_PRINT_2("Num Raw Samples     = %u\n", ping_header.nNumRawSamples);
-            DEBUG_PRINT_2("Num Elements        = %u\n", bf_header.wNumElements);
+            DEBUG_PRINT_2("Ping Header Version = ", ping_header.dwVersion);
+            DEBUG_PRINT_2("num_bytes_ref_pulse = ", num_bytes_ref_pulse);
+            DEBUG_PRINT_2("num_bytes_raw_data  = ", num_bytes_raw_data);
+            DEBUG_PRINT_2("BF Packet ID        = ", ping_header.dwBFPacketID);
+            DEBUG_PRINT_2("Ping Counter          ", ping_header.dwPingCounter);
+            DEBUG_PRINT_2("Num Raw Samples     = ", ping_header.nNumRawSamples);
+            DEBUG_PRINT_2("Num Elements        = ", bf_header.wNumElements);
             
-            DEBUG_PRINT_2("PRF                 = %f\n", ping_header.fPulseRepFreq);
+            DEBUG_PRINT_2("PRF                 = ", ping_header.fPulseRepFreq);
             
 //                 DEBUG_PRINT_4("Rotator Angles: %f %f %f\n", ping_header.fRotatorAngle[0], ping_header.fRotatorAngle[1], ping_header.fRotatorAngle[2]);
             
 //                 DEBUG_PRINT_2("Compass            = %f\n", ping_header.fCompassHeading);
 //                 DEBUG_PRINT_2("Magnetic Variation = %f\n", ping_header.fMagneticVariation);
-            DEBUG_PRINT_2("Pitch              = %f\n", ping_header.fPitch);
-            DEBUG_PRINT_2("Roll               = %f\n", ping_header.fRoll);
+            DEBUG_PRINT_2("Pitch              = ", ping_header.fPitch);
+            DEBUG_PRINT_2("Roll               = ", ping_header.fRoll);
 //                 DEBUG_PRINT_2("Depth              = %f\n", ping_header.fDepth);
 //                 
 //                 DEBUG_PRINT_2("Temperature        = %f\n", ping_header.fTemperature);
@@ -750,23 +775,83 @@ void DataSourceM3::GetPing()
 //                 
 //                 DEBUG_PRINT_2("Local Time Offset  = %f\n", ping_header.fLocalTimeOffset);
             
-            footer_offset = sizeof(Packet_Header_Struct) + sizeof(Ping_Hdr_Struct) + num_bytes_ref_pulse + num_bytes_raw_data;
+            //footer_offset = sizeof(Packet_Header_Struct) + sizeof(Ping_Hdr_Struct) + num_bytes_ref_pulse + num_bytes_raw_data;
+            footer_offset = num_bytes_ref_pulse + num_bytes_raw_data;
             
             //curr_ping++;
+            got_ping = true;
         }      
         break; // PKT_DATA_TYPE_PING_HDR
+            
+        case PKT_DATA_TYPE_GENERIC_HDR:
+            if (sensor_data_search)
+            {
+                // look for optional generic sensor data packet associated with new ping data records
+                DEBUG_PRINT("\ngeneric sensor data packet");
+                memset(&generic_header, 0, sizeof(Generic_Hdr_Struct));
+                //memcpy(&generic_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Generic_Hdr_Struct));
+                input_.read((char *)&generic_header, sizeof(generic_header));
+                if ( !input_.good() ) return; // TODO: more sophisticated error checking
+				
+                num_bytes_generic_data = packet_header.packet_body_size - sizeof(Generic_Hdr_Struct);
+                if (num_bytes_generic_data != generic_header.wDataSize)
+                {
+                    DEBUG_PRINT("ERROR: packet & generic sensor data size mismatch");
+                    DEBUG_PRINT_2("# generic data bytes declared in data hdr:  ", generic_header.wDataSize);
+                    DEBUG_PRINT_2("# generic data bytes implied by packet hdr: ", num_bytes_generic_data);
+                    //						ERROR_MSG_EXIT("Packet & Sensor data size mismatch!");
+                }
+				
+                /* Extract the generic sensor data */
+                //memcpy(generic_str, bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(Generic_Hdr_Struct), num_bytes_generic_data);
+                input_.read((char *)&generic_str, num_bytes_generic_data);
+                if ( !input_.good() ) return; // TODO: more sophisticated error checking
+                generic_str[num_bytes_generic_data] = 0;            // ensure null termination
+                sensor_data_found = 1;
+                DEBUG_PRINT_2("sensor str = ", generic_str);
+            }
+            
+            /* Increment the buffer pointer to the next ping */
+//            footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
+            footer_offset = 0;
+            break;
             
         default:
             ERROR_MSG_EXIT( "Error: incorrect packet data type");
             break;
 
     } // switch (packet_header.data_type)
-                
+        
+    /* Extract the footer and compare packet sizes */
+    memset(&footer, 0, sizeof(Footer_Struct));
+    //memcpy(&footer, bfr_ptr + footer_offset, sizeof(Footer_Struct));
+        clog << "footer_offset = " << footer_offset << endl;
+    input_.seekg(footer_offset, ios_base::cur);
+    input_.read((char *)&footer, sizeof(footer));
+    if ( !input_.good() ) return; // TODO: more sophisticated error checking
+
+    DEBUG_PRINT_2("header.packet_body_size = ", packet_header.packet_body_size);
+    DEBUG_PRINT_2("footer.packet_body_size = ", footer.packet_body_size);
+    
+    if (packet_header.packet_body_size != footer.packet_body_size)
+    {
+        DEBUG_PRINT_2("dwProcessingType = ", header.dwProcessingType);
+       // DEBUG_PRINT_4("fProcessingParams = ",header.fProcessingParam0, header.fProcessingParam1, header.fProcessingParam2);
+        
+       // mexPrintf("header.packet_body_size = %d\n", packet_header.packet_body_size);
+        //mexPrintf("footer.packet_body_size = %d\n", footer.packet_body_size);
+        
+        ERROR_MSG_EXIT("ERROR: packet size mismatch!");
+    }
+    } // while ( !got_ping )
+    
+    
 
     if ( !valid_packet(packet_header, header, bf_header, ping_header) )
     {
         ERROR_MSG_EXIT( "Error: Invalid packet");
     }
+    clog << "Valid packet!" << endl;
 
 } //  DataSourceM3::GetPing
 
