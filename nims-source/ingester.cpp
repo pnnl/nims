@@ -20,6 +20,7 @@
 #include <boost/program_options.hpp>
 
 #include "data_source_m3.h"
+#include "frame_buffer.h"
 
 using namespace std;
 //using namespace cv;
@@ -34,17 +35,22 @@ namespace fs = boost::filesystem;
 static volatile int sigint_received = 0;
 
 // returns length of data copied to shared memory
-static size_t ProcessFile(const string &watchDirectory, const string &fileName)
+static size_t ProcessFile(const string &watchDirectory, const string &fileName, FrameBufferWriter &fb)
 {
     cout << "processing file " << fileName << " in dir " << watchDirectory << endl;
     DataSourceM3 input(string(watchDirectory + "/" + fileName));
     if ( !input.is_open() )
     {
-        cout << "file NOT open. :(" << endl;
+        cout << "source NOT open. :(" << endl;
         return 0;
     }
-    cout << "file is open!" << endl;
-    input.GetPing();
+    cout << "source is open!" << endl;
+    Frame frame;
+    input.GetPing(&frame);
+    cout << "got frame!" << endl;
+    cout << frame.header << endl;
+    fb.PutNewFrame(frame);
+    
     return 1;
 }
 
@@ -92,6 +98,7 @@ int main (int argc, char * argv[]) {
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
     
+    FrameBufferWriter fb("ingester");
     
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);
@@ -149,7 +156,7 @@ int main (int argc, char * argv[]) {
                 if( !(event->mask & IN_ISDIR) ) {
                     clog << "Found file: " << event->name << endl;
                     string eventName(event->name);
-                    ProcessFile(inputDirectory, eventName);
+                    ProcessFile(inputDirectory, eventName, fb);
                     clog << "Done processing file." << endl;
                 }
             }
