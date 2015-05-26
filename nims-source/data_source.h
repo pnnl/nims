@@ -13,6 +13,7 @@
 
 #include <fstream>
 
+#include "frame_buffer.h"
 /*-----------------------------------------------------------------------------
 Base class for sonar data sources.  Classes for specific devices will be
 derived from this class.  The unit of data is a ping, which is both the ping
@@ -24,11 +25,11 @@ class DataSource {
   DataSource(const std::string& path); // Constructor
   ~DataSource();                       // Destructor
   
-  bool is_open(){ return input_.is_open(); }; // check if source was opened successfully
-  bool eof()    { return input_.eof(); };     // check for "end of file" condition
+  bool is_open()   { return input_.is_open(); }; // check if source was opened successfully
+  bool more_data() { return !input_.eof(); };    // check for not "end of file" condition
   
-  virtual void GetPing() =0;     // get the next ping from the source
-  virtual size_t ReadPings() =0; // read the specified number of pings
+  virtual void GetPing(Frame* pdata) =0;     // get the next ping from the source
+  //virtual size_t ReadPings(Frame* pdata, const size_t& num_pings) =0; // read consecutive pings
   
  protected:
   std::ifstream input_;
