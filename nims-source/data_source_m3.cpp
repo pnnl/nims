@@ -490,7 +490,7 @@ bool valid_packet(const Packet_Header_Struct &packet_header, const Header_Struct
 //-----------------------------------------------------------------------------
 // DataSourceM3::GetPing
 // get the next ping from the source
-void DataSourceM3::GetPing()
+void DataSourceM3::GetPing(Frame* pframe)
 {
     if ( !input_.good() ) return;
     
@@ -530,6 +530,7 @@ void DataSourceM3::GetPing()
     INT32U num_bytes_generic_data = 0;
     
     bool got_ping = false;
+    int start_pos = input_.tellg(); // save the start position
     
     while ( !got_ping) {
 
@@ -836,11 +837,6 @@ void DataSourceM3::GetPing()
     if (packet_header.packet_body_size != footer.packet_body_size)
     {
         DEBUG_PRINT_2("dwProcessingType = ", header.dwProcessingType);
-       // DEBUG_PRINT_4("fProcessingParams = ",header.fProcessingParam0, header.fProcessingParam1, header.fProcessingParam2);
-        
-       // mexPrintf("header.packet_body_size = %d\n", packet_header.packet_body_size);
-        //mexPrintf("footer.packet_body_size = %d\n", footer.packet_body_size);
-        
         ERROR_MSG_EXIT("ERROR: packet size mismatch!");
     }
     } // while ( !got_ping )
@@ -852,9 +848,60 @@ void DataSourceM3::GetPing()
         ERROR_MSG_EXIT( "Error: Invalid packet");
     }
     clog << "Valid packet!" << endl;
+    
+    // Return the ping data in a device-independent structure.
+    strncpy(pframe->header.device, "M3", 2);
+    pframe->header.device[2] = '\0';
+    
+    pframe->malloc_data(num_bytes_raw_data);
+    if (pframe->size() != num_bytes_raw_data)
+    {
+        ERROR_MSG_EXIT( "Error: Can't allocate memory for frame data.");
+    }
 
+    switch (packet_header.data_type)
+    {
+        case PKT_DATA_TYPE_OLD_HDR:
+        {
+            pframe->header.version = header.dwVersion;
+            pframe->header.ping_num = header.dwPingCounter;
+            pframe->header.ping_sec = header.dwTimeSec;
+            pframe->header.ping_millisec = header.dwTimeMillisec;
+            pframe->header.soundspeed_mps = header.velocitySound;
+            pframe->header.num_samples = header.nNumRangeCells;
+            pframe->header.range_min_m = 0;
+            pframe->header.range_max_m = 0;
+            pframe->header.winstart_sec = 0;
+            pframe->header.winlen_sec = 0;
+            pframe->header.num_beams = header.nNumElements;
+            //pframe->header.beam_angles_deg[kMaxBeams] = ;
+            pframe->header.freq_hz = 0;
+            pframe->header.pulselen_microsec = header.dwPulseLength;
+            pframe->header.pulserep_hz = 0;
+            
+        }
+            break;
+        case PKT_DATA_TYPE_PING_HDR:
+            pframe->header.version = ping_header.dwVersion;
+            pframe->header.ping_num = ping_header.dwPingCounter;
+            pframe->header.ping_sec = ping_header.dwTimeSec;
+            pframe->header.ping_millisec = ping_header.dwTimeMillisec;
+            pframe->header.soundspeed_mps = bf_header.fVSound;
+            pframe->header.num_samples = ping_header.nNumRawSamples;
+            pframe->header.range_min_m = 0;
+            pframe->header.range_max_m = 0;
+            pframe->header.winstart_sec = 0;
+            pframe->header.winlen_sec = 0;
+            pframe->header.num_beams = bf_header.wNumElements;
+            //pframe->header.beam_angles_deg[kMaxBeams] = 0;
+            pframe->header.freq_hz = 0;
+            pframe->header.pulselen_microsec = ping_header.dwPulseLength;
+            pframe->header.pulserep_hz = 0;
+    } // switch
+    
 } //  DataSourceM3::GetPing
 
+/*
 //-----------------------------------------------------------------------------
 // DataSourceM3::ReadPings
 // read the specified number of pings
@@ -863,4 +910,5 @@ size_t DataSourceM3::ReadPings()
     return 0;
     
 } // DataSourceM3::ReadPings
+*/
 
