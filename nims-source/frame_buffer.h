@@ -13,6 +13,7 @@
 #include <mqueue.h> // POSIX message queue
 #include <limits.h> // for NAME_MAX
 #include <string>   // for strings
+#include <vector>
 #include <thread>   // for threads
 #include <iostream> // clog
 
@@ -25,7 +26,7 @@ struct FrameHeader
     unsigned int   version;         // of data file or firmware, vendor-specific
     unsigned int   ping_num;        // ping counter
     unsigned int   ping_sec;        // time of ping in seconds since midnight 1-Jan-1970
-    unsigned int   ping_ms;         // milliseconds part of ping time
+    unsigned int   ping_millisec;         // milliseconds part of ping time
     float          soundspeed_mps;  // speed of sound (meters per second)
     unsigned int   num_samples;     // number of samples per beam
     float          range_min_m;     // near range (meters)
@@ -35,7 +36,7 @@ struct FrameHeader
     unsigned int   num_beams;       // number of beams
     float          beam_angles_deg[kMaxBeams]; // beam angles (deg)
     unsigned int   freq_hz;         // sonar frequency (Hz)
-    unsigned int   pulselen_us;     // pulse length (microsec)
+    unsigned int   pulselen_microsec;     // pulse length (microsec)
     float          pulserep_hz;     // pulse repitition frequency (Hz)
     
     FrameHeader() 
@@ -45,7 +46,7 @@ struct FrameHeader
         version = 0;         
         ping_num = 0;        
         ping_sec = 0;        
-        ping_ms = 0;         
+        ping_millisec = 0;
         soundspeed_mps = 0.0;  
         num_samples = 0;     
         range_min_m = 0.0;     
@@ -55,23 +56,41 @@ struct FrameHeader
         num_beams = 0;       
         beam_angles_deg[kMaxBeams] = { 0.0 }; 
         freq_hz = 0;         
-        pulselen_us = 0;     
+        pulselen_microsec = 0;
         pulserep_hz = 0.0;     
     };
 }; // struct FrameHeader
 
+std::ostream& operator<<(std::ostream& strm, const FrameHeader& fh);
+
 struct Frame
 {
     FrameHeader header;
-    float *data;
-    size_t data_size;
     
     Frame()
     {
-        data = nullptr;
-        data_size = 0;
+       data_size = 0;
+       pdata = nullptr;
+     };
+    
+    ~Frame()
+    {
+        if (data_size > 0) free(pdata);
     };
     
+    size_t size() const { return data_size; };
+    float * const data_ptr() const { return pdata; };
+    
+    void malloc_data(size_t size) {
+      if (data_size > 0) free(pdata);
+      pdata = (float*)malloc(size);
+      if (pdata != nullptr) data_size = size;
+    };
+    
+private:
+    size_t data_size;
+    float *pdata;
+
 }; // struct Frame
 
 // The FrameBufferInterface is an interface for accessing
