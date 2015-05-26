@@ -63,17 +63,41 @@ struct BadReaderQueue : std::exception
  components start sharing memory, we can make this external.
 */
 // TODO:  Does this need to be static?
-static size_t SizeForFramebuffer(const Frame &f)
+static size_t SizeForSharedFrame(const Frame &f)
 {
     static size_t page_size = 0;
     if (0 == page_size)
         page_size = sysconf(_SC_PAGE_SIZE);
 
     assert(page_size > 0);
-    const size_t len = f.data_size + sizeof(f);
+    const size_t len = f.size() + sizeof(f);
     const size_t number_of_pages = len / page_size + 1;
     return page_size * number_of_pages;
 }
+
+std::ostream& operator<<(std::ostream& strm, const FrameHeader& fh)
+{
+    strm << "   device = " << fh.device << endl;
+    strm << "   version = " << fh.version << endl;
+    strm << "   ping_num = " << fh.ping_num << endl;
+    strm << "   ping_sec = " << fh.ping_sec << endl;
+    strm << "   ping_millisec = " << fh.ping_millisec << endl;
+    strm << "   soundspeed_mps = " << fh.soundspeed_mps << endl;
+    strm << "   num_samples = " << fh.num_samples << endl;
+    strm << "   range_min_m = " << fh.range_min_m << endl;
+    strm << "   range_max_m = " << fh.range_max_m << endl;
+    strm << "   winstart_sec = " << fh.winstart_sec << endl;
+    strm << "   winlen_sec = " << fh.winlen_sec << endl;
+    strm << "   num_beams = " << fh.num_beams << endl;
+    if (fh.num_beams > 0)
+        strm << "   beam_angles_deg = " << fh.beam_angles_deg[0] << " to " << fh.beam_angles_deg[fh.num_beams-1] << endl;
+    strm << "   freq_hz = " << fh.freq_hz << endl;
+    strm << "   pulselen_microsec = " << fh.pulselen_microsec << endl;
+    strm << "   pulserep_hz = " << fh.pulserep_hz << endl;
+    
+	return strm;
+    
+} // operator<<
 
 //-----------------------------------------------------------------------------
 // FrameBufferWriter Constructor
@@ -135,7 +159,7 @@ FrameBufferWriter::~FrameBufferWriter()
 
 
 //-----------------------------------------------------------------------------
-// Put a new frame into the buffer.  Returns the
+// Put a new frame into shared memory.  Returns the
 // index of the new frame.
 long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
 {
@@ -158,7 +182,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
         return -1;
     }
     
-    const size_t map_length = SizeForFramebuffer(new_frame);
+    const size_t map_length = SizeForSharedFrame(new_frame);
     assert(map_length > sizeof(Frame));
     
     // !!! early return
@@ -169,28 +193,30 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
         return -1;
     }
 
-    // mmap a shared framebuffer on the file descriptor we have from shm_open
-    Frame *shared_buffer;
-    shared_buffer = (Frame *)mmap(NULL, map_length, 
+    // mmap the file descriptor from shm_open into this address space
+    char *shared_frame;
+    shared_frame = (char *)mmap(NULL, map_length,
             PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     
     close(fd);
     
     // !!! early return
-    if (MAP_FAILED == shared_buffer) {
+    if (MAP_FAILED == shared_frame) {
         perror("mmap() in FrameBufferInterface::PutNewFrame");
         shm_unlink(shared_name.c_str());
         return -1;
     }
         
-    // copy data to the shared framebuffer
-    shared_buffer->data_size = new_frame.data_size;
-    memcpy(&shared_buffer->data, new_frame.data, new_frame.data_size);
+    // copy frame header and data to the shared frame
+    memcpy(shared_frame, &(new_frame.header), sizeof(new_frame.header));
+    size_t data_size = new_frame.size();
+    memcpy(shared_frame + sizeof(new_frame.header), &data_size, sizeof(data_size));
+    memcpy(shared_frame + sizeof(new_frame.header) + sizeof(data_size), new_frame.data_ptr(), data_size);
      
     // done with the region in this process; ok to do this?
     // pretty sure we can't shm_unlink here
-    munmap(shared_buffer, map_length);
-    shared_buffer = nullptr;
+    munmap(shared_frame, map_length);
+    shared_frame = nullptr;
         
     // create a message to notify the consumers
     cout << "sending frame messages to " << mq_readers_.size() << " readers" << endl;
@@ -331,8 +357,8 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
     //clog << "expected mmap data size: " << msg.mapped_data_length << endl;
     
     // mmap a shared framebuffer on the file descriptor we have from shm_open
-    Frame *shared_frame;
-    shared_frame = (Frame *)mmap(NULL, msg.mapped_data_size,
+    char *shared_frame;
+    shared_frame = (char *)mmap(NULL, msg.mapped_data_size,
                                             PROT_READ, MAP_PRIVATE, fd, 0);
     
     close(fd);
@@ -344,6 +370,20 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
         return -1;
     }
     
+    // copy the data into this address space
+    memset(&(next_frame->header), 0, sizeof(next_frame->header));
+    memcpy(&(next_frame->header), shared_frame, sizeof(next_frame->header));
+    size_t data_size;
+    memcpy(&data_size, shared_frame + sizeof(next_frame->header), sizeof(data_size));
+    next_frame->malloc_data(data_size);
+    if (next_frame->size() != data_size)
+    {
+        cerr << "Error: Can't allocate memory for frame data." << endl;
+        return -1;
+    }
+    memcpy(next_frame->data_ptr(), shared_frame + sizeof(next_frame->header) + sizeof(data_size), data_size);
+    
+    // clean up
     munmap(shared_frame, msg.mapped_data_size);
     shm_unlink(msg.shm_open_name);
     
