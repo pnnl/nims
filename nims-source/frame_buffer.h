@@ -19,6 +19,8 @@
 
 const int kMaxBeams = 512;
 const int kMaxSamples = 20000;
+// TODO:  need a rational determination based on memory, frame size/page size, frame rate
+const int kMaxFramesInBuffer = 100;
 
 struct FrameHeader
 {
@@ -93,17 +95,15 @@ private:
 
 }; // struct Frame
 
-// The FrameBufferInterface is an interface for accessing
-// the data from a particular sonar device.  Each sonar
-// device will have its own FrameBufferInterace.  One
-// process (the ingester) will instatiate  a FrameBufferInterface
-// with writer=true.  This process will put new frames
-// in the buffer as data arrives from the device.  Other
-// processes will instantiate a FrameBufferInterface as readers
-// (writer=false).  The reader processess will consume frames in the
-// order that they arrived in the buffer, with each frame
-// remaining in the buffer until all the reader processes
-// have consumed it, or some set amount of time expires.
+
+// One process (the ingester) will instatiate  a FrameBufferWriter.
+// This process will put new frames
+// in the buffer as data arrives from a sonar device.  Other
+// processes will instantiate a FrameBufferReader.
+// The reader processess will consume frames in the
+// order that they arrived in the buffer.  A specified number
+// of frames will exist at any one time; old frames are removed
+// as new frames arrive.
 class FrameBufferWriter
 {
 	public:
@@ -128,7 +128,10 @@ class FrameBufferWriter
         std::string mqw_name_;    // writer message queue name
         mqd_t mqw_;                // writer message queue (FIFO)
         std::thread t_;            // writer's connection service thread
-        std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer 
+        std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer
+        std::string shm_names_[kMaxFramesInBuffer]; // limited number of "slots" for frames in shared mem
+        int64_t frame_count_; // number of frames written
+    
  
 
 }; // class FrameBufferWriter
