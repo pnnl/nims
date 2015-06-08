@@ -40,6 +40,40 @@ namespace fs = boost::filesystem;
 static volatile sig_atomic_t sigint_received_ = 0;
 static vector<nims::Task *> *child_tasks_ = NULL;
 
+/*
+ !!! typedefs are a temporary hack to fix compilation; 
+ used to be in nims_includes.h.
+ */
+
+/*
+ An object living in shared memory; created by ingester,
+ to be read by others. This is a dummy structure for now.
+ 
+ - dataLength is the length in bytes of the data
+   member, not of the entire structure.
+*/
+typedef struct __attribute__ ((__packed__)) _NimsFramebuffer {
+    size_t  data_length;
+    void   *data;
+} NimsFramebuffer;
+
+/*
+ A notification that the frame buffer at shared
+ memory location 'name' has been created and
+ is ready for processing.
+
+ - dataLength is the expected frame buffer length
+ - name is a null-terminated C-string with the
+   name of the shared memory path where the frame
+   buffer resides.
+*/
+#define MQ_INGEST_QUEUE "/nims_ingest_queue"
+typedef struct __attribute__ ((__packed__)) _NimsIngestMessage {
+    size_t mapped_data_length;
+    char   shm_open_name[NAME_MAX];
+} NimsIngestMessage;
+
+
 static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
 {        
     int fd = shm_open(msg->shm_open_name, O_RDONLY, S_IRUSR);
