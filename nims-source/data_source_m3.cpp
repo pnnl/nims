@@ -40,7 +40,7 @@ using namespace std;
 #define ERROR_MSG_EXIT(err_msg)     \
 {                                   \
     cerr << err_msg << endl;          \
-    return;                         \
+    return -1;                         \
 }                                   \
 
 #define INT32U  uint32_t
@@ -490,9 +490,9 @@ bool valid_packet(const Packet_Header_Struct &packet_header, const Header_Struct
 //-----------------------------------------------------------------------------
 // DataSourceM3::GetPing
 // get the next ping from the source
-void DataSourceM3::GetPing(Frame* pframe)
+int DataSourceM3::GetPing(Frame* pframe)
 {
-    if ( !input_.good() ) return;
+    if ( !input_.good() ) return -1;
     
         /* Initialize variables */
     Packet_Header_Struct packet_header;
@@ -537,7 +537,7 @@ void DataSourceM3::GetPing(Frame* pframe)
     /* Extract the packet header */
     //memcpy(&packet_header, bfr_ptr, sizeof(Packet_Header_Struct));
      input_.read((char *)&packet_header, sizeof(packet_header));
-     if ( !input_.good() ) return; // TODO: more sophisticated error checking
+     if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
         
     /* Check header sync words */
     if ((packet_header.sync_word_1 != HDR_SYNC_INT16U_1) ||
@@ -551,7 +551,7 @@ void DataSourceM3::GetPing(Frame* pframe)
             //clog << "header.packet_header.sync_word_4 0x%04x\n", packet_header.sync_word_4 << endl;
             
             cerr << "ERROR: failed to find header sync words" << endl;
-            return;
+            return -1;
     }
     cout << "packet type is " << std::hex << packet_header.data_type << endl;
     
@@ -564,7 +564,7 @@ void DataSourceM3::GetPing(Frame* pframe)
             memset(&header, 0, sizeof(Header_Struct));
             //memcpy(&header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Header_Struct));
             input_.read((char *)&header, sizeof(header));
-            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+            if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
 
             
             if ((header.EIQMode==1) && (header.nNumImages>1)) 
@@ -599,7 +599,7 @@ void DataSourceM3::GetPing(Frame* pframe)
            memset(&bf_header, 0, sizeof(BF_Hdr_Struct));
             //memcpy(&bf_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(BF_Hdr_Struct));
             input_.read((char *)&bf_header, sizeof(bf_header));
-            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+            if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
 
             DEBUG_PRINT_2("BF Packet ID        = ", bf_header.dwPacketID);
             
@@ -618,7 +618,7 @@ void DataSourceM3::GetPing(Frame* pframe)
             streampos pos = input_.tellg();
             input_.read((char *)bf_hdr2_ptr, packet_header.packet_body_size);
             input_.seekg(pos);
-            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+            if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
 
             //footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
             footer_offset = packet_header.packet_body_size - sizeof(BF_Hdr_Struct);
@@ -712,7 +712,7 @@ void DataSourceM3::GetPing(Frame* pframe)
             memset(&ping_header, 0, sizeof(Ping_Hdr_Struct));
             //memcpy(&ping_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Ping_Hdr_Struct));
             input_.read((char *)&ping_header, sizeof(ping_header));
-            if ( !input_.good() ) return; // TODO: more sophisticated error checking
+            if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
 
 			if (ping_header.dwBFPacketID != bf_header.dwPacketID)
             {
@@ -792,7 +792,7 @@ void DataSourceM3::GetPing(Frame* pframe)
                 memset(&generic_header, 0, sizeof(Generic_Hdr_Struct));
                 //memcpy(&generic_header, bfr_ptr + sizeof(Packet_Header_Struct), sizeof(Generic_Hdr_Struct));
                 input_.read((char *)&generic_header, sizeof(generic_header));
-                if ( !input_.good() ) return; // TODO: more sophisticated error checking
+                if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
 				
                 num_bytes_generic_data = packet_header.packet_body_size - sizeof(Generic_Hdr_Struct);
                 if (num_bytes_generic_data != generic_header.wDataSize)
@@ -806,7 +806,7 @@ void DataSourceM3::GetPing(Frame* pframe)
                 /* Extract the generic sensor data */
                 //memcpy(generic_str, bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(Generic_Hdr_Struct), num_bytes_generic_data);
                 input_.read((char *)&generic_str, num_bytes_generic_data);
-                if ( !input_.good() ) return; // TODO: more sophisticated error checking
+                if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
                 generic_str[num_bytes_generic_data] = 0;            // ensure null termination
                 sensor_data_found = 1;
                 DEBUG_PRINT_2("sensor str = ", generic_str);
@@ -829,7 +829,7 @@ void DataSourceM3::GetPing(Frame* pframe)
         clog << "footer_offset = " << footer_offset << endl;
     input_.seekg(footer_offset, ios_base::cur);
     input_.read((char *)&footer, sizeof(footer));
-    if ( !input_.good() ) return; // TODO: more sophisticated error checking
+    if ( !input_.good() ) return -1; // TODO: more sophisticated error checking
 
     DEBUG_PRINT_2("header.packet_body_size = ", packet_header.packet_body_size);
     DEBUG_PRINT_2("footer.packet_body_size = ", footer.packet_body_size);
@@ -898,7 +898,7 @@ void DataSourceM3::GetPing(Frame* pframe)
             pframe->header.pulselen_microsec = ping_header.dwPulseLength;
             pframe->header.pulserep_hz = 0;
     } // switch
-    
+    return 0;
 } //  DataSourceM3::GetPing
 
 /*

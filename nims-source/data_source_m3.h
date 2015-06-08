@@ -24,7 +24,7 @@ class DataSourceM3 : public DataSource {
  public:
   DataSourceM3(const std::string& path) : DataSource(path) {};
   
-  void GetPing(Frame* pdata);  // get the next ping from the source
+  int GetPing(Frame* pdata);  // get the next ping from the source
   //size_t ReadPings(Frame* pdata, const size_t& num_pings); // read consecutive pings
   
  private:
