@@ -34,7 +34,7 @@ namespace fs = boost::filesystem;
 
 static volatile int sigint_received = 0;
 
-// returns length of data copied to shared memory
+// returns number of processed frames
 static size_t ProcessFile(const string &watchDirectory, const string &fileName, FrameBufferWriter &fb)
 {
     cout << "processing file " << fileName << " in dir " << watchDirectory << endl;
@@ -45,13 +45,18 @@ static size_t ProcessFile(const string &watchDirectory, const string &fileName, 
         return 0;
     }
     cout << "source is open!" << endl;
-    Frame frame;
-    input.GetPing(&frame);
-    cout << "got frame!" << endl;
-    cout << frame.header << endl;
-    fb.PutNewFrame(frame);
+    size_t frame_count=0;
+    while ( input.more_data() )
+    {
+        Frame frame;
+        if ( -1 == input.GetPing(&frame) ) break;
+        cout << "got frame!" << endl;
+        cout << frame.header << endl;
+        fb.PutNewFrame(frame);
+        ++frame_count;
+    }
     
-    return 1;
+    return frame_count;
 }
 
 static void sig_handler(int sig)
@@ -98,7 +103,7 @@ int main (int argc, char * argv[]) {
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
     
-    FrameBufferWriter fb("ingester");
+    FrameBufferWriter fb("nims");
     
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);
