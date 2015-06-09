@@ -19,7 +19,8 @@
 
 const int kMaxBeams = 512;
 const int kMaxSamples = 20000;
-// TODO:  need a rational determination based on memory, frame size/page size, frame rate
+// TODO:  Need a rational determination based on memory, frame size/page size, 
+//        frame rate.  
 const int kMaxFramesInBuffer = 100;
 
 struct FrameHeader
@@ -129,7 +130,7 @@ class FrameBufferWriter
         mqd_t mqw_;                // writer message queue (FIFO)
         std::thread t_;            // writer's connection service thread
         std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer
-        std::string shm_names_[kMaxFramesInBuffer]; // limited number of "slots" for frames in shared mem
+        std::string shm_names_[kMaxFramesInBuffer]; // "slots" for frames in shared mem
         int64_t frame_count_; // number of frames written
     
  
