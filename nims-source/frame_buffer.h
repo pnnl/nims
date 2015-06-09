@@ -144,7 +144,7 @@ class FrameBufferReader
 {
 	public:
     // Each sonar device has a unique name.
-	    FrameBufferReader(const std::string &fb_name);
+	    FrameBufferReader(const std::string &fb_name, const std::string &mqw_name);
 	    ~FrameBufferReader();
 	   
     // NOTE: Don't need this now because constructor throws exception.

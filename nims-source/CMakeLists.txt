@@ -54,7 +54,7 @@ target_link_libraries(tracker ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} rt)
+target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 
 # only copies once
 # file(COPY ${PROJECT_SOURCE_DIR}/config.yaml

@@ -56,8 +56,9 @@ int main (int argc, char * const argv[]) {
         return 0;
     }
 	
-    string buffer_name = options["buffer"].as<string>();
-    YAML::Node config = YAML::LoadFile(options["cfg"].as<string>());
+  string buffer_name = options["buffer"].as<string>();
+  
+  YAML::Node config = YAML::LoadFile(options["cfg"].as<string>());
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
