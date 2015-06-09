@@ -519,8 +519,16 @@ int DataSourceM3::GetPing(Frame* pframe)
     memset(&footer,        0, sizeof(Footer_Struct));
 	memset(&generic_header,0, sizeof(Generic_Hdr_Struct));
 
-   INT32U num_bytes_ref_pulse = 0;
+     INT32U num_bytes_ref_pulse = 0;
+    Ipp32fc_Type* refPulse = nullptr;
+    double* ref_pulse_I;
+    double* ref_pulse_Q;
+    
     INT32U num_bytes_raw_data = 0;
+    Ipp16sc_Type* rawData = nullptr;
+    double* raw_data_I;
+    double* raw_data_Q;
+
     INT32U footer_offset = 0;
     
     int sensor_data_search = 1; // TODO: understand "generic sensor data" better
@@ -569,6 +577,7 @@ int DataSourceM3::GetPing(Frame* pframe)
             
             if ((header.EIQMode==1) && (header.nNumImages>1)) 
             { //for fast EIQ mode, because it has 4 reference pulses for each ping
+				clog << "EIQ mode" << endl;
                 num_bytes_ref_pulse = 
                     sizeof(Ipp32fc_Type)*(header.dwReferencePulse[0])*header.nNumImages;
             }
@@ -622,17 +631,17 @@ int DataSourceM3::GetPing(Frame* pframe)
 
             //footer_offset = sizeof(Packet_Header_Struct) + packet_header.packet_body_size;
             footer_offset = packet_header.packet_body_size - sizeof(BF_Hdr_Struct);
-
+			DEBUG_PRINT_2("Num elements = ", bf_header.wNumElements);
 			if (bf_header.wNumElements > MAX_NUM_ELEMENTS)
 			{
-				DEBUG_PRINT_2("Num elements = ", bf_header.wNumElements);
+				//DEBUG_PRINT_2("Num elements = ", bf_header.wNumElements);
 				free(bf_hdr2_ptr);
 				ERROR_MSG_EXIT("ERROR: number of elements exceeds max");
 			}
-        
+			DEBUG_PRINT_2("Num spatial phases = ", bf_header.wNumTxSpatialPhases);
 			if (bf_header.wNumTxSpatialPhases > MAX_NUM_SPATIAL_PHASES)
 			{
-				DEBUG_PRINT_2("Num spatial phases = ", bf_header.wNumTxSpatialPhases);
+				//DEBUG_PRINT_2("Num spatial phases = ", bf_header.wNumTxSpatialPhases);
 				free(bf_hdr2_ptr);
 				ERROR_MSG_EXIT("ERROR: number of spatial phases exceeds max");
 			}
@@ -849,16 +858,52 @@ int DataSourceM3::GetPing(Frame* pframe)
     }
     clog << "Valid packet!" << endl;
     
+    // Backup and read data.
+    input_.seekg(-(num_bytes_ref_pulse + num_bytes_raw_data 
+                 + sizeof(footer)),ios_base::cur);
+    /* Extract the reference */
+	clog << "extracting reference pulse" << endl;
+    refPulse = (Ipp32fc_Type*)malloc(num_bytes_ref_pulse);
+ //   memcpy(refPulse,
+ //                  bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(Header_Struct),
+ //                  num_bytes_ref_pulse);
+    input_.read((char *)refPulse, num_bytes_ref_pulse);
+	clog << "reading raw data" << endl;
+    rawData = (Ipp16sc_Type*)malloc(num_bytes_raw_data);
+	if ( rawData == nullptr )
+	{
+		if ( refPulse != nullptr ) free(refPulse);
+		ERROR_MSG_EXIT( "Error: Can't allocate memory for raw data.");
+	}
+    //memcpy(rawData,
+    //       bfr_ptr + sizeof(Packet_Header_Struct) + sizeof(Ping_Hdr_Struct) + num_bytes_ref_pulse,
+    //       num_bytes_raw_data);
+	input_.read((char *)rawData, num_bytes_raw_data);
+	clog << "advancing to next packet" << endl;
+	// advance to the next packet
+	input_.seekg(sizeof(Footer_Struct),ios_base::cur);
+	
+    // Beamform.
+    /*
+    int beamform(const RawData& raw_data, 
+                 const Settings& settings, 
+                 const Options& options,
+                 ImageData* image_data, 
+                 RangeList* range_list);
+    */
+    
     // Return the ping data in a device-independent structure.
     strncpy(pframe->header.device, "M3", 2);
     pframe->header.device[2] = '\0';
     
+	/*
     pframe->malloc_data(num_bytes_raw_data);
     if (pframe->size() != num_bytes_raw_data)
     {
         ERROR_MSG_EXIT( "Error: Can't allocate memory for frame data.");
     }
-
+*/
+clog << "populating header" << endl;
     switch (packet_header.data_type)
     {
         case PKT_DATA_TYPE_OLD_HDR:
@@ -869,15 +914,15 @@ int DataSourceM3::GetPing(Frame* pframe)
             pframe->header.ping_millisec = header.dwTimeMillisec;
             pframe->header.soundspeed_mps = header.velocitySound;
             pframe->header.num_samples = header.nNumRangeCells;
-            pframe->header.range_min_m = 0;
-            pframe->header.range_max_m = 0;
+            pframe->header.range_min_m = header.fMinRangeMeter[0];
+            pframe->header.range_max_m = header.fMaxRangeMeter[0];
             pframe->header.winstart_sec = 0;
             pframe->header.winlen_sec = 0;
             pframe->header.num_beams = header.nNumElements;
             //pframe->header.beam_angles_deg[kMaxBeams] = ;
-            pframe->header.freq_hz = 0;
+            pframe->header.freq_hz = header.dwSubArrayFrequency[0];
             pframe->header.pulselen_microsec = header.dwPulseLength;
-            pframe->header.pulserep_hz = 0;
+            pframe->header.pulserep_hz = header.fPulseRepFreq[0];
             
         }
             break;
@@ -888,17 +933,20 @@ int DataSourceM3::GetPing(Frame* pframe)
             pframe->header.ping_millisec = ping_header.dwTimeMillisec;
             pframe->header.soundspeed_mps = bf_header.fVSound;
             pframe->header.num_samples = ping_header.nNumRawSamples;
-            pframe->header.range_min_m = 0;
-            pframe->header.range_max_m = 0;
+            pframe->header.range_min_m = ping_header.fMinRangeMeter[0];
+            pframe->header.range_max_m = ping_header.fMaxRangeMeter[0];
             pframe->header.winstart_sec = 0;
             pframe->header.winlen_sec = 0;
             pframe->header.num_beams = bf_header.wNumElements;
             //pframe->header.beam_angles_deg[kMaxBeams] = 0;
-            pframe->header.freq_hz = 0;
+            pframe->header.freq_hz = bf_hdr_image.dwSubArrayFrequency;
             pframe->header.pulselen_microsec = ping_header.dwPulseLength;
-            pframe->header.pulserep_hz = 0;
+            pframe->header.pulserep_hz = ping_header.fPulseRepFreq;
     } // switch
-    return 0;
+    
+	free(rawData);
+	free(refPulse);
+     return 0;
 } //  DataSourceM3::GetPing
 
 /*
