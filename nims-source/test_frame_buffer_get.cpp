@@ -68,8 +68,8 @@ int main (int argc, char * const argv[]) {
     {
         FrameBufferReader fb(buffer_name, config["FB_WRITER_QUEUE"].as<string>());
         Frame next_frame;
-        int frame_index = -1;
-        while (frame_index = fb.GetNextFrame(&next_frame) != -1)
+        long frame_index = -1;
+        while ((frame_index = fb.GetNextFrame(&next_frame)) != -1)
         {
             cout << argv[0] << ": " << "got frame " << frame_index << endl;
         }
