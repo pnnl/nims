@@ -14,5 +14,6 @@ APPLICATIONS:
     - name: tracker
       args:
  
+FB_WRITER_QUEUE: /nims_framebufferwriter-connect
 
 ...

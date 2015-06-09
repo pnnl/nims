@@ -17,6 +17,7 @@
 
 //#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include "yaml-cpp/yaml.h"
 
 #include "frame_buffer.h"
 
@@ -32,6 +33,7 @@ int main (int argc, char * const argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
+  ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
 	("buffer,b", po::value<string>()->default_value( "test" ),    "name of frame buffer")
 	;
 	po::variables_map options;
@@ -55,6 +57,7 @@ int main (int argc, char * const argv[]) {
     }
 	
     string buffer_name = options["buffer"].as<string>();
+    YAML::Node config = YAML::LoadFile(options["cfg"].as<string>());
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
@@ -63,7 +66,9 @@ int main (int argc, char * const argv[]) {
 	Frame new_frame;
 	try 
 	{
-	FrameBufferWriter fb(buffer_name); // create as the writer
+    // create as the writer
+	FrameBufferWriter fb(buffer_name, config["FB_WRITER_QUEUE"].as<string>()); 
+  
 	//if (!fb.IsOpen())
 	//{
 	    //perror(argv[0]);

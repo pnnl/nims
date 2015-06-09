@@ -108,8 +108,11 @@ private:
 class FrameBufferWriter
 {
 	public:
-    // Each sonar device has a unique name.
-	    FrameBufferWriter(const std::string &fb_name);
+    /* Each sonar device has a unique name. Writer name is obtained from config.yml
+       and passed in as mqw_name. This is the queue used for checkin by external
+       clients (see FB_WRITER_QUEUE in config.yml).
+       */
+	    FrameBufferWriter(const std::string &fb_name, const std::string &mqw_name);
 	    ~FrameBufferWriter();
 	   
     // NOTE: Don't need this now because constructor throws exception.

@@ -44,7 +44,7 @@ add_executable(test_frame_buffer test_frame_buffer.cpp)
 #target_link_libraries(ingester ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # Can't figure out which finder has Linux realtime, which
 # we need for POSIX shared memory. Adding rt breaks cross-platform.
-target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
+target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 
 #target_link_libraries(detector ${OpenCV_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
@@ -53,7 +53,7 @@ target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 target_link_libraries(tracker ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} rt)
+target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} rt)
 
 # only copies once

@@ -18,6 +18,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include "yaml-cpp/yaml.h"
 
 #include "data_source_m3.h"
 #include "frame_buffer.h"
@@ -74,6 +75,7 @@ int main (int argc, char * argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
+  ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
 	("indir,i", po::value<string>()->default_value( "/home/input" ), "path for input files")
 	;
 	po::variables_map options;
@@ -99,11 +101,14 @@ int main (int argc, char * argv[]) {
 	// TODO: make sure input path exists
     string inputDirectory = options["indir"].as<string>();
     
+    fs::path cfgfilepath(options["cfg"].as<string>());
+    YAML::Node config = YAML::LoadFile(cfgfilepath.string());
+    
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
     
-    FrameBufferWriter fb("nims");
+    FrameBufferWriter fb("nims", config["FB_WRITER_QUEUE"].as<string>());
     
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);

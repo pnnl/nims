@@ -101,11 +101,11 @@ std::ostream& operator<<(std::ostream& strm, const FrameHeader& fh)
 
 //-----------------------------------------------------------------------------
 // FrameBufferWriter Constructor
-FrameBufferWriter::FrameBufferWriter(const std::string &fb_name)
+FrameBufferWriter::FrameBufferWriter(const std::string &fb_name, const std::string &mqw_name)
 : fb_name_(fb_name)
 { 
     shm_prefix_ = "/nims_" + fb_name_ + "-";
-    mqw_name_ = "/nims_" + fb_name_ + "-connect";
+    mqw_name_ = mqw_name; //"/nims_" + fb_name_ + "-connect";
     mqw_ = -1;
    
     clog << "max messsage size is " << kMaxMessageSize << endl;
