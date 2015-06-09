@@ -55,6 +55,8 @@ static size_t ProcessFile(const string &watchDirectory, const string &fileName, 
         cout << frame.header << endl;
         fb.PutNewFrame(frame);
         ++frame_count;
+		// TODO:  This is temporary fix to keep from reading file faster than realtime
+		std::this_thread::sleep_for (std::chrono::milliseconds(100));
     }
     
     return frame_count;
