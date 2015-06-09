@@ -497,13 +497,15 @@ int DataSourceM3::GetPing(Frame* pframe)
         /* Initialize variables */
     Packet_Header_Struct packet_header;
     Header_Struct        header;
-    BF_Hdr_Struct        bf_header;
-    BF_Hdr_SpatialPhase_Struct       bf_hdr_spatial_phase;
-    BF_Hdr_Image_Struct              bf_hdr_image;
-    BF_Hdr_Image_Focal_Zone_Struct   bf_hdr_image_focal_zone;
-    BF_Hdr_Beam_Struct               bf_hdr_beam;
-    Beam_Struct                      hdr_beam[MAX_NUM_BEAMS];
-    BF_Hdr_Beam_Focal_Zone_Struct    bf_hdr_beam_focal_zone;
+	// NOTE:  One BF Packet is followed by multiple Ping Packets
+    static BF_Hdr_Struct        bf_header;
+    static BF_Hdr_SpatialPhase_Struct       bf_hdr_spatial_phase;
+    static BF_Hdr_Image_Struct              bf_hdr_image;
+    static BF_Hdr_Image_Focal_Zone_Struct   bf_hdr_image_focal_zone;
+    static BF_Hdr_Beam_Struct               bf_hdr_beam;
+    static Beam_Struct                      hdr_beam[MAX_NUM_BEAMS];
+    static BF_Hdr_Beam_Focal_Zone_Struct    bf_hdr_beam_focal_zone;
+   static char* bf_hdr2_ptr;
    
     Ping_Hdr_Struct       ping_header;
     Generic_Hdr_Struct    generic_header;
@@ -514,7 +516,7 @@ int DataSourceM3::GetPing(Frame* pframe)
 
     memset(&packet_header, 0, sizeof(Packet_Header_Struct));
     memset(&header,        0, sizeof(Header_Struct));
-    memset(&bf_header,     0, sizeof(BF_Hdr_Struct));
+    //memset(&bf_header,     0, sizeof(BF_Hdr_Struct));
     memset(&ping_header,   0, sizeof(Ping_Hdr_Struct));
     memset(&footer,        0, sizeof(Footer_Struct));
 	memset(&generic_header,0, sizeof(Generic_Hdr_Struct));
@@ -612,12 +614,12 @@ int DataSourceM3::GetPing(Frame* pframe)
 
             DEBUG_PRINT_2("BF Packet ID        = ", bf_header.dwPacketID);
             
-            //if (bf_hdr2_ptr)
-            //{
-            //    mxFree(bf_hdr2_ptr);
-            //    bf_hdr2_ptr = 0;
-            //}
-            char* bf_hdr2_ptr = nullptr;
+            if ( bf_hdr2_ptr != nullptr )
+            {
+                free(bf_hdr2_ptr);
+                bf_hdr2_ptr = nullptr;
+            }
+            
             bf_hdr2_ptr = (char *)malloc(packet_header.packet_body_size);
             INT32U bf_hdr2_offset = 0;
             
@@ -710,7 +712,7 @@ int DataSourceM3::GetPing(Frame* pframe)
 			    } // END loop over the images  
 		    } // END loop over the spatial phases  
 				
-            free(bf_hdr2_ptr);
+            //free(bf_hdr2_ptr);
             }
             // NOTE:  Don't set got_ping = true because need to read another packet
 	        break; // PKT_DATA_TYPE_BF_HDR
@@ -725,7 +727,7 @@ int DataSourceM3::GetPing(Frame* pframe)
 
 			if (ping_header.dwBFPacketID != bf_header.dwPacketID)
             {
-                cerr << "BF Packet ID =  " << bf_header.dwPacketID << "vs. "
+                cerr << "BF Packet ID =  " << bf_header.dwPacketID << " vs. "
                  << ping_header.dwBFPacketID << endl;
                 ERROR_MSG_EXIT("Beamformer Packet ID Mismatch!");
             }
