@@ -133,15 +133,15 @@ if ( options.apply_rx_corrns==1 )
 
 clog << "Range Processing ..." << endl;
     
-ImageData echoRangeCompressed;
-rangeCompression(raw_data,
+//ImageData echoRangeCompressed;
+/*rangeCompression(raw_data,
                 settings.ref_pulse,
                 numRawSamples,
                 numCompSamples,
                 numElements,
                 options.range_kaiser_coeff,
                 correctionCoef,
-                echoRangeCompressed);
+                echoRangeCompressed);*/
 /*
 %******************************************************************%
 %******************************************************************%
@@ -168,7 +168,7 @@ float rangeMinActual=(sampleWindowStartTime-0.000025)*c/2; //%the actual samplin
 //% way, which is always smaller than 0.2.
 for (int i=0; i<numCompSamples; ++i)
 {
-    range_list[i] = rangeMinActual + i*sampleCompStep;
+    range_list[i][0] = rangeMinActual + i*sampleCompStep;
 }
 
 if ( options.azimuth_process == 1 )
@@ -204,7 +204,7 @@ if ( options.azimuth_process == 1 )
 */
 } else
 {
-    image_data = echoRangeCompressed;
+//    image_data = echoRangeCompressed;
     clog << "Azimuth Processing OFF" << endl;
 }
     
