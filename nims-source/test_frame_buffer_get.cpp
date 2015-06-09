@@ -15,6 +15,7 @@
 //#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include "yaml-cpp/yaml.h"
+#include <signal.h>
 
 #include "frame_buffer.h"
 
@@ -23,6 +24,13 @@ using namespace boost;
 namespace po = boost::program_options;
 //namespace fs = boost::filesystem;
 
+static volatile sig_atomic_t sigint_received_ = 0;
+
+static void SigintHandler(int sig)
+{
+    if (SIGINT == sig)
+        sigint_received_ = 1;
+}
 
 int main (int argc, char * const argv[]) {
 	//--------------------------------------------------------------------------
@@ -58,6 +66,15 @@ int main (int argc, char * const argv[]) {
     string buffer_name = options["buffer"].as<string>();
     YAML::Node config = YAML::LoadFile(options["cfg"].as<string>());
     
+    // some default registrations for cleanup
+    struct sigaction new_action, old_action;
+    new_action.sa_handler = SigintHandler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGINT, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGINT, &new_action, NULL);
+    
 	//unsigned int bar = options["bar"].as<unsigned int>();
     
 	//--------------------------------------------------------------------------
@@ -69,7 +86,7 @@ int main (int argc, char * const argv[]) {
         FrameBufferReader fb(buffer_name, config["FB_WRITER_QUEUE"].as<string>());
         Frame next_frame;
         long frame_index = -1;
-        while ((frame_index = fb.GetNextFrame(&next_frame)) != -1)
+        while (!sigint_received_ && (frame_index = fb.GetNextFrame(&next_frame)) != -1)
         {
             cout << argv[0] << ": " << "got frame " << frame_index << endl;
         }

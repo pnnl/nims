@@ -21,10 +21,12 @@
 
 using namespace std;
 
-struct FrameMsg {
-    int64_t frame_number;
-    size_t mapped_data_size;
-    char   shm_open_name[NAME_MAX]; // TODO: should this be PATH_MAX (posix)?
+struct __attribute__ ((__packed__)) FrameMsg {
+    // Python code unpacks these as long long and unsigned long long,
+    // respectively, so we used fixed-length types.
+    int64_t  frame_number;
+    uint64_t mapped_data_size;
+    char     shm_open_name[NAME_MAX];
     
     FrameMsg()
     {
@@ -40,6 +42,7 @@ struct FrameMsg {
      
         // Shouldn't happen but better check anyway
         assert((name.size() + 1) < sizeof(shm_open_name));
+        memset(shm_open_name, '\0', sizeof(shm_open_name));
         strcpy(shm_open_name, name.c_str());
 
     };
@@ -150,6 +153,7 @@ FrameBufferWriter::~FrameBufferWriter()
         t_.join();
         mq_unlink(mqw_name_.c_str());
         mq_close(mqw_);
+        clog << __func__ << " cleaned up thread and writer queue" << endl;
     }
     
     // close reader message queues
@@ -157,6 +161,8 @@ FrameBufferWriter::~FrameBufferWriter()
     
     // clean up shared memory
     for (int k=0; k<kMaxFramesInBuffer; ++k) shm_unlink(shm_names_[k].c_str());
+    
+    clog << __func__ << " cleaned up reader message queues" << endl;
     
 } // FrameBufferWriter Destructor
 

@@ -12,7 +12,7 @@
 #include <thread>
 #include <chrono>
 #include <unistd.h>
-
+#include <sys/wait.h>
 
 using namespace std;
 
@@ -23,6 +23,7 @@ int main (int argc, char * const argv[]) {
 	cout << endl << "Starting " << argv[0] << endl;
 
     pid_t pidput = fork();
+    pid_t pidget = -1;
     if (0 == pidput) // first child
     {
         
@@ -40,7 +41,7 @@ int main (int argc, char * const argv[]) {
     }
     else  // parent process
     {
-        pid_t pidget = fork();
+        pidget = fork();
         if (0 == pidget) // second child
         {
             std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -58,7 +59,11 @@ int main (int argc, char * const argv[]) {
         }
     }
 
-	
+
+    if (pidput > 0) waitpid(pidput, NULL, 0);
+    cout << "put ended, waiting for get" << endl;
+    kill(pidget, SIGINT);
+    if (pidget > 0) waitpid(pidget, NULL, 0);
 	   
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
