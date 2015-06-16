@@ -13,8 +13,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "nims_includes.h"
-
 using namespace std;
 
 mqd_t CreateMessageQueue(size_t message_size, const string &name)
