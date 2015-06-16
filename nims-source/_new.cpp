@@ -8,19 +8,21 @@
  *
  */
 #include <iostream> // cout, cin, cerr
-//#include <fstream>  // ifstream, ofstream
 #include <string>   // for strings
 
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 //#include <opencv2/opencv.hpp>
 
-//#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
+#include "yaml-cpp/yaml.h"
+
+#include "queues.h" // SubprocessCheckin()
 
 using namespace std;
-//using namespace cv;
 using namespace boost;
 namespace po = boost::program_options;
-//namespace fs = boost::filesystem;
+namespace fs = boost::filesystem;
+//using namespace cv;
 
 
 int main (int argc, char * const argv[]) {
@@ -30,8 +32,7 @@ int main (int argc, char * const argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("foo,f", po::value<string>()->default_value( "" ),         "a string value")
-	("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
+	("cfg,c", po::value<string>()->default_value( "./nims-config.yaml" ), "path to config file; default is ./nims-config.yaml")
 	;
 	po::variables_map options;
     try
@@ -53,12 +54,19 @@ int main (int argc, char * const argv[]) {
         return 0;
     }
 	
-    string foo = options["foo"].as<string>();
-	unsigned int bar = options["bar"].as<unsigned int>();
+    // READ CONFIG FILE
+    fs::path cfgfilepath( options["cfg"].as<string>() );
+    if ( ! (fs::exists(cfgfilepath) && fs::is_regular_file(cfgfilepath)) )
+    {
+        cerr << "Can't find config file " << cfgfilepath.string() << endl;
+        return -1;
+    }
+    YAML::Node config = YAML::LoadFile(cfgfilepath.string()); // throws exception if bad path
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
+    SubprocessCheckin(getpid()); // Synchronize with main NIMS process.
 	
 	   
 	cout << endl << "Ending " << argv[0] << endl << endl;
