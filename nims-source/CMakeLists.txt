@@ -50,7 +50,7 @@ target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YA
 target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
 
 #target_link_libraries(tracker ${OpenCV_LIBS} ${Boost_LIBRARIES})
-target_link_libraries(tracker ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
+target_link_libraries(tracker ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
