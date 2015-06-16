@@ -15,6 +15,8 @@
 #include <mqueue.h>
 
 __BEGIN_DECLS
+
+#define MQ_SUBPROCESS_CHECKIN_QUEUE "/nims_subprocess_checkin_queue"
   
 mqd_t CreateMessageQueue(size_t message_size, const std::string &name);
 
