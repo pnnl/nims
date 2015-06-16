@@ -8,7 +8,6 @@
  *
  */
 #include <iostream> // cout, cin, cerr
-//#include <fstream>  // ifstream, ofstream
 #include <string>   // for strings
 
 #include <sys/types.h>
@@ -22,14 +21,14 @@
 #include <fcntl.h>    // O_* constants
 #include <unistd.h>   // sysconf
 #include <sys/mman.h> // mmap, shm_open
-#include "queues.h"
 #include <sys/epoll.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+
 #include "yaml-cpp/yaml.h"
 
-#include "nims_includes.h"
+#include "queues.h"
 #include "task.h"
 
 using namespace std;
@@ -40,83 +39,6 @@ namespace fs = boost::filesystem;
 static volatile sig_atomic_t sigint_received_ = 0;
 static vector<nims::Task *> *child_tasks_ = NULL;
 
-/*
- !!! typedefs are a temporary hack to fix compilation; 
- used to be in nims_includes.h.
- */
-
-/*
- An object living in shared memory; created by ingester,
- to be read by others. This is a dummy structure for now.
- 
- - dataLength is the length in bytes of the data
-   member, not of the entire structure.
-*/
-typedef struct __attribute__ ((__packed__)) _NimsFramebuffer {
-    size_t  data_length;
-    void   *data;
-} NimsFramebuffer;
-
-/*
- A notification that the frame buffer at shared
- memory location 'name' has been created and
- is ready for processing.
-
- - dataLength is the expected frame buffer length
- - name is a null-terminated C-string with the
-   name of the shared memory path where the frame
-   buffer resides.
-*/
-#define MQ_INGEST_QUEUE "/nims_ingest_queue"
-typedef struct __attribute__ ((__packed__)) _NimsIngestMessage {
-    size_t mapped_data_length;
-    char   shm_open_name[NAME_MAX];
-} NimsIngestMessage;
-
-
-static void ProcessSharedFramebufferMessage(const NimsIngestMessage *msg)
-{        
-    int fd = shm_open(msg->shm_open_name, O_RDONLY, S_IRUSR);
-    
-    // !!! early return
-    if (-1 == fd) {
-        perror("shm_open() in nims::ProcessSharedFramebufferMessage");
-        return;
-    }
-    
-    // size of mmap region
-    assert(msg->mapped_data_length > sizeof(NimsFramebuffer));
-    cout << "expected mmap data name: " << msg->shm_open_name << endl;
-    cout << "expected mmap data size: " << msg->mapped_data_length << endl;
-
-    // mmap a shared framebuffer on the file descriptor we have from shm_open
-    NimsFramebuffer *shared_buffer;
-    shared_buffer = (NimsFramebuffer *)mmap(NULL, msg->mapped_data_length,
-            PROT_READ, MAP_PRIVATE, fd, 0);
-    
-    close(fd);
-
-    // !!! early return
-    if (MAP_FAILED == shared_buffer) {
-        perror("mmap() in nims::ProcessSharedFramebufferMessage");
-        shm_unlink(msg->shm_open_name);
-    } else {
-
-        assert(shared_buffer->data_length + sizeof(NimsFramebuffer) 
-                <= msg->mapped_data_length);
-
-        // !!! extract the shared content as a C string for debugging _ONLY_
-        char *content = (char *)malloc(shared_buffer->data_length + 1);
-        memset(content, '\0', shared_buffer->data_length + 1);
-        memcpy(content, &shared_buffer->data, shared_buffer->data_length);
-        cout << "shared data length " << shared_buffer->data_length << endl;
-        cout << "shared data content " << content << endl;
-        free(content);
-
-        munmap(shared_buffer, msg->mapped_data_length);
-        shm_unlink(msg->shm_open_name);
-    }
-}
 
 static void SigintHandler(int sig)
 {
@@ -282,21 +204,13 @@ int main (int argc, char * argv[]) {
     // launch all default processes listed in the config file
     LaunchProcessesFromConfig(config);
     
-    // launching subprocesses may or may not create this
-    mqd_t ingest_queue = CreateMessageQueue(sizeof(NimsIngestMessage),
-            MQ_INGEST_QUEUE);
-
-    if (-1 == ingest_queue) {
-        cerr << "nims: failed to create message queue" << endl;
-        exit(1);
-    }
-     
     int epollfd = epoll_create(1);
     if (-1 == epollfd) {
         perror("nims: epollcreate() failed");
         exit(1);
     }
-        
+    
+    /*
     // monitor our ingest queue descriptor
     struct epoll_event ev;
     ev.events = EPOLLIN;
@@ -305,7 +219,7 @@ int main (int argc, char * argv[]) {
         perror("nims: epoll_ctl() failed");
         exit(2);
     }
-
+*/
     while (true) {
         
         cerr << "### entering epoll" << endl;
@@ -333,7 +247,7 @@ int main (int argc, char * argv[]) {
             }
         
         }
-        
+        /*
         for (int n = 0; n < nfds; ++n) {
             
             if (events[n].data.fd == ingest_queue) {
@@ -344,7 +258,7 @@ int main (int argc, char * argv[]) {
                  Queued messages are still processed, though; I tested this
                  by tickling the ingester several times, then launching nims
                  to see it process all of the enqueued messages.
-                */
+                *//*
                 NimsIngestMessage msg;
                 if (mq_receive (ingest_queue, (char *)&msg, 
                         sizeof(msg), NULL) != -1) 
@@ -353,13 +267,13 @@ int main (int argc, char * argv[]) {
             } else {
                 cerr << "*** ERROR *** Monitoring file descriptor with no event handler" << endl;
             }
-        }
-        
+        }*/
+
     }
     
     close(epollfd);
-    mq_close(ingest_queue);
-    mq_unlink(MQ_INGEST_QUEUE);
+    //mq_close(ingest_queue);
+    //mq_unlink(MQ_INGEST_QUEUE);
     
     // just in case we screw up and call SignalChildProcesses twice...
     delete child_tasks_;
