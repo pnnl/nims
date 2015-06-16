@@ -23,12 +23,12 @@ set(Boost_USE_STATIC_LIBS   ON)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
-#find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc)
+find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc)
 find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
 find_package(Yaml-cpp REQUIRED)
 find_package(Threads REQUIRED)
 
-#include_directories(${Boost_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${YAML_CPP_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
@@ -41,17 +41,12 @@ add_executable(test_frame_buffer_put test_frame_buffer_put.cpp frame_buffer.cpp)
 add_executable(test_frame_buffer_get test_frame_buffer_get.cpp frame_buffer.cpp)
 add_executable(test_frame_buffer test_frame_buffer.cpp)
 
-#target_link_libraries(ingester ${OpenCV_LIBS} ${Boost_LIBRARIES})
 # Can't figure out which finder has Linux realtime, which
 # we need for POSIX shared memory. Adding rt breaks cross-platform.
 target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 
-#target_link_libraries(detector ${OpenCV_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt)
-
-#target_link_libraries(tracker ${OpenCV_LIBS} ${Boost_LIBRARIES})
-target_link_libraries(tracker ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
-
+target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
