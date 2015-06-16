@@ -66,6 +66,7 @@ struct FrameHeader
 
 std::ostream& operator<<(std::ostream& strm, const FrameHeader& fh);
 
+typedef float framedata_t; // type for data values
 struct Frame
 {
     FrameHeader header;
@@ -82,17 +83,17 @@ struct Frame
     };
     
     size_t size() const { return data_size; };
-    float * const data_ptr() const { return pdata; };
+    framedata_t * const data_ptr() const { return pdata; };
     
     void malloc_data(size_t size) {
       if (data_size > 0) free(pdata);
-      pdata = (float*)malloc(size);
+      pdata = (framedata_t*)malloc(size);
       if (pdata != nullptr) data_size = size;
     };
     
 private:
     size_t data_size;
-    float *pdata;
+    framedata_t *pdata;
 
 }; // struct Frame
 
@@ -161,9 +162,9 @@ class FrameBufferReader
     private:
         std::string fb_name_;    // unique name for this frame buffer
          std::string mqw_name_;    // writer message queue name
-        mqd_t mqw_;                // writer message queue (FIFO)
+        mqd_t mqw_;                // writer message queue
         std::string mqr_name_;
-        mqd_t mqr_;                // reader message queue, only used by reader
+        mqd_t mqr_;                // reader message queue
 
 
 }; // class FrameBufferReader
