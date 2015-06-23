@@ -14,7 +14,7 @@
 #include <cstring>
 #include <cstdlib> // malloc, free
 #include <stdint.h> // fixed width integer types
-
+#include <complex>
 using namespace std;
 
 //-----------------------------------------------------------------------------
@@ -587,7 +587,7 @@ int DataSourceM3::GetPing(Frame* pframe)
             {
                 num_bytes_ref_pulse = sizeof(Ipp32fc_Type)*(header.dwReferencePulse[0]);
             }
-                
+			// NOTE:  ref pulse is empty if the pulse was a tone burst.
             num_bytes_raw_data = sizeof(Ipp16sc_Type)*(header.nNumRangeCells)*(header.nNumElements);
                 
             DEBUG_PRINT_2("Header Version = ", header.dwVersion);
@@ -754,6 +754,7 @@ int DataSourceM3::GetPing(Frame* pframe)
 			{
 				num_bytes_ref_pulse += sizeof(Ipp32fc_Type)*(ping_header.dwReferencePulse[nn]); 
 			}
+			// NOTE:  ref pulse is empty if the pulse was a tone burst.
 
             num_bytes_raw_data = sizeof(Ipp16sc_Type)*(ping_header.nNumRawSamples)*(bf_header.wNumElements);
             
@@ -886,6 +887,7 @@ int DataSourceM3::GetPing(Frame* pframe)
 	input_.seekg(sizeof(Footer_Struct),ios_base::cur);
 	
     // Beamform.
+	
     /*
     int beamform(const RawData& raw_data, 
                  const Settings& settings, 
@@ -925,7 +927,35 @@ clog << "populating header" << endl;
             pframe->header.freq_hz = header.dwSubArrayFrequency[0];
             pframe->header.pulselen_microsec = header.dwPulseLength;
             pframe->header.pulserep_hz = header.fPulseRepFreq[0];
-            
+           
+		    // Add Rx correction vector
+            Ipp32fc_Type* rxCorrns = (Ipp32fc_Type*)header.RXPhaseAmpCorrection[0];
+ 			vector< complex<double> > rx_corrns;
+            for (int ii = 0; ii < 512; ii++)
+            {
+                /* Copy first image only */
+                rx_corrns.push_back( complex<double>(rxCorrns[ii].I, rxCorrns[ii].Q) );
+            }
+
+		   vector< complex<double> > ref_pulse;
+		   
+            for (int ii = 0; ii < (header.dwReferencePulse[0])*header.nNumImages; ii++)
+            {
+				ref_pulse.push_back( complex<double>((double)(refPulse[ii].I),(double)(refPulse[ii].Q)) );
+            }
+
+			vector< complex<double> > raw_data;
+            for (int ii = 0; ii < header.nNumRangeCells; ii++)
+            {
+                for (int jj = 0; jj < header.nNumElements; jj++)
+                {
+                    //raw_data_I[ii+jj*header.nNumRangeCells] = (double)(rawData[ii*(header.nNumElements) + jj].I);
+                    //raw_data_Q[ii+jj*header.nNumRangeCells] = (double)(rawData[ii*(header.nNumElements) + jj].Q);
+					raw_data[ii+jj*header.nNumRangeCells] = complex<double>((double)(rawData[ii*(header.nNumElements) + jj].I),
+					                                     (double)(rawData[ii*(header.nNumElements) + jj].Q));
+                }
+            }
+		   
         }
             break;
         case PKT_DATA_TYPE_PING_HDR:
