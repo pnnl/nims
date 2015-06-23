@@ -33,7 +33,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${YAML_CPP_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
 
-add_executable(ingester ingester.cpp data_source_m3.cpp frame_buffer.cpp)
+add_executable(ingester ingester.cpp queues.cpp data_source_m3.cpp frame_buffer.cpp)
 add_executable(detector detector.cpp queues.cpp frame_buffer.cpp)
 add_executable(tracker tracker.cpp queues.cpp frame_buffer.cpp tracked_object.cpp pixelgroup.cpp)
 add_executable(nims nims.cpp queues.cpp task.cpp)
