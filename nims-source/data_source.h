@@ -11,28 +11,26 @@
 #ifndef __NIMS_DATA_SOURCE_H__
 #define __NIMS_DATA_SOURCE_H__
 
-#include <fstream>
 
 #include "frame_buffer.h"
 /*-----------------------------------------------------------------------------
 Base class for sonar data sources.  Classes for specific devices will be
 derived from this class.  The unit of data is a ping, which is both the ping
-attributes and the received echo.
+attributes (metadata) and the received echo data.
 */
 
 class DataSource {
  public:
-  DataSource(const std::string& path); // Constructor
-  ~DataSource();                       // Destructor
+    DataSource() {};  // Constructor
+    ~DataSource() {}; // Destructor
   
-  bool is_open()   { return input_.is_open(); }; // check if source was opened successfully
-  bool more_data() { return !input_.eof(); };    // check for not "end of file" condition
-  
+  virtual bool is_good()   =0;  // check if source is in a good state
+  virtual bool more_data() =0;  // check for not "end of file" condition
   virtual int GetPing(Frame* pdata) =0;     // get the next ping from the source
   //virtual size_t ReadPings(Frame* pdata, const size_t& num_pings) =0; // read consecutive pings
   
  protected:
-  std::ifstream input_;
+  int input_; // file descriptor for the source
   
 }; // DataSource
    

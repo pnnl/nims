@@ -14,6 +14,8 @@
 
 #include "data_source.h"
 
+#include <string>
+
 /*-----------------------------------------------------------------------------
 Base class for sonar data sources.  Classes for specific devices will be
 derived from this class.  The unit of data is a ping, which is both the ping
@@ -22,8 +24,12 @@ attributes and the received echo.
 
 class DataSourceM3 : public DataSource {
  public:
-  DataSourceM3(const std::string& path) : DataSource(path) {};
+    DataSourceM3(std::string const &host_addr);
+    ~DataSourceM3();
   
+    bool is_good()   { return (input_ != -1); };  // check if source is in a good state
+    bool more_data() { return true; };  // TODO: check for not "end of file"
+
   int GetPing(Frame* pdata);  // get the next ping from the source
   //size_t ReadPings(Frame* pdata, const size_t& num_pings); // read consecutive pings
   
