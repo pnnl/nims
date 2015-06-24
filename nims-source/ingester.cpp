@@ -22,6 +22,7 @@
 
 #include "data_source_m3.h"
 #include "frame_buffer.h"
+#include "queues.h" // SubprocessCheckin
 
 using namespace std;
 //using namespace cv;
@@ -40,7 +41,7 @@ static size_t ProcessFile(const string &watchDirectory, const string &fileName, 
 {
     cout << "processing file " << fileName << " in dir " << watchDirectory << endl;
     DataSourceM3 input(string(watchDirectory + "/" + fileName));
-    if ( !input.is_open() )
+    if ( !input.is_good() )
     {
         cout << "source NOT open. :(" << endl;
         return 0;
@@ -74,11 +75,11 @@ int main (int argc, char * argv[]) {
 	//
 	// TODO:  Make one input arg, the path of the config file.  Then get other
 	//        params from config file.
+    // TODO:  boost options is overkill if we just have one arg (see above).
 	po::options_description desc;
 	desc.add_options()
-	("help",                                                    "print help message")
-  ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
-	("indir,i", po::value<string>()->default_value( "/home/input" ), "path for input files")
+	("help",                                                     "print help message")
+    ("cfg,c", po::value<string>()->default_value("config.yaml"), "path to config file")
 	;
 	po::variables_map options;
     try
@@ -100,11 +101,11 @@ int main (int argc, char * argv[]) {
         return 0;
     }
 	
-	// TODO: make sure input path exists
-    string inputDirectory = options["indir"].as<string>();
-    
     fs::path cfgfilepath(options["cfg"].as<string>());
     YAML::Node config = YAML::LoadFile(cfgfilepath.string());
+	// TODO: get params from config file
+    string M3_host_addr("130.20.41.25");
+    
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
@@ -115,72 +116,27 @@ int main (int argc, char * argv[]) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);
 	
-    // Watch the input directory for new files.
-    size_t BASE_EVENT_SIZE = sizeof(struct inotify_event);
-    size_t BUF_LEN = 32 * (BASE_EVENT_SIZE + NAME_MAX + 1); // max size of one event with pathname in it
-    clog << "Buffer length is " << BUF_LEN << " bytes." << endl;
-    char buffer[BUF_LEN]; //
     
-    int fd = inotify_init();
+    SubprocessCheckin(getpid()); // sync with main NIMS process
     
-    if( fd < 0 ) {
-        perror( "Error initializing inotify" );
-        exit(1);
-    }
-    
-    // watch for new files
-    int wd = inotify_add_watch( fd, inputDirectory.c_str(), IN_CLOSE_WRITE );
-    clog << "Watching directory " << inputDirectory << ", wd = " << wd << endl;
-    
-    //SubprocessCheckin(getpid()); // sync with main NIMS process
-    
-    while( 1 ) {
-		
-        // read event buffer
-        int length = read( fd, buffer, BUF_LEN ); // blocking read
-		
-        // in case the read() was interrupted by a signal
-        if (sigint_received) {
-            cerr << "ingester received SIGINT; cleaning up" << endl;
-            inotify_rm_watch(fd, wd);
-            break;
+        DataSourceM3 input(M3_host_addr);
+        if ( !input.is_good() )
+        {
+            cerr << "source NOT open. :(" << endl;
+            return -1;
         }
+        clog << "ingester:  source is open!" << endl;
+        size_t frame_count=0;
+        while ( input.more_data() )
+        {
+            Frame frame;
+            if ( -1 == input.GetPing(&frame) ) break;
+            cout << "got frame!" << endl;
+            cout << frame.header << endl;
+            fb.PutNewFrame(frame);
+            ++frame_count;
+         }
         
-        if( length < 0 ) {
-            perror( "Error in read() on inotify file descriptor" );
-            inotify_rm_watch(fd, wd);
-            break;
-        }
-		
-        clog << "Read " << length << " bytes from event buffer. " << endl;
-        int i=0;
-        while( i < length ) {
-            clog << "reading event at index i = " << i << endl;
-            struct inotify_event *event = ( struct inotify_event * ) &buffer[i];
-            clog <<  "event length:  " << event->len << ", wd = " << event->wd << endl;
-            
-            if( event->mask & IN_IGNORED ) {
-                clog << "Input dir no longer exists." << endl;
-                close(fd);  // close event queue to trigger error in outer loop
-                break;
-            }
-            if( event->mask & IN_CLOSE_WRITE ) {
-                if( !(event->mask & IN_ISDIR) ) {
-                    clog << "Found file: " << event->name << endl;
-                    string eventName(event->name);
-                    ProcessFile(inputDirectory, eventName, fb);
-                    clog << "Done processing file." << endl;
-                }
-            }
-            i += BASE_EVENT_SIZE + event->len;
-        } // while (i < length)
-        
-        
-    } // main event loop
-	
-    inotify_rm_watch(fd, wd);
-    close(fd);
-    
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
 }
