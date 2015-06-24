@@ -68,13 +68,12 @@ int main (int argc, char * const argv[]) {
 	try 
 	{
     // create as the writer
-	FrameBufferWriter fb(buffer_name, config["FB_WRITER_QUEUE"].as<string>()); 
-  
-	//if (!fb.IsOpen())
-	//{
-	    //perror(argv[0]);
-	    //return -1;
-	//}
+	FrameBufferWriter fb(config["FRAMEBUFFER_NAME"].as<string>()); 
+  if (-1 == fb.Initialize() )
+  {
+    cerr << argv[0] << " Error initializing frame buffer!" << endl;
+    return -1;
+  }
 	int frame_index = -1;
 	std::this_thread::sleep_for (std::chrono::seconds(10));
 	for (int k=0; k<7; ++k)

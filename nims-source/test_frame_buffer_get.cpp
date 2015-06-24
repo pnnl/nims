@@ -83,7 +83,12 @@ int main (int argc, char * const argv[]) {
 	
     try
     {
-        FrameBufferReader fb(buffer_name, config["FB_WRITER_QUEUE"].as<string>());
+        FrameBufferReader fb(config["FRAMEBUFFER_NAME"].as<string>());
+        if (-1 == fb.Connect() )
+        {
+            cerr << argvs[0] << " Error connecting to frame buffer!" << endl;
+            return -1;
+        }
         Frame next_frame;
         long frame_index = -1;
         while (!sigint_received_ && (frame_index = fb.GetNextFrame(&next_frame)) != -1)
