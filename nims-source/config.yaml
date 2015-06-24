@@ -24,5 +24,7 @@ SONAR_TYPE: 1
 # Specific to M3
 M3_HOST_ADDR: 130.20.41.25
 
-
+# Number of pings to use to calulate moving average
+# of backscatter intensity
+NUM_PINGS_FOR_MOVING_AVG: 100
 ...
