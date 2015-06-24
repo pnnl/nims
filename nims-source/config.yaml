@@ -14,6 +14,15 @@ APPLICATIONS:
     - name: tracker
       args:
  
-FB_WRITER_QUEUE: /nims_framebufferwriter-connect
+# Need this here for python code.
+FRAMEBUFFER_NAME: nims_framebuffer
+
+# Define the type of sonar device connected to the system.
+# 1 = M3 (that's all we support for now.)
+SONAR_TYPE: 1
+
+# Specific to M3
+M3_HOST_ADDR: 130.20.41.25
+
 
 ...
