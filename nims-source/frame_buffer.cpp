@@ -144,13 +144,6 @@ int FrameBufferWriter::Initialize()
     return 0;
 } // FrameBufferWriter::Initialize
 
-//-----------------------------------------------------------------------------
-// FrameBufferWriter Destructor
-FrameBufferWriter::~FrameBufferWriter()
-{
-    CleanUp();    
-    
-} // FrameBufferWriter Destructor
 
 //-----------------------------------------------------------------------------
 // Put a new frame into shared memory.  Returns the
