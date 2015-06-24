@@ -144,35 +144,13 @@ int FrameBufferWriter::Initialize()
     return 0;
 } // FrameBufferWriter::Initialize
 
-<<<<<<< .mine
-=======
 //-----------------------------------------------------------------------------
 // FrameBufferWriter Destructor
 FrameBufferWriter::~FrameBufferWriter()
 {
-    // wait for connection thread to return
-    if (t_.joinable())
-    {
-       char msg = 'x';
-       clog << "sending exit message to connection thread" << endl;
-        mq_send(mqw_, &msg, sizeof(msg), 0);
-        clog << "waiting for thread to return" << endl;
-        t_.join();
-        mq_unlink(mqw_name_.c_str());
-        mq_close(mqw_);
-        clog << __func__ << " cleaned up thread and writer queue" << endl;
-    }
-    
-    // close reader message queues
-    for (int k=0; k<mq_readers_.size(); ++k) mq_close(mq_readers_[k]);
-    
-    // clean up shared memory
-    for (int k=0; k<kMaxFramesInBuffer; ++k) shm_unlink(shm_names_[k].c_str());
-    
-    clog << __func__ << " cleaned up reader message queues" << endl;
+    CleanUp();    
     
 } // FrameBufferWriter Destructor
->>>>>>> .r94
 
 //-----------------------------------------------------------------------------
 // Put a new frame into shared memory.  Returns the
@@ -276,13 +254,17 @@ void FrameBufferWriter::CleanUp()
         t_.join();
         mq_unlink(mqw_name_.c_str());
         mq_close(mqw_);
-    }
+       clog << __func__ << " cleaned up thread and writer queue" << endl;
+     }
     
     // close reader message queues
     for (int k=0; k<mq_readers_.size(); ++k) mq_close(mq_readers_[k]);
+    clog << __func__ << " cleaned up reader message queues" << endl;
     
     // clean up shared memory
     for (int k=0; k<kMaxFramesInBuffer; ++k) shm_unlink(shm_names_[k].c_str());
+    clog << __func__ << " cleaned up shared memory" << endl;
+    
 } // FrameBufferWriter::CleanUp
 	    
 //-----------------------------------------------------------------------------	    
