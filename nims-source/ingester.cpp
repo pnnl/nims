@@ -30,38 +30,13 @@ using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-// Moved the size of the buffer to where the buffer is declared.
-//#define EVENT_SIZE ( sizeof(struct inotify_event) )
-//#define BUF_LEN ( 1024 * (EVENT_SIZE + 16) )
+// TODO: Somehow the defined sonar types need to 
+//       be accessible to users for the config file,
+//       maybe for user interface
+#define NIMS_SONAR_M3 1
+
 
 static volatile int sigint_received = 0;
-
-// returns number of processed frames
-static size_t ProcessFile(const string &watchDirectory, const string &fileName, FrameBufferWriter &fb)
-{
-    cout << "processing file " << fileName << " in dir " << watchDirectory << endl;
-    DataSourceM3 input(string(watchDirectory + "/" + fileName));
-    if ( !input.is_good() )
-    {
-        cout << "source NOT open. :(" << endl;
-        return 0;
-    }
-    cout << "source is open!" << endl;
-    size_t frame_count=0;
-    while ( input.more_data() )
-    {
-        Frame frame;
-        if ( -1 == input.GetPing(&frame) ) break;
-        cout << "got frame!" << endl;
-        cout << frame.header << endl;
-        fb.PutNewFrame(frame);
-        ++frame_count;
-		// TODO:  This is temporary fix to keep from reading file faster than realtime
-		std::this_thread::sleep_for (std::chrono::milliseconds(100));
-    }
-    
-    return frame_count;
-}
 
 static void sig_handler(int sig)
 {
@@ -101,41 +76,76 @@ int main (int argc, char * argv[]) {
         return 0;
     }
 	
-    fs::path cfgfilepath(options["cfg"].as<string>());
-    YAML::Node config = YAML::LoadFile(cfgfilepath.string());
-	// TODO: get params from config file
-    string M3_host_addr("130.20.41.25");
-    
-    
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
+	
+	int sonar_type;
+	string m3_host_addr;
+	string fb_name;
+    fs::path cfgfilepath(options["cfg"].as<string>());
+    try 
+    {
+        YAML::Node config = YAML::LoadFile(cfgfilepath.string());
+        sonar_type = config["SONAR_TYPE"].as<int>();
+        m3_host_addr = config["M3_HOST_ADDR"].as<string>();
+        fb_name = config["FRAMEBUFFER_NAME"].as<string>();
+     }
+     catch( const std::exception& e )
+    {
+        cerr << "Error reading config file." << e.what() << endl;
+        cerr << desc << endl;
+        return -1;
+    }
+   
+ 	DataSource *input; // This is a virtual class.   
     
-    FrameBufferWriter fb("nims", config["FB_WRITER_QUEUE"].as<string>());
+	// TODO: Define an enum or ?
+	switch ( sonar_type )
+	{
+	    case NIMS_SONAR_M3 :  
+            input = new DataSourceM3(m3_host_addr);
+            break;
+        default :
+             cerr << "Ingester:  unknown sonar type." << endl;
+             return -1;
+             break;
+     } // switch SONAR_TYPE
+    
+    
+    
+	   
+     FrameBufferWriter fb(fb_name);
+     if ( -1 == fb.Initialize() )
+   {
+        cerr << "Error initializing frame buffer writer." << endl;
+        return -1;
+    }
+     
+    
+   
+    if ( !input->is_good() )
+    {
+        cerr << "Error opening data source." << endl;
+        return -1;
+    }
     
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, sig_handler);
-	
-    
+   
     SubprocessCheckin(getpid()); // sync with main NIMS process
-    
-        DataSourceM3 input(M3_host_addr);
-        if ( !input.is_good() )
-        {
-            cerr << "source NOT open. :(" << endl;
-            return -1;
-        }
-        clog << "ingester:  source is open!" << endl;
-        size_t frame_count=0;
-        while ( input.more_data() )
-        {
-            Frame frame;
-            if ( -1 == input.GetPing(&frame) ) break;
-            cout << "got frame!" << endl;
-            cout << frame.header << endl;
-            fb.PutNewFrame(frame);
-            ++frame_count;
-         }
+      
+    clog << "ingester:  source is open!" << endl;
+    size_t frame_count=0;
+    while ( input->more_data() )
+    {
+        Frame frame;
+        if ( -1 == input->GetPing(&frame) ) break;
+        cout << "got frame!" << endl;
+        cout << frame.header << endl;
+        fb.PutNewFrame(frame);
+        ++frame_count;
+     }
         
 	cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
