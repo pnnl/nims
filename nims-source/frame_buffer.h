@@ -98,7 +98,7 @@ private:
 }; // struct Frame
 
 
-// One process (the ingester) will instatiate  a FrameBufferWriter.
+// One process (the ingester) will instantiate  a FrameBufferWriter.
 // This process will put new frames
 // in the buffer as data arrives from a sonar device.  Other
 // processes will instantiate a FrameBufferReader.
@@ -109,49 +109,47 @@ private:
 class FrameBufferWriter
 {
 	public:
-    /* Each sonar device has a unique name. Writer name is obtained from config.yml
-       and passed in as mqw_name. This is the queue used for checkin by external
-       clients (see FB_WRITER_QUEUE in config.yml).
-       */
-	    FrameBufferWriter(const std::string &fb_name, const std::string &mqw_name);
+    // Each sonar device has a unique buffer. The buffer name is obtained from config.yml
+    //  and passed in to the constructor.
+       
+	    FrameBufferWriter(const std::string &fb_name);
 	    ~FrameBufferWriter();
-	   
-    // NOTE: Don't need this now because constructor throws exception.
-	    // Call immediately following construction to test
-	    // that the interface was properly initialized.
-	    //bool IsOpen() { return (mqw_ != -1 || mqr_ != -1); };
+
+	   // Open for business.  Will re-initialize if already intialized.
+	   int Initialize();
+    
+	    bool initialized() { return (mqw_ != -1); };
 	    
 	    // Put a new frame into the buffer.  Returns the
 	    // index of the new frame.
 	    long PutNewFrame(const Frame &new_frame); 
 	    
     private:
+        void CleanUp();  // used by destructor and intialize
         void HandleMessages();  // thread function run by writer
     
         std::string fb_name_;    // unique name for this frame buffer
         std::string shm_prefix_; // framebuffer shared memory path name prefix
-        std::string mqw_name_;    // writer message queue name
-        mqd_t mqw_;                // writer message queue (FIFO)
-        std::thread t_;            // writer's connection service thread
-        std::vector<mqd_t> mq_readers_; // list of reader queues, only used by writer
+        std::string mqw_name_;   // writer message queue name
+        mqd_t mqw_;              // writer message queue (FIFO)
+        std::thread t_;          // writer's connection service thread
+        std::vector<mqd_t> mq_readers_;             // list of reader queues
         std::string shm_names_[kMaxFramesInBuffer]; // "slots" for frames in shared mem
-        int64_t frame_count_; // number of frames written
+        int64_t frame_count_;   // number of frames written
     
- 
-
-}; // class FrameBufferWriter
+ }; // class FrameBufferWriter
 
 class FrameBufferReader
 {
 	public:
     // Each sonar device has a unique name.
-	    FrameBufferReader(const std::string &fb_name, const std::string &mqw_name);
+	    FrameBufferReader(const std::string &fb_name);
 	    ~FrameBufferReader();
+	    
+	    // Connect to the writer 
+	    int Connect();
 	   
-    // NOTE: Don't need this now because constructor throws exception.
-	    // Call immediately following construction to test
-	    // that the interface was properly initialized.
-	    //bool IsOpen() { return (mqw_ != -1 || mqr_ != -1); };
+ 	    bool connected() { return (mqr_ != -1); };
 	    
 	    // Get the next frame in the buffer, "next" meaning
 	    // relative to the last frame that was retrieved by the
@@ -161,7 +159,7 @@ class FrameBufferReader
 	    
     private:
         std::string fb_name_;    // unique name for this frame buffer
-         std::string mqw_name_;    // writer message queue name
+        std::string mqw_name_;    // writer message queue name
         mqd_t mqw_;                // writer message queue
         std::string mqr_name_;
         mqd_t mqr_;                // reader message queue
