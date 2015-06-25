@@ -61,6 +61,16 @@ int main (int argc, char * argv[]) {
         return 0;
     }
     
+    // For testing
+    bool VIEW = true; // display new ping images
+    const char *WIN_PING="Ping Image";
+     const char *WIN_MEAN="Mean Intensity Image";
+  if (VIEW)
+  {
+        namedWindow(WIN_PING, CV_WINDOW_AUTOSIZE );
+        namedWindow(WIN_MEAN, CV_WINDOW_AUTOSIZE );
+  }
+     
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
@@ -116,9 +126,6 @@ int main (int argc, char * argv[]) {
          << " and measurement noise = " << measurement_noise << endl;
 
 
-    Mat_<framedata_t> ping_mean; // moving average echo intensity (background)
-    Mat_<framedata_t> ping_stdv; // moving std dev of echo intensity (background)
-    
         FrameBufferReader fb(fb_name);
         if ( -1 == fb.Connect() )
         {
@@ -126,7 +133,6 @@ int main (int argc, char * argv[]) {
             return -1;
         }
         
-        // Initialize the mean and std dev of the echo intensity.
         // Get one ping to get the dimensions of the ping data.
          Frame next_ping;
         
@@ -140,12 +146,21 @@ int main (int argc, char * argv[]) {
     
        int dim_sizes[] = {(int)next_ping.header.num_samples, 
                            (int)next_ping.header.num_beams};
-        int cv_type = sizeof(framedata_t)==32 ? CV_32FC1 : CV_64FC1; 
-        
+        // the framedata_t (frame_buffer.h) is either float or double
+        int cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1; 
         size_t total_samples = next_ping.header.num_samples*next_ping.header.num_beams;
-        Mat_<framedata_t> pings(N, total_samples);
         
-        clog << "initializing moving average and std dev" << endl;
+        clog << "   num samples = " << dim_sizes[0] << ", num beams = " << dim_sizes[1] << endl;
+        clog << "   bytes per sample = " << sizeof(framedata_t) << " (" ;
+             if ( sizeof(framedata_t)==4 ) clog << "CV_32FC1";
+             else clog << "CV_64FC1";
+             clog << ")" << endl;
+        clog << "   total samples = " << total_samples << endl;
+        
+         // Initialize the mean and std dev of the echo intensity.
+       clog << "initializing moving average and std dev" << endl;
+       Mat_<framedata_t> pings(N, total_samples);
+        Mat ping_mean = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type); // moving average      
         for (int k=0; k<N; ++k)
         {
             if ( fb.GetNextFrame(&next_ping)==-1 )
@@ -156,9 +171,21 @@ int main (int argc, char * argv[]) {
             }
             // Create a cv::Mat wrapper for the ping data
             Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
-            ping_data.reshape(0,1).copyTo(pings.rowRange(k,k+1));
+            ping_data.reshape(0,1).copyTo(pings.row(k));
+            ping_mean += ping_data;
+         }
+        ping_mean = ping_mean/N;
+       //Mat_<framedata_t> ping_mean = accumulator/N; // moving average echo intensity (background)
+       Mat ping_stdv = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type); // moving std dev 
+        for (int k=0; k<N; ++k)
+        {
+            Mat sqrDiff;
+            pow(ping_mean - pings.row(k).reshape(0,dim_sizes[0]),2.0f,sqrDiff);
+            ping_stdv += sqrDiff;
         }
-        meanStdDev(pings, ping_mean, ping_stdv);
+        ping_stdv = ping_stdv/(N-1);
+   
+       //meanStdDev(pings, ping_mean, ping_stdv);
         clog << "moving average and std dev initialized" << endl;
         
         int frame_index = -1;
@@ -170,15 +197,24 @@ int main (int argc, char * argv[]) {
             
             // update background
             clog << "updating mean background"  << endl;
-            Mat new_mean = ping_mean + (ping_data.reshape(0,1) - ping_mean)/N;
-            ping_stdv = ping_stdv + 
-                (ping_data.reshape(0,1) - ping_mean).mul(ping_data.reshape(0,1) - new_mean);
+            // u(k) = u(k-1) + (x - u(k-1))/N
+            Mat new_mean = ping_mean + (ping_data - ping_mean)/N;
+            // s(k) = s(k-1) + (x - u(k-1))(x - u(k))/(N-1)
+            ping_stdv = ping_stdv + (ping_data - ping_mean).mul(ping_data - new_mean)/(N-1);
             ping_mean = new_mean;
             
+            if (VIEW)
+            {
+                // display new ping image
+                imshow(WIN_PING, ping_data); 
+                // display updated mean image
+                imshow(WIN_MEAN, Mat(2, dim_sizes, cv_type, ping_mean.data));
+             }
+             
             // detect targets
             clog << "detecting targets" << endl;
             // TODO: Make number of std devs a parameter
-            Mat foregroundMask = (ping_data.reshape(0,1) - ping_mean) / ping_stdv > 3; 
+            Mat foregroundMask = (ping_data - ping_mean) / ping_stdv > 3; 
             int nz = countNonZero(foregroundMask);
             if (nz > 0)
             {
