@@ -18,18 +18,37 @@
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/support/date_time.hpp>
-namespace logging = boost::log;
 
-void set_log_level(int lvl, std::string const & task_name)
+namespace logging = boost::log;
+namespace expr = boost::log::expressions;
+
+void setup_logging(std::string const & task_name, std::string const & level)
 {
-    namespace expr = boost::log::expressions;
-    static pid_t pid = getpid();
+    logging::trivial::severity_level slv;
+    if (level == "trace")
+        slv = logging::trivial::trace;
+    else if (level == "debug")
+        slv = logging::trivial::debug;
+    else if (level == "info")
+        slv = logging::trivial::info;
+    else if (level == "warning")
+        slv = logging::trivial::warning;
+    else if (level == "error")
+        slv = logging::trivial::error;
+    else if (level == "fatal")
+        slv = logging::trivial::fatal;
+    
     logging::core::get()->set_filter
     (
-        logging::trivial::severity >= logging::trivial::info
+        logging::trivial::severity >= slv
     );
+    
+    // adds date, pid
     logging::add_common_attributes();
+    
+    // add process name
     logging::core::get()->add_global_attribute("Task", logging::attributes::constant<std::string>(task_name));
+    
     /*
     Notes
         a) boost::log adds ProcessID, but it only spits out values in hex.
@@ -42,6 +61,7 @@ void set_log_level(int lvl, std::string const & task_name)
     
     Time format: http://www.boost.org/doc/libs/1_58_0/doc/html/date_time/date_time_io.html#format_strings
     */
+    static pid_t pid = getpid();
     logging::add_console_log(
         std::clog,
         logging::keywords::format = (
