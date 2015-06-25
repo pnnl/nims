@@ -16,11 +16,6 @@
 #include <stdio.h>  // perror(3)
 #include <stdlib.h> // exit()
 #include <signal.h>
-
-// for POSIX shared memory
-#include <fcntl.h>    // O_* constants
-#include <unistd.h>   // sysconf
-#include <sys/mman.h> // mmap, shm_open
 #include <sys/epoll.h>
 
 #include <boost/filesystem.hpp>
@@ -210,16 +205,15 @@ int main (int argc, char * argv[]) {
         exit(1);
     }
     
-    /*
-    // monitor our ingest queue descriptor
+    // monitor stdin, just to have a dummy fd for our event loop
     struct epoll_event ev;
     ev.events = EPOLLIN;
-    ev.data.fd = ingest_queue;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ingest_queue, &ev) == -1) {
+    ev.data.fd = STDIN_FILENO;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &ev) == -1) {
         perror("nims: epoll_ctl() failed");
         exit(2);
     }
-*/
+
     while (true) {
         
         cerr << "### entering epoll" << endl;
@@ -229,6 +223,7 @@ int main (int argc, char * argv[]) {
         
         // pass -1 for timeout to block indefinitely
         int nfds = epoll_wait(epollfd, events, EVENT_MAX, -1);
+        
         cerr << "### epoll_wait returned" << endl;
         
         // handle error condition first, in case we're exiting on a signal
@@ -247,33 +242,11 @@ int main (int argc, char * argv[]) {
             }
         
         }
-        /*
-        for (int n = 0; n < nfds; ++n) {
-            
-            if (events[n].data.fd == ingest_queue) {
-                
-                /*
-                 Process a single message per loop; this avoids blocking
-                 on mq_receive, since we don't get SIGINT if we do while().
-                 Queued messages are still processed, though; I tested this
-                 by tickling the ingester several times, then launching nims
-                 to see it process all of the enqueued messages.
-                *//*
-                NimsIngestMessage msg;
-                if (mq_receive (ingest_queue, (char *)&msg, 
-                        sizeof(msg), NULL) != -1) 
-                    ProcessSharedFramebufferMessage(&msg);
-                
-            } else {
-                cerr << "*** ERROR *** Monitoring file descriptor with no event handler" << endl;
-            }
-        }*/
-
+        
     }
     
     close(epollfd);
-    //mq_close(ingest_queue);
-    //mq_unlink(MQ_INGEST_QUEUE);
+    cout << "nims process exiting" << endl;
     
     // just in case we screw up and call SignalChildProcesses twice...
     delete child_tasks_;
