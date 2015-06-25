@@ -34,7 +34,6 @@ int main (int argc, char * const argv[]) {
 	desc.add_options()
 	("help",                                                    "print help message")
   ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
-	("buffer,b", po::value<string>()->default_value( "test" ),    "name of frame buffer")
 	;
 	po::variables_map options;
     try
@@ -55,9 +54,7 @@ int main (int argc, char * const argv[]) {
         cerr << desc << endl;
         return 0;
     }
-	
-  string buffer_name = options["buffer"].as<string>();
-  
+	  
   YAML::Node config = YAML::LoadFile(options["cfg"].as<string>());
     
 	//--------------------------------------------------------------------------

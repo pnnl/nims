@@ -86,7 +86,7 @@ int main (int argc, char * const argv[]) {
         FrameBufferReader fb(config["FRAMEBUFFER_NAME"].as<string>());
         if (-1 == fb.Connect() )
         {
-            cerr << argvs[0] << " Error connecting to frame buffer!" << endl;
+            cerr << argv[0] << " Error connecting to frame buffer!" << endl;
             return -1;
         }
         Frame next_frame;
