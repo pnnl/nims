@@ -14,6 +14,7 @@ endif()
 
 # link Boost statically
 set(Boost_USE_STATIC_LIBS   ON)
+set(OpenCV_STATIC ON)
 
 # enable extended initializer lists
 #add_definitions("-std=c++0x")
@@ -24,7 +25,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
-find_package(Boost REQUIRED COMPONENTS filesystem system program_options)
+# order of these matters for log_setup/log/thread
+find_package(Boost REQUIRED COMPONENTS filesystem system program_options log_setup log thread)
 find_package(Yaml-cpp REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -36,7 +38,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 add_executable(ingester ingester.cpp queues.cpp data_source_m3.cpp frame_buffer.cpp)
 add_executable(detector detector.cpp queues.cpp frame_buffer.cpp)
 add_executable(tracker tracker.cpp queues.cpp frame_buffer.cpp tracked_object.cpp pixelgroup.cpp)
-add_executable(nims nims.cpp queues.cpp task.cpp)
+add_executable(nims nims.cpp queues.cpp task.cpp log.cpp)
 add_executable(test_frame_buffer_put test_frame_buffer_put.cpp frame_buffer.cpp)
 add_executable(test_frame_buffer_get test_frame_buffer_get.cpp frame_buffer.cpp)
 add_executable(test_frame_buffer test_frame_buffer.cpp)

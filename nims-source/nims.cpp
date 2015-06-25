@@ -25,6 +25,7 @@
 
 #include "queues.h"
 #include "task.h"
+#include "log.h"
 
 using namespace std;
 using namespace boost;
@@ -43,7 +44,7 @@ static void SigintHandler(int sig)
 
 static void SignalChildProcesses(const int sig)
 {
-    cerr << "running nims::SignalChildProcesses" << endl;
+    BOOST_LOG_TRIVIAL(info) << "running nims::SignalChildProcesses";
 
     // !!! early return if it hasn't been created yet
     if (NULL == child_tasks_) return;
@@ -52,7 +53,7 @@ static void SignalChildProcesses(const int sig)
     for (it = child_tasks_->begin(); it != child_tasks_->end(); ++it) {
         nims::Task *t = *it;
         if (getpgid(getpid()) == getpgid(t->get_pid())) {
-            cerr << "sending signal to child " << t->get_pid() << endl;
+            BOOST_LOG_TRIVIAL(info) << "sending signal to child " << t->get_pid();
             t->signal(sig);
         }
     }
@@ -65,7 +66,7 @@ static void SignalChildProcesses(const int sig)
 */
 static void ExitHandler()
 {
-    cerr << "running nims::ExitHandler" << endl;
+    BOOST_LOG_TRIVIAL(info) << "running nims::ExitHandler";
     SignalChildProcesses(SIGINT);
     fflush(stderr);
 }
@@ -170,6 +171,8 @@ int main (int argc, char * argv[]) {
         cerr << desc << endl;
         return 0;
     }
+    
+    set_log_level(-1, string(basename(argv[0])));
 
     /*
      Use atexit to guarantee cleanup when we exit, primarily with
