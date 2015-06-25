@@ -32,6 +32,7 @@ int main (int argc, char * argv[]) {
 	desc.add_options()
 	("help",                                                    "print help message")
 	("foo,f", po::value<string>()->default_value( "" ),         "a string value")
+    ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
 	("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;

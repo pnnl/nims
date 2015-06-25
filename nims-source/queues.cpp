@@ -20,7 +20,6 @@ mqd_t CreateMessageQueue(size_t message_size, const string &name)
     struct mq_attr attr;
     memset(&attr, 0, sizeof(struct mq_attr));
     
-    // ??? I can set this at 300 in my test program, but this chokes if it's > 10. WTF?
     attr.mq_maxmsg = 10;
     attr.mq_msgsize = message_size;
     attr.mq_flags = 0;

@@ -7,12 +7,16 @@ BINARY_DIR: .
 APPLICATIONS:
     - name: detector
       args:
+          - -c
+          - config.yaml
     - name: ingester
       args:
-          - -i
-          - /tmp
+          - -c
+          - config.yaml
     - name: tracker
       args:
+          - -c
+          - config.yaml
  
 # Need this here for python code.
 FRAMEBUFFER_NAME: nims_framebuffer
