@@ -43,6 +43,9 @@ __BEGIN_DECLS
 
 void setup_logging(std::string const & task_name, std::string const & level="info");
 
+// use this instead of perror to print context with errno
+void nims_perror(const char *msg);
+
 __END_DECLS
 
 #endif /* _LOG_H */

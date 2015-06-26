@@ -22,6 +22,16 @@
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
 
+void nims_perror(const char *msg)
+{
+    // stash this away immediately in case a call changes it
+    int err = errno;
+    char buf[1024]{'\0'};
+    // we end up with the GNU version instead of POSIX; don't use buf directly
+    char *error_msg = strerror_r(err, buf, sizeof(buf));
+    BOOST_LOG_TRIVIAL(error) << msg << ": " << error_msg;
+}
+
 void setup_logging(std::string const & task_name, std::string const & level)
 {
     logging::trivial::severity_level slv;
@@ -65,7 +75,7 @@ void setup_logging(std::string const & task_name, std::string const & level)
     logging::add_console_log(
         std::clog,
         logging::keywords::format = (
-            expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%s") << 
+            expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S") << 
                 " [" << logging::trivial::severity << "] " << 
                     expr::attr<std::string>("Task") << 
                         " (" << pid << ") " << 
