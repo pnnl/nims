@@ -15,6 +15,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include "yaml-cpp/yaml.h"
 
@@ -28,8 +29,6 @@ using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 using namespace cv;
-
-
 
 
 int main (int argc, char * argv[]) {
@@ -70,7 +69,8 @@ int main (int argc, char * argv[]) {
         namedWindow(WIN_PING, CV_WINDOW_AUTOSIZE );
         namedWindow(WIN_MEAN, CV_WINDOW_AUTOSIZE );
   }
-     
+  int disp_ms = 100; // time duration of window display
+  
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
@@ -207,8 +207,10 @@ int main (int argc, char * argv[]) {
             {
                 // display new ping image
                 imshow(WIN_PING, ping_data); 
+                waitKey(disp_ms); // have to call this to get image to display
                 // display updated mean image
-                imshow(WIN_MEAN, Mat(2, dim_sizes, cv_type, ping_mean.data));
+                imshow(WIN_MEAN, ping_mean);
+                waitKey(disp_ms);
              }
              
             // detect targets
