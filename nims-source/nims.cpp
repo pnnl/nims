@@ -9,6 +9,7 @@
  */
 #include <iostream> // cout, cin, cerr
 #include <string>   // for strings
+#include <unordered_map>
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -17,6 +18,7 @@
 #include <stdlib.h> // exit()
 #include <signal.h>
 #include <sys/epoll.h>
+#include <sys/wait.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -41,9 +43,9 @@ static void sigint_handler(int sig)
         sigint_received_ = 1;
 }
 
-static void SignalChildProcesses(const int sig)
+static void InterruptChildProcesses()
 {
-    NIMS_LOG_WARNING << "running nims::SignalChildProcesses";
+    NIMS_LOG_WARNING << "running nims::InterruptChildProcesses";
 
     // !!! early return if it hasn't been created yet
     if (NULL == child_tasks_) return;
@@ -53,7 +55,10 @@ static void SignalChildProcesses(const int sig)
         nims::Task *t = *it;
         if (getpgid(getpid()) == getpgid(t->get_pid())) {
             NIMS_LOG_WARNING << "sending signal to child " << t->get_pid();
-            t->signal(sig);
+            t->signal(SIGINT);
+            
+            // make sure we reap all child processes
+            waitpid(t->get_pid(), NULL, 0);
         }
     }
 }
@@ -66,7 +71,7 @@ static void SignalChildProcesses(const int sig)
 static void ExitHandler()
 {
     NIMS_LOG_DEBUG << "running nims::ExitHandler";
-    SignalChildProcesses(SIGINT);
+    InterruptChildProcesses();
     fflush(stderr);
 }
 
@@ -83,6 +88,8 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
         exit(1);
     }
     
+    std::unordered_map<pid_t, std::string> checkin_map;
+    
     for (int i = 0; i < applications.size(); i++) {
         YAML::Node app = applications[i];
         vector<string> app_args;
@@ -93,6 +100,7 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
         if (Task->launch()) {
             child_tasks_->push_back(Task);
             NIMS_LOG_DEBUG << "Launched " << name.string() << " pid " << Task->get_pid();
+            checkin_map[Task->get_pid()] = name.string();
         }
         else {
             NIMS_LOG_ERROR << "Failed to launch " << name.string();
@@ -118,13 +126,21 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
         if (mq_timedreceive(mq, (char *)&checkin_pid, sizeof(pid_t), NULL, 
                 &timeout) == -1) {
             
+            // log which task(s) haven't checked in yet
+            for (auto it = checkin_map.begin(); it != checkin_map.end(); ++it)
+                NIMS_LOG_ERROR << it->second << " (pid " << it->first << ") failed to check in";
+            
             if (ETIMEDOUT == errno) {
-                NIMS_LOG_ERROR << "subtask(s) failed to checkin after 10 seconds";
+                NIMS_LOG_ERROR << "check in timed out after " << CHECKIN_TIME_LIMIT_SECONDS << " seconds";
                 exit(errno);
             }
+            
+            // any other error
             nims_perror("subtask checkin failed");
             exit(errno);
         }
+        
+        checkin_map.erase(checkin_pid);
 
     } while(--remaining);
     
@@ -228,7 +244,7 @@ int main (int argc, char * argv[]) {
             
             if (EINTR == errno && sigint_received_) {
             
-                // atexit will call SignalChildProcesses
+                // atexit will call InterruptChildProcesses
                 NIMS_LOG_WARNING << "nims: received SIGINT";            
                 break;
                 
@@ -245,7 +261,7 @@ int main (int argc, char * argv[]) {
     close(epollfd);
     NIMS_LOG_DEBUG << "nims process shutting down";
     
-    // just in case we screw up and call SignalChildProcesses twice...
+    // just in case we screw up and call InterruptChildProcesses twice...
     delete child_tasks_;
     child_tasks_ = NULL;
 
