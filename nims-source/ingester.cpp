@@ -130,8 +130,19 @@ int main (int argc, char * argv[]) {
         return -1;
     }
     
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGINT, sig_handler);
+    struct sigaction new_action, old_action;
+    new_action.sa_handler = sig_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGINT, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGINT, &new_action, NULL);
+    
+    // ignore SIGPIPE
+    new_action.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGPIPE, &new_action, NULL);  
    
     SubprocessCheckin(getpid()); // sync with main NIMS process
       
@@ -139,12 +150,15 @@ int main (int argc, char * argv[]) {
     size_t frame_count=0;
     while ( input->more_data() )
     {
+        Frame frame;
+        if ( -1 == input->GetPing(&frame) ) break;
+        
+        // if we get INT during a recv(), GetPing returns -1 before this is hit
         if (sigint_received) {
             cout << "ingester: exiting due to SIGINT" << endl;
             break;
         }
-        Frame frame;
-        if ( -1 == input->GetPing(&frame) ) break;
+        
         cout << "got frame!" << endl;
         cout << frame.header << endl;
         fb.PutNewFrame(frame);
