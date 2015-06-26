@@ -9,6 +9,7 @@
  */
 
 #include <log.h>
+#include <string>
 #include <pthread.h>
 #include <boost/log/sources/severity_feature.hpp>
 #include <boost/log/sources/severity_logger.hpp>
@@ -108,13 +109,35 @@ void setup_logging(std::string const & task_name, std::string const & level)
     logging::add_console_log(
         std::clog,
         logging::keywords::format = (
-            expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S") << 
+            expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f") << 
                 " [" << logging::trivial::severity << "] " << 
                     expr::attr<std::string>("Task") << 
                         " (" << pid << ") " << 
                             expr::smessage
         )
     );
-        
+    
+    // need auto flush with file-based log
+    // not sure yet if rotate works with append
+    logging::add_file_log(
+        logging::keywords::file_name = task_name + "_%N.log",
+        logging::keywords::rotation_size = 10 * 1024 * 1024,
+        logging::keywords::auto_flush = true,
+        keywords::open_mode = (std::ios::out | std::ios::app),
+        logging::keywords::format = (
+            expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f") << 
+                " [" << logging::trivial::severity << "] " << 
+                    expr::attr<std::string>("Task") << 
+                        " (" << pid << ") " << 
+                            expr::smessage
+        )
+    );
+    
+    // mainly to separate log file blocks visually
+    std::string uc_task_name;
+    for (auto ch = task_name.begin(); ch != task_name.end(); ++ch)
+        uc_task_name += std::toupper(*ch);
+    NIMS_LOG_DEBUG << "**** WELCOME TO " << uc_task_name << " ****";
+    
 }
 

@@ -183,7 +183,7 @@ int main (int argc, char * argv[]) {
     }
     
     setup_logging(string(basename(argv[0])), options["log"].as<string>());
-    
+        
     /*
      Use atexit to guarantee cleanup when we exit, primarily with
      nonzero status because of some error condition. I'd like to
