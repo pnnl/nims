@@ -9,6 +9,9 @@
  */
 
 #include <log.h>
+#include <pthread.h>
+#include <boost/log/sources/severity_feature.hpp>
+#include <boost/log/sources/severity_logger.hpp>
 
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/log/core.hpp>
@@ -21,19 +24,49 @@
 
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
+namespace src = boost::log::sources;
+namespace keywords = boost::log::keywords;
 
-void nims_perror(const char *msg)
+/*
+
+We use a singleton here in order to explicitly manage the lifetime
+of the object. Using boost::log's global loggers is not safe during
+a handler registered with atexit or possibly other times (it causes
+a crash).
+
+Note that this never gets deleted by design, as we want it to stick
+around for the entire life of the program; the memory and resources
+are only reclaimed when it terminates.
+
+*/
+
+static src::severity_logger_mt< logging::trivial::severity_level > *_shared_logger = NULL;
+
+static void setup_shared_logger()
+{
+    assert(NULL == _shared_logger);
+    _shared_logger = new src::severity_logger_mt< logging::trivial::severity_level >();
+}
+
+src::severity_logger_mt< logging::trivial::severity_level > * shared_logger()
+{
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    (void) pthread_once(&once, setup_shared_logger);
+    return _shared_logger;
+}
+
+void nims_perror(const char *context)
 {
     // stash this away immediately in case a call changes it
     int err = errno;
     char buf[1024]{'\0'};
     // we end up with the GNU version instead of POSIX; don't use buf directly
     char *error_msg = strerror_r(err, buf, sizeof(buf));
-    BOOST_LOG_TRIVIAL(error) << msg << ": " << error_msg;
+    BOOST_LOG_SEV(*shared_logger(), logging::trivial::severity_level::error) << context << ": " << error_msg;
 }
 
 void setup_logging(std::string const & task_name, std::string const & level)
-{
+{    
     logging::trivial::severity_level slv;
     if (level == "trace")
         slv = logging::trivial::trace;

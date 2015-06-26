@@ -35,8 +35,7 @@ namespace fs = boost::filesystem;
 static volatile sig_atomic_t sigint_received_ = 0;
 static vector<nims::Task *> *child_tasks_ = NULL;
 
-
-static void SigintHandler(int sig)
+static void sigint_handler(int sig)
 {
     if (SIGINT == sig)
         sigint_received_ = 1;
@@ -44,7 +43,7 @@ static void SigintHandler(int sig)
 
 static void SignalChildProcesses(const int sig)
 {
-    //BOOST_LOG_TRIVIAL(warning) << "running nims::SignalChildProcesses";
+    NIMS_LOG_WARNING << "running nims::SignalChildProcesses";
 
     // !!! early return if it hasn't been created yet
     if (NULL == child_tasks_) return;
@@ -53,7 +52,7 @@ static void SignalChildProcesses(const int sig)
     for (it = child_tasks_->begin(); it != child_tasks_->end(); ++it) {
         nims::Task *t = *it;
         if (getpgid(getpid()) == getpgid(t->get_pid())) {
-            //BOOST_LOG_TRIVIAL(warning) << "sending signal to child " << t->get_pid();
+            NIMS_LOG_WARNING << "sending signal to child " << t->get_pid();
             t->signal(sig);
         }
     }
@@ -66,7 +65,7 @@ static void SignalChildProcesses(const int sig)
 */
 static void ExitHandler()
 {
-    //BOOST_LOG_TRIVIAL(debug) << "running nims::ExitHandler";
+    NIMS_LOG_DEBUG << "running nims::ExitHandler";
     SignalChildProcesses(SIGINT);
     fflush(stderr);
 }
@@ -80,7 +79,7 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     
     mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
     if (-1 == mq) {
-        BOOST_LOG_TRIVIAL(error) << "failed to create message queue";
+        NIMS_LOG_ERROR << "failed to create message queue";
         exit(1);
     }
     
@@ -93,10 +92,10 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
         nims::Task *Task = new nims::Task(bin_dir / name, app_args);
         if (Task->launch()) {
             child_tasks_->push_back(Task);
-            BOOST_LOG_TRIVIAL(info) << "Launched " << name.string() << " pid " << Task->get_pid();
+            NIMS_LOG_DEBUG << "Launched " << name.string() << " pid " << Task->get_pid();
         }
         else {
-            BOOST_LOG_TRIVIAL(error) << "Failed to launch " << name.string();
+            NIMS_LOG_ERROR << "Failed to launch " << name.string();
         }
     }
 
@@ -113,14 +112,14 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
 
     pid_t checkin_pid;
     int remaining = applications.size();
-    BOOST_LOG_TRIVIAL(info) << "waiting for tasks to check in...";
+    NIMS_LOG_DEBUG << "waiting for tasks to check in...";
     do { 
         
         if (mq_timedreceive(mq, (char *)&checkin_pid, sizeof(pid_t), NULL, 
                 &timeout) == -1) {
             
             if (ETIMEDOUT == errno) {
-                BOOST_LOG_TRIVIAL(fatal) << "subtask(s) failed to checkin after 10 seconds";
+                NIMS_LOG_ERROR << "subtask(s) failed to checkin after 10 seconds";
                 exit(errno);
             }
             nims_perror("subtask checkin failed");
@@ -130,7 +129,7 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     } while(--remaining);
     
     time_t dt = timeout.tv_sec - CHECKIN_TIME_LIMIT_SECONDS - time(NULL);
-    BOOST_LOG_TRIVIAL(info) << "all tasks checked in after " << dt << " seconds";
+    NIMS_LOG_DEBUG << "all tasks checked in after " << dt << " seconds";
     
     mq_close(mq);
     mq_unlink(MQ_SUBPROCESS_CHECKIN_QUEUE);
@@ -144,7 +143,7 @@ int main (int argc, char * argv[]) {
 	desc.add_options()
 	("help",                                                    "print help message")
     ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
-    ("log,l", po::value<string>()->default_value("info"), "trace|debug|info|warning|error|fatal")
+    ("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
 	//("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;
@@ -178,7 +177,7 @@ int main (int argc, char * argv[]) {
     
     // some default registrations for cleanup
     struct sigaction new_action, old_action;
-    new_action.sa_handler = SigintHandler;
+    new_action.sa_handler = sigint_handler;
     sigemptyset(&new_action.sa_mask);
     new_action.sa_flags = 0;
     sigaction(SIGINT, NULL, &old_action);
@@ -214,7 +213,7 @@ int main (int argc, char * argv[]) {
 
     while (true) {
         
-        BOOST_LOG_TRIVIAL(debug) << "### entering epoll";
+        NIMS_LOG_DEBUG << "### entering epoll";
         // no particular reason for 10, but it was in sample code that I grabbed
 #define EVENT_MAX 10
         struct epoll_event events[EVENT_MAX];
@@ -222,7 +221,7 @@ int main (int argc, char * argv[]) {
         // pass -1 for timeout to block indefinitely
         int nfds = epoll_wait(epollfd, events, EVENT_MAX, -1);
         
-        BOOST_LOG_TRIVIAL(debug) << "### epoll_wait returned";
+        NIMS_LOG_DEBUG << "### epoll_wait returned";
         
         // handle error condition first, in case we're exiting on a signal
         if (-1 == nfds) {
@@ -230,7 +229,7 @@ int main (int argc, char * argv[]) {
             if (EINTR == errno && sigint_received_) {
             
                 // atexit will call SignalChildProcesses
-                BOOST_LOG_TRIVIAL(warning) << "nims: received SIGINT";            
+                NIMS_LOG_WARNING << "nims: received SIGINT";            
                 break;
                 
             } else if (EINTR != errno) {
@@ -244,7 +243,7 @@ int main (int argc, char * argv[]) {
     }
     
     close(epollfd);
-    BOOST_LOG_TRIVIAL(debug) << "nims process shutting down";
+    NIMS_LOG_DEBUG << "nims process shutting down";
     
     // just in case we screw up and call SignalChildProcesses twice...
     delete child_tasks_;
