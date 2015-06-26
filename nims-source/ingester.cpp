@@ -139,6 +139,10 @@ int main (int argc, char * argv[]) {
     size_t frame_count=0;
     while ( input->more_data() )
     {
+        if (sigint_received) {
+            cout << "ingester: exiting due to SIGINT" << endl;
+            break;
+        }
         Frame frame;
         if ( -1 == input->GetPing(&frame) ) break;
         cout << "got frame!" << endl;
