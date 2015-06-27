@@ -10,6 +10,7 @@
 #include <iostream> // cout, cin, cerr
 #include <fstream>  // ifstream, ofstream
 #include <string>   // for strings
+#include <cmath>    // for trigonometric functions
 
 
 #include <boost/program_options.hpp>
@@ -30,6 +31,70 @@ namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 using namespace cv;
 
+#define PI 3.14159265
+
+// Generate the mapping from beam-range to x-y for display
+int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
+{
+    // range bin resolution in meters per pixel
+    float rng_step = (hdr.range_max_m - hdr.range_min_m)/(hdr.num_samples - 1);
+    clog << "PingImagePolarToCart: range resolution is " << rng_step << endl;
+    float y2 = hdr.range_max_m; // y coordinate of first row of image pixels
+    
+    float beam_step = hdr.beam_angles_deg[1] - hdr.beam_angles_deg[0];
+    double theta1 = (double)hdr.beam_angles_deg[0] * PI/180.0;
+    double theta2 = (double)hdr.beam_angles_deg[hdr.num_beams-1] * PI/180.0;
+    float x1 = hdr.range_max_m*sin(theta1);
+    float x2 = hdr.range_max_m*sin(theta2);
+    clog << "PingImagePolarToCart: beam angles from " << hdr.beam_angles_deg[0]
+         << " to " << hdr.beam_angles_deg[hdr.num_beams-1] << endl;
+    clog << "PingImagePolarToCart: beam angle step is " << beam_step << endl;
+    clog << "PingImagePolarToCart: x1 = " << x1 << ", x2 = " << x2 << endl;
+
+    // size of image
+    int nrows = hdr.num_samples;
+    int ncols = (x2 - x1) / rng_step;
+    clog << "PingImagePolarToCart: image size is " << nrows << " x " << ncols << endl;
+    
+    _map_x.create(nrows, ncols, CV_32FC1);
+    Mat_<float> map_x = _map_x.getMat();
+    _map_y.create(nrows, ncols, CV_32FC1);
+    Mat_<float> map_y = _map_y.getMat();
+    
+    // initialize map to 0's
+    map_x = Mat::zeros(nrows, ncols, CV_32FC1);
+    map_y = Mat::zeros(nrows, ncols, CV_32FC1);
+    
+    // each row is a range
+    for (int m=0; m<nrows; ++m)
+    {
+        // each column is an angle
+        for (int n=0; n<ncols; ++n)
+        {
+            // convert row, col to x,y coordinates, centered at origin
+            float x = x1 + n*rng_step;
+            float y = y2 - m*rng_step;
+            // convert x,y to beam-range
+            float rng = sqrt(pow(x,2)+pow(y,2));
+            float beam_deg = 90 - (atan2(y,x)*(180/PI));
+            // convert beam-range to indices
+            float i_rng = (rng - hdr.range_min_m) / rng_step;
+            float i_beam = (beam_deg - hdr.beam_angles_deg[0]) / beam_step;
+            if (i_rng >=0 && i_rng < hdr.num_samples && i_beam >= 0 && i_beam < hdr.num_beams)
+            {
+                map_x(m,n) = i_beam;
+                map_y(m,n) = i_rng;
+            }
+        }
+    }
+}
+
+int MakePingImage(InputArray _ping, OutputArray _img)
+{
+    
+    
+    return 0;
+}
 
 int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
@@ -66,8 +131,8 @@ int main (int argc, char * argv[]) {
      const char *WIN_MEAN="Mean Intensity Image";
   if (VIEW)
   {
-        namedWindow(WIN_PING, CV_WINDOW_AUTOSIZE );
-        namedWindow(WIN_MEAN, CV_WINDOW_AUTOSIZE );
+        //namedWindow(WIN_PING, CV_WINDOW_AUTOSIZE );
+        //namedWindow(WIN_MEAN, CV_WINDOW_AUTOSIZE );
   }
   int disp_ms = 100; // time duration of window display
   
@@ -157,9 +222,22 @@ int main (int argc, char * argv[]) {
              clog << ")" << endl;
         clog << "   total samples = " << total_samples << endl;
         
+        Mat map_x;
+        Mat map_y;
+        if (VIEW) 
+        {
+            PingImagePolarToCart(next_ping.header, map_x, map_y);
+            double min_beam, min_rng, max_beam, max_rng;
+            minMaxIdx(map_x.reshape(0,1), &min_beam, &max_beam);
+            minMaxIdx(map_y.reshape(0,1), &min_rng, &max_rng);
+            
+            clog << "image mapping:  beam index is from " << min_beam << " to " << max_beam << endl;
+            clog << "image mapping:  range index is from " << min_rng << " to " << max_rng << endl;
+        }
+        
          // Initialize the mean and std dev of the echo intensity.
        clog << "initializing moving average and std dev" << endl;
-       Mat_<framedata_t> pings(N, total_samples);
+       Mat_<framedata_t> pings(N, total_samples);  // TODO:  would be good to clear this when done intitializing
         Mat ping_mean = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type); // moving average      
         for (int k=0; k<N; ++k)
         {
@@ -175,7 +253,10 @@ int main (int argc, char * argv[]) {
             ping_mean += ping_data;
          }
         ping_mean = ping_mean/N;
-       //Mat_<framedata_t> ping_mean = accumulator/N; // moving average echo intensity (background)
+        double min_val, max_val;
+        minMaxIdx(pings.row(N-1), &min_val, &max_val);
+        clog << "ping data values from " << min_val << " to " << max_val << endl;
+    
        Mat ping_stdv = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type); // moving std dev 
         for (int k=0; k<N; ++k)
         {
@@ -206,12 +287,21 @@ int main (int argc, char * argv[]) {
             if (VIEW)
             {
                 // display new ping image
-                imshow(WIN_PING, ping_data); 
-                waitKey(disp_ms); // have to call this to get image to display
+                Mat img1;
+                 remap(ping_data, img1, map_x, map_y, INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+                Mat im_out;
+                img1.convertTo(im_out, CV_16U, 65535, 0);
+                stringstream pngfilepath;
+                pngfilepath <<  "ping-" << frame_index << ".png";
+                imwrite(pngfilepath.str(), im_out);
+                //imshow(WIN_PING, ping_data);
+                //waitKey(disp_ms); // have to call this to get image to display
                 // display updated mean image
-                imshow(WIN_MEAN, ping_mean);
-                waitKey(disp_ms);
-             }
+                Mat img2;
+                 remap(ping_mean, img2, map_x, map_y, INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+                //imshow(WIN_MEAN, ping_mean);
+                //waitKey(disp_ms);
+            }
              
             // detect targets
             clog << "detecting targets" << endl;
