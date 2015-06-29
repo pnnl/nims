@@ -209,9 +209,11 @@ int main (int argc, char * argv[]) {
 
     SubprocessCheckin(getpid()); // synchronize with main NIMS process
     
-       int dim_sizes[] = {(int)next_ping.header.num_samples, 
-                           (int)next_ping.header.num_beams};
-        // the framedata_t (frame_buffer.h) is either float or double
+       //int dim_sizes[] = {(int)next_ping.header.num_samples, 
+        //                   (int)next_ping.header.num_beams};
+        int dim_sizes[] = {(int)next_ping.header.num_beams, 
+                           (int)next_ping.header.num_samples};
+       // the framedata_t (frame_buffer.h) is either float or double
         int cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1; 
         size_t total_samples = next_ping.header.num_samples*next_ping.header.num_beams;
         
@@ -288,7 +290,7 @@ int main (int argc, char * argv[]) {
             {
                 // display new ping image
                 Mat img1;
-                 remap(ping_data, img1, map_x, map_y, INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+                 remap(ping_data.t(), img1, map_x, map_y, INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
                 Mat im_out;
                 img1.convertTo(im_out, CV_16U, 65535, 0);
                 stringstream pngfilepath;
