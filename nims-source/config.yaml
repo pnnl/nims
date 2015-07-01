@@ -13,14 +13,20 @@ APPLICATIONS:
       args:
           - -c
           - config.yaml
+          - l
+          - debug
     - name: ingester
       args:
           - -c
           - config.yaml
+          - l
+          - debug
     - name: tracker
       args:
           - -c
           - config.yaml
+          - l
+          - debug
  
 # Need this here for python code.
 FRAMEBUFFER_NAME: nims_framebuffer

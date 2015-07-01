@@ -13,7 +13,6 @@
 #include <sys/inotify.h> // watch a directory
 #include <signal.h>
 
-
 //#include <opencv2/opencv.hpp>
 
 #include <boost/filesystem.hpp>
@@ -23,6 +22,7 @@
 #include "data_source_m3.h"
 #include "frame_buffer.h"
 #include "queues.h" // SubprocessCheckin
+#include "log.h"
 
 using namespace std;
 //using namespace cv;
@@ -55,6 +55,7 @@ int main (int argc, char * argv[]) {
 	desc.add_options()
 	("help",                                                     "print help message")
     ("cfg,c", po::value<string>()->default_value("config.yaml"), "path to config file")
+    ("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
 	;
 	po::variables_map options;
     try
@@ -75,26 +76,28 @@ int main (int argc, char * argv[]) {
         cerr << desc << endl;
         return 0;
     }
+    
+    std::string cfgpath = options["cfg"].as<string>();
+    setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
 	
 	//--------------------------------------------------------------------------
 	// DO STUFF
-	cout << endl << "Starting " << argv[0] << endl;
+	NIMS_LOG_DEBUG << "Starting " << argv[0];
 	
 	int sonar_type;
 	string m3_host_addr;
 	string fb_name;
-    fs::path cfgfilepath(options["cfg"].as<string>());
     try 
     {
-        YAML::Node config = YAML::LoadFile(cfgfilepath.string());
+        YAML::Node config = YAML::LoadFile(cfgpath);
         sonar_type = config["SONAR_TYPE"].as<int>();
         m3_host_addr = config["M3_HOST_ADDR"].as<string>();
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
      }
      catch( const std::exception& e )
     {
-        cerr << "Error reading config file." << e.what() << endl;
-        cerr << desc << endl;
+        NIMS_LOG_ERROR << "Error reading config file." << e.what();
+        NIMS_LOG_ERROR << desc;
         return -1;
     }
    
@@ -107,7 +110,7 @@ int main (int argc, char * argv[]) {
             input = new DataSourceM3(m3_host_addr);
             break;
         default :
-             cerr << "Ingester:  unknown sonar type." << endl;
+             NIMS_LOG_ERROR << "Ingester:  unknown sonar type: " << sonar_type;
              return -1;
              break;
      } // switch SONAR_TYPE
@@ -118,7 +121,7 @@ int main (int argc, char * argv[]) {
      FrameBufferWriter fb(fb_name);
      if ( -1 == fb.Initialize() )
    {
-        cerr << "Error initializing frame buffer writer." << endl;
+        NIMS_LOG_ERROR << "Error initializing frame buffer writer.";
         return -1;
     }
      
@@ -126,7 +129,7 @@ int main (int argc, char * argv[]) {
    
     if ( !input->is_good() )
     {
-        cerr << "Error opening data source." << endl;
+        NIMS_LOG_ERROR << "Error opening data source.";
         return -1;
     }
     
@@ -146,7 +149,7 @@ int main (int argc, char * argv[]) {
    
     SubprocessCheckin(getpid()); // sync with main NIMS process
       
-    clog << "ingester:  source is open!" << endl;
+    NIMS_LOG_DEBUG << "source is open!";
     size_t frame_count=0;
     while ( input->more_data() )
     {
@@ -155,16 +158,16 @@ int main (int argc, char * argv[]) {
         
         // if we get INT during a recv(), GetPing returns -1 before this is hit
         if (sigint_received) {
-            cout << "ingester: exiting due to SIGINT" << endl;
+            NIMS_LOG_WARNING << "ingester: exiting due to SIGINT";
             break;
         }
         
-        cout << "got frame!" << endl;
-        cout << frame.header << endl;
+        NIMS_LOG_DEBUG << "got frame!";
+        NIMS_LOG_DEBUG << frame.header << endl;
         fb.PutNewFrame(frame);
         ++frame_count;
      }
         
-	cout << endl << "Ending " << argv[0] << endl << endl;
+	NIMS_LOG_DEBUG << "Ending runloop; SIGINT: " << sigint_received;
     return 0;
 }
