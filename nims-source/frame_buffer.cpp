@@ -16,7 +16,9 @@
 #include <exception>  // exception class
 
 #include <boost/lexical_cast.hpp>
+#include <boost/log/trivial.hpp>
 
+#include "log.h"
 #include "frame_buffer.h"
 
 using namespace std;
@@ -102,7 +104,7 @@ FrameBufferWriter::FrameBufferWriter(const std::string &fb_name)
     mqw_name_ = "/" + fb_name;
     mqw_ = -1;
    
-    clog << "max messsage size is " << kMaxMessageSize << endl;
+    NIMS_LOG_DEBUG << "max messsage size is " << kMaxMessageSize;
    
     
 } // FrameBufferWriter Constructor
@@ -127,18 +129,18 @@ int FrameBufferWriter::Initialize()
     attr.mq_maxmsg = 8;
     attr.mq_msgsize = NAME_MAX;
     
-    clog << "creating frame buffer connection msg queue " << mqw_name_ << endl;
+    NIMS_LOG_DEBUG << "creating frame buffer connection msg queue " << mqw_name_;
     // NOTE:  writer queue needs to be read/write so parent can send exit message to thread
     mqw_ = mq_open(mqw_name_.c_str(),O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
     if (mqw_ == -1) 
     {
-        perror("FrameBufferWriter");
+        nims_perror("FrameBufferWriter");
         return -1;
     }
     frame_count_ = 0;
     
     // Start thread for servicing reader connections
-    clog << "starting connection thread" << endl;
+    NIMS_LOG_DEBUG << "starting connection thread";
     t_ = std::thread(&FrameBufferWriter::HandleMessages, this);
     
     return 0;
@@ -207,7 +209,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     shared_frame = nullptr;
         
     // create a message to notify the consumers
-    cout << "sending frame messages to " << mq_readers_.size() << " readers" << endl;
+    NIMS_LOG_DEBUG << "sending frame messages to " << mq_readers_.size() << " readers";
     FrameMsg msg(frame_count_, map_length, shared_name);
     struct timespec tm;
     clock_gettime(CLOCK_REALTIME, &tm); // get the current time
@@ -241,22 +243,22 @@ void FrameBufferWriter::CleanUp()
     if (t_.joinable())
     {
        char msg = 'x';
-       clog << "sending exit message to connection thread" << endl;
+       NIMS_LOG_DEBUG << "sending exit message to connection thread";
         mq_send(mqw_, &msg, sizeof(msg), 0);
-        clog << "waiting for thread to return" << endl;
+        NIMS_LOG_DEBUG << "waiting for thread to return";
         t_.join();
         mq_unlink(mqw_name_.c_str());
         mq_close(mqw_);
-       clog << __func__ << " cleaned up thread and writer queue" << endl;
+        NIMS_LOG_DEBUG << __func__ << " cleaned up thread and writer queue";
      }
     
     // close reader message queues
     for (int k=0; k<mq_readers_.size(); ++k) mq_close(mq_readers_[k]);
-    clog << __func__ << " cleaned up reader message queues" << endl;
+    NIMS_LOG_DEBUG << __func__ << " cleaned up reader message queues";
     
     // clean up shared memory
     for (int k=0; k<kMaxFramesInBuffer; ++k) shm_unlink(shm_names_[k].c_str());
-    clog << __func__ << " cleaned up shared memory" << endl;
+    NIMS_LOG_DEBUG << __func__ << " cleaned up shared memory";
     
 } // FrameBufferWriter::CleanUp
 	    
@@ -273,16 +275,16 @@ void FrameBufferWriter::HandleMessages()
         numbytes = mq_receive(mqw_, msg, kMaxMessageSize, 0);
         if (-1 == numbytes) 
         {
-            perror("connection thread");
-            clog << "connection thread returning" << endl;
+            nims_perror("connection thread");
+            NIMS_LOG_ERROR << "connection thread returning";
             return;
         }
         msg[numbytes] = '\0';
-        clog << "got a message with " << numbytes << " bytes: " << msg << endl;
+        NIMS_LOG_DEBUG << "got a message with " << numbytes << " bytes: " << msg;
         if (numbytes==1 && msg[0] == 'x') return;
         
         // Open reader message queue.
-        clog << "opening message queue " << msg << endl;
+        NIMS_LOG_DEBUG << "opening message queue " << msg;
         mqr = mq_open(msg,O_WRONLY);
         mq_readers_.push_back(mqr); // Add it to the list.
     }
@@ -300,7 +302,7 @@ FrameBufferReader::FrameBufferReader(const std::string &fb_name)
     mqw_ = -1;
     mqr_ = -1;
    
-   clog << "max messsage size is " << kMaxMessageSize << endl;
+   NIMS_LOG_DEBUG << "max messsage size is " << kMaxMessageSize;
    
       
 } // FrameBufferReader Constructor 
@@ -321,30 +323,30 @@ int FrameBufferReader::Connect()
         attr.mq_flags = 0;
         attr.mq_maxmsg = kMaxMessage; // system limit in /proc/sys/fs/mqueue/msg_max
         attr.mq_msgsize = kMaxMessageSize;
-        clog << "creating reader message queue " << mqr_name_ << endl;
+        NIMS_LOG_DEBUG << "creating reader message queue " << mqr_name_;
         mqr_ = mq_open(mqr_name_.c_str(),O_RDONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
         if (mqr_ == -1) 
         {
-            perror("FrameBufferReader");
+            nims_perror("FrameBufferReader");
             return -1;
         }
 
        // connect to the writer and send reader queue name
-       clog << "opening writer queue" << endl;
+       NIMS_LOG_DEBUG << "opening writer queue: " << mqw_name_;
        mqw_ = mq_open(mqw_name_.c_str(), O_WRONLY);
        // TODO:  Should probably wait and try again and eventually time out.
        if (mqw_ == -1) 
        {
-           perror("FrameBufferReader");
+           nims_perror("FrameBufferReader");
            // clean up
            mq_close(mqr_);
            mq_unlink(mqr_name_.c_str());
            return -1;
        }
-       clog << "sending connection message" << endl;
+       NIMS_LOG_DEBUG << "sending connection message";
        if (-1 == mq_send(mqw_, mqr_name_.c_str(), mqr_name_.size(), 0))
        {
-           perror("FrameBufferReader");
+           nims_perror("FrameBufferReader");
            // clean up
            mq_close(mqr_);
            mq_unlink(mqr_name_.c_str());
@@ -368,7 +370,7 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
     //        is passing the address of a Frame struct.
     if (next_frame == nullptr)
     {
-        cerr << "GetNextFrame: pointer argument must be initialized!" << endl;
+        NIMS_LOG_ERROR << "GetNextFrame: pointer argument must be initialized!";
         return -1;
     }
     // Read messages until we get a valid shared memory name.  If the reader
@@ -381,17 +383,17 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
         // Note this will block if queue is empty.
         if ( -1 == mq_receive(mqr_, (char *)&msg, sizeof(msg), 0) )
         {
-            perror("GetNextFrame");
+            nims_perror("GetNextFrame");
             return -1;
         }
         // Attempt to open the shared memory.
         fd = shm_open(msg.shm_open_name, O_RDONLY, S_IRUSR);
    }
     
-    cout << "GetNextFrame: getting " << msg.shm_open_name << endl;
+    NIMS_LOG_DEBUG << "GetNextFrame: getting " << msg.shm_open_name;
     // size of mmap region
     assert(msg.mapped_data_size > sizeof(Frame));
-    clog << "GetNextFrame: data size = " << msg.mapped_data_size << endl;
+    NIMS_LOG_DEBUG << "GetNextFrame: data size = " << msg.mapped_data_size;
     
     // mmap a shared framebuffer on the file descriptor we have from shm_open
     char *shared_frame;
@@ -402,7 +404,7 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
     
     // !!! early return
     if (MAP_FAILED == shared_frame) {
-        perror("mmap() in GetNextFrame");
+        nims_perror("mmap() in GetNextFrame");
         return -1;
     }
     
@@ -414,7 +416,7 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
     next_frame->malloc_data(data_size);
     if (next_frame->size() != data_size)
     {
-        cerr << "Error: Can't allocate memory for frame data." << endl;
+        NIMS_LOG_ERROR << "Error: Can't allocate memory for frame data.";
         return -1;
     }
     memcpy(next_frame->data_ptr(), shared_frame + sizeof(next_frame->header) 

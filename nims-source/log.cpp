@@ -51,6 +51,9 @@ static void setup_shared_logger()
 {
     assert(NULL == _shared_logger);
     _shared_logger = new src::severity_logger_mt< logging::trivial::severity_level >();
+    
+    // adds date, pid
+    logging::add_common_attributes();
 }
 
 src::severity_logger_mt< logging::trivial::severity_level > * shared_logger()
@@ -91,9 +94,6 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
         logging::trivial::severity >= slv
     );
     
-    // adds date, pid
-    logging::add_common_attributes();
-    
     // add process name
     logging::core::get()->add_global_attribute("Task", logging::attributes::constant<std::string>(task_name));
     
@@ -116,7 +116,7 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
             expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f") << 
                 " [" << logging::trivial::severity << "] " << 
                     expr::attr<std::string>("Task") << 
-                        " (" << pid << ") " << 
+                        " (" << pid << ")\t" << 
                             expr::smessage
         )
     );
@@ -136,7 +136,7 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
             expr::stream << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f") << 
                 " [" << logging::trivial::severity << "] " << 
                     expr::attr<std::string>("Task") << 
-                        " (" << pid << ") " << 
+                        " (" << pid << ")\t" << 
                             expr::smessage
         )
     );
