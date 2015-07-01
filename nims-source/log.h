@@ -54,7 +54,7 @@ boost::log::sources::severity_logger_mt< boost::log::trivial::severity_level > *
   
 // call once from main() to register process name and set level
 // supported level names: debug, warning, error
-void setup_logging(std::string const & task_name, std::string const & level="debug");
+void setup_logging(std::string const & task_name, std::string const & cfgpath, std::string const & level="debug");
 
 // use this instead of perror to print context with errno
 void nims_perror(const char *msg);

@@ -3,6 +3,10 @@
 # default to the same dir as the config file
 BINARY_DIR: .
 
+# files in /var/tmp will persist across reboots; this keeps
+# us from cluttering up the binary directory
+LOG_DIR: /var/tmp/NIMS/log
+
 # "name" is a path relative to BINARY_DIR
 APPLICATIONS:
     - name: detector

@@ -182,7 +182,8 @@ int main (int argc, char * argv[]) {
         return 0;
     }
     
-    setup_logging(string(basename(argv[0])), options["log"].as<string>());
+    std::string cfgpath = options["cfg"].as<string>();
+    setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
         
     /*
      Use atexit to guarantee cleanup when we exit, primarily with
@@ -206,8 +207,7 @@ int main (int argc, char * argv[]) {
     if (SIG_IGN != old_action.sa_handler)
         sigaction(SIGPIPE, &new_action, NULL);  
 	    
-    fs::path cfgfilepath( options["cfg"].as<string>() );
-    YAML::Node config = YAML::LoadFile(cfgfilepath.string());
+    YAML::Node config = YAML::LoadFile(cfgpath);
         
     // launch all default processes listed in the config file
     LaunchProcessesFromConfig(config);

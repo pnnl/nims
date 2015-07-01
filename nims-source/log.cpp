@@ -23,10 +23,14 @@
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/support/date_time.hpp>
 
+#include <boost/filesystem.hpp>
+#include "yaml-cpp/yaml.h"
+
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
 namespace src = boost::log::sources;
 namespace keywords = boost::log::keywords;
+namespace fs = boost::filesystem;
 
 /*
 
@@ -66,7 +70,7 @@ void nims_perror(const char *context)
     BOOST_LOG_SEV(*shared_logger(), logging::trivial::severity_level::error) << context << ": " << error_msg;
 }
 
-void setup_logging(std::string const & task_name, std::string const & level)
+void setup_logging(std::string const & task_name, std::string const & cfgpath, std::string const & level)
 {    
     logging::trivial::severity_level slv;
     if (level == "trace")
@@ -119,8 +123,12 @@ void setup_logging(std::string const & task_name, std::string const & level)
     
     // need auto flush with file-based log
     // not sure yet if rotate works with append
+    YAML::Node config = YAML::LoadFile(cfgpath);
+    fs::path log_dir(config["LOG_DIR"].as<std::string>());
+    fs::path log_file = log_dir / fs::path(task_name + "_%N.log");
+    
     logging::add_file_log(
-        logging::keywords::file_name = task_name + "_%N.log",
+        logging::keywords::file_name = log_file.string(),
         logging::keywords::rotation_size = 10 * 1024 * 1024,
         logging::keywords::auto_flush = true,
         keywords::open_mode = (std::ios::out | std::ios::app),
