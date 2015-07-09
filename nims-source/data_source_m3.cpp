@@ -76,12 +76,21 @@ typedef struct
 
 #define ABS_IQ(x) sqrt(pow(x.I,2)+pow(x.Q,2));
 
+// Time Varying Gain (TVG)
+// see section 9.9.3 Changing the TVG, p. 94 in User's Manual
+// Chu, D. and Hufnagle, Jr., L., "Time varying gain (TVG) measurements
+//    of a multibeam echo sounder for applications to quantitative acoustics.", 2006
+// www.dtic.mil/cgi-bin/GetTRDoc?AD=ADA498689
+// http://www.hydro-international.com/issues/articles/id890-Digital_Sidescan_is_this_the_end_of_TVG_and_AGC.html
+//
+// TL = max(A log10 r + B r + C, L)
+// where TL is transmission loss, r is range
 typedef struct
 {
-    INT16U  A;
-    INT16U  B;
-    float   C;
-    float   L;
+    INT16U  A; // the spreading coefficient
+    INT16U  B; // the absorption coefficient in dB/km
+    float   C; // the TVG curve offset in dB
+    float   L; // the maximum gain limit in dB
 } TVG_Params_Type;
 
 typedef struct
