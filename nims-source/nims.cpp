@@ -206,12 +206,21 @@ int main (int argc, char * argv[]) {
     sigaction(SIGPIPE, NULL, &old_action);
     if (SIG_IGN != old_action.sa_handler)
         sigaction(SIGPIPE, &new_action, NULL);  
-	    
-    YAML::Node config = YAML::LoadFile(cfgpath);
-        
-    // launch all default processes listed in the config file
-    LaunchProcessesFromConfig(config);
-    
+	try 
+	{    
+        YAML::Node config = YAML::LoadFile(cfgpath);
+        // launch all default processes listed in the config file
+        LaunchProcessesFromConfig(config);
+    }
+    catch( const std::exception& e )
+    {
+        NIMS_LOG_ERROR << "Error reading config file: " << cfgpath << endl; 
+        NIMS_LOG_ERROR << e.what() << endl;
+        NIMS_LOG_ERROR << desc << endl;
+        return -1;
+    }
+       
+     
     int epollfd = epoll_create(1);
     if (-1 == epollfd) {
         nims_perror("epollcreate() failed");
