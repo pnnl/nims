@@ -131,7 +131,7 @@ int FrameBufferWriter::Initialize()
     
     NIMS_LOG_DEBUG << "creating frame buffer connection msg queue " << mqw_name_;
     // NOTE:  writer queue needs to be read/write so parent can send exit message to thread
-    mqw_ = mq_open(mqw_name_.c_str(),O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
+    mqw_ = mq_open(mqw_name_.c_str(),O_RDWR | O_CREAT, S_IRUSR | S_IWUSR, &attr);
     if (mqw_ == -1) 
     {
         nims_perror("FrameBufferWriter");
