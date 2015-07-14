@@ -238,16 +238,13 @@ int main (int argc, char * argv[]) {
 
     while (true) {
         
-        NIMS_LOG_DEBUG << "### entering epoll";
         // no particular reason for 10, but it was in sample code that I grabbed
 #define EVENT_MAX 10
         struct epoll_event events[EVENT_MAX];
         
         // pass -1 for timeout to block indefinitely
         int nfds = epoll_wait(epollfd, events, EVENT_MAX, -1);
-        
-        NIMS_LOG_DEBUG << "### epoll_wait returned";
-        
+                
         // handle error condition first, in case we're exiting on a signal
         if (-1 == nfds) {
             
