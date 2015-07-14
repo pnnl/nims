@@ -23,32 +23,18 @@
 #include <arpa/inet.h> // inet_addr
 #include <unistd.h> // close
 
+#include "log.h"
+
 using namespace std;
 
 //-----------------------------------------------------------------------------
 // from M3 IMB Beamformed Data Format, document 922-20007002
 //-----------------------------------------------------------------------------
-
-#define DEBUG_PRINT_ON 1
-
-#ifdef DEBUG_PRINT_ON
-    #define DEBUG_PRINT(text) clog << text << endl;
-    #define DEBUG_PRINT_2(text, arg2) clog << text << arg2 << endl;
-    #define DEBUG_PRINT_3(text, arg2, arg3) clog << text << arg2 << arg3 << endl;
-    #define DEBUG_PRINT_4(text, arg2, arg3, arg4) clog << text << arg2 << arg3 << arg4 << endl;
-    #define DEBUG_PRINT_5(text, arg2, arg3, arg4, arg5) clog << text << arg2<< arg3 << arg4 << arg5 << endl;
-#else
-    #define DEBUG_PRINT(text)
-    #define DEBUG_PRINT_2(text, arg2)
-    #define DEBUG_PRINT_3(text, arg2, arg3)
-    #define DEBUG_PRINT_4(text, arg2, arg3, arg4)
-    #define DEBUG_PRINT_5(text, arg2, arg3, arg4, arg5)
-#endif
     
 #define ERROR_MSG_EXIT(err_msg)     \
 {                                   \
     if (bfData != nullptr) free(bfData); \
-    cerr << err_msg << endl;          \
+    NIMS_LOG_ERROR << err_msg;          \
     return -1;                         \
 }                                   \
 
@@ -247,16 +233,21 @@ int DataSourceM3::GetPing(Frame* pframe)
     
     ssize_t bytes_read = 0;
     
-    DEBUG_PRINT("DataSourceM3::GetPing()");
-    DEBUG_PRINT_2("packet header size is ", sizeof(Packet_Header_Struct));
-    DEBUG_PRINT_2("data header size is ", sizeof(Data_Header_Struct));
-    DEBUG_PRINT_2("packet footer size is ", sizeof(Packet_Footer_Struct));
+    NIMS_LOG_DEBUG << __func__;
+    NIMS_LOG_DEBUG << "packet header size is " << sizeof(Packet_Header_Struct);
+    NIMS_LOG_DEBUG << "data header size is " << sizeof(Data_Header_Struct);
+    NIMS_LOG_DEBUG << "packet footer size is " << sizeof(Packet_Footer_Struct);
 
     // Read the packet header.
      bytes_read = recv(input_, (char *)&packet_header, sizeof(packet_header),MSG_WAITALL);
-     DEBUG_PRINT_2("bytes_read =  ", bytes_read);
-     if ( bytes_read != sizeof(packet_header) )
+     if ( bytes_read != sizeof(packet_header) ) {
+         nims_perror("incorrect number of bytes from recv()");
+         NIMS_LOG_ERROR << "bytes_read =  " << bytes_read;
          ERROR_MSG_EXIT("Error reading header.");
+     }
+     
+     NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
+
     // Check header sync words.
     if ( (packet_header.sync_word_1 != HDR_SYNC_INT16U_1) ||
          (packet_header.sync_word_2 != HDR_SYNC_INT16U_2) ||
@@ -268,39 +259,47 @@ int DataSourceM3::GetPing(Frame* pframe)
     if ( packet_header.data_type != PKT_DATA_TYPE_BEAMFORMED )
         ERROR_MSG_EXIT("Error wrong packet type.");
 
-    DEBUG_PRINT_2("packet header body size is ", ntohl(packet_header.packet_body_size));
+    NIMS_LOG_DEBUG << "packet header body size is " << ntohl(packet_header.packet_body_size);
     
     // Read data header.
     bytes_read = recv(input_, (char *)&header, sizeof(header),MSG_WAITALL);
-    DEBUG_PRINT_2("bytes_read =  ", bytes_read);
-    if ( bytes_read != sizeof(header) )
+    if ( bytes_read != sizeof(header) ) {
+        nims_perror("incorrect number of bytes from recv()");
+        NIMS_LOG_ERROR << "bytes_read =  " << bytes_read;
         ERROR_MSG_EXIT("Error reading data header.");
-    DEBUG_PRINT_2("num samples is ", header.nNumSamples);
-    DEBUG_PRINT_2("num beams is ", header.nNumBeams);
-    
-    #ifdef DEBUG_PRINT_ON
-    clog << header << endl;
-    #endif
+    }
+
+    NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
+    NIMS_LOG_DEBUG << "num samples is " << header.nNumSamples;
+    NIMS_LOG_DEBUG << "num beams is " << header.nNumBeams;
+    NIMS_LOG_DEBUG << "header:" << endl << header;
 
     num_bytes_bf_data = sizeof(Ipp32fc_Type)*(header.nNumSamples)*(header.nNumBeams);
-    DEBUG_PRINT_2("num_bytes_bf_data = ", num_bytes_bf_data);
+    NIMS_LOG_DEBUG << "num_bytes_bf_data = " << num_bytes_bf_data;
 
     bfData = (Ipp32fc_Type*)malloc(num_bytes_bf_data);
     if ( bfData == nullptr )
         ERROR_MSG_EXIT("Error allocating memory for data.");
         
-    DEBUG_PRINT("reading data...");
+    NIMS_LOG_DEBUG << "reading data...";
     bytes_read = recv(input_, (char *)bfData, num_bytes_bf_data, MSG_WAITALL);
-    DEBUG_PRINT_2("bytes_read =  ", bytes_read);
-    if ( bytes_read != num_bytes_bf_data )
+    if ( bytes_read != num_bytes_bf_data ) {
+        nims_perror("incorrect number of bytes from recv()");
+        NIMS_LOG_ERROR << "bytes_read =  " << bytes_read;
         ERROR_MSG_EXIT("Error reading data.");
+    }
+    NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
 
     // Read packet footer.
     bytes_read = recv(input_, (char *)&packet_footer, sizeof(packet_footer), MSG_WAITALL);
-    DEBUG_PRINT_2("bytes_read =  ", bytes_read);
-    if ( bytes_read != sizeof(packet_footer) )
+    if ( bytes_read != sizeof(packet_footer) ) {
+        nims_perror("incorrect number of bytes from recv()");
+        NIMS_LOG_ERROR << "bytes_read =  " << bytes_read;
         ERROR_MSG_EXIT("Error reading footer.");
-    DEBUG_PRINT_2("packet footer body size is ", packet_footer.packet_body_size);
+    }
+    
+    NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
+    NIMS_LOG_DEBUG << "packet footer body size is " << packet_footer.packet_body_size;
     
     // Check packet size.
     if ( packet_header.packet_body_size != packet_footer.packet_body_size )
@@ -308,7 +307,7 @@ int DataSourceM3::GetPing(Frame* pframe)
         
     // Okay, good to go.
     
-    DEBUG_PRINT("    extracting header");
+    NIMS_LOG_DEBUG << "    extracting header";
 
     pframe->header.version = header.dwVersion;
     pframe->header.ping_num = header.dwPingNumber;
@@ -330,7 +329,7 @@ int DataSourceM3::GetPing(Frame* pframe)
     pframe->header.pulselen_microsec = header.dwPulseLength;
     pframe->header.pulserep_hz = header.fPulseRepFreq;
    
-    DEBUG_PRINT("    extracting data");
+    NIMS_LOG_DEBUG << "    extracting data";
     // copy data to frame as real intensity value
     size_t frame_data_size = sizeof(framedata_t)*(header.nNumSamples)*(header.nNumBeams);
     pframe->malloc_data(frame_data_size);
