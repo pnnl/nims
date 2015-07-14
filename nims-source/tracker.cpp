@@ -341,7 +341,11 @@ int main (int argc, char * argv[]) {
                 Mat im_out;
                 img1.convertTo(im_out, CV_16U, 65535, 0);
                 stringstream pngfilepath;
-                pngfilepath <<  "ping-" << frame_index << ".png";
+                static int image_name_index = 0;
+                image_name_index += 1;
+                if (image_name_index > 10)
+                    image_name_index = 0;
+                pngfilepath <<  "ping-" << image_name_index << ".png";
                 imwrite(pngfilepath.str(), im_out);
                 //imshow(WIN_PING, ping_data);
                 //waitKey(disp_ms); // have to call this to get image to display
@@ -351,7 +355,7 @@ int main (int argc, char * argv[]) {
                        INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
                  img2.convertTo(im_out, CV_16U, 65535, 0);
                 stringstream pngfilepath2;
-                pngfilepath2 <<  "mean_bg-" << frame_index << ".png";
+                pngfilepath2 <<  "mean_bg-" << image_name_index << ".png";
                 imwrite(pngfilepath2.str(), im_out);
                //imshow(WIN_MEAN, ping_mean);
                 //waitKey(disp_ms);
