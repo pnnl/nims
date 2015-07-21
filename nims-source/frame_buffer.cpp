@@ -167,7 +167,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     
     // !!! early return
     if (-1 == fd) {
-        perror("shm_open() in FrameBufferInterface::PutNewFrame");
+        nims_perror("shm_open() in FrameBufferInterface::PutNewFrame");
         return -1;
     }
     
@@ -177,7 +177,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     // !!! early return
     // could use fallocate or posix_fallocate, but ftruncate is portable
     if (0 != ftruncate(fd, map_length)) {
-        perror("ftruncate() in FrameBufferInterface::PutNewFrame");
+        nims_perror("ftruncate() in FrameBufferInterface::PutNewFrame");
         shm_unlink(shared_name.c_str());
         return -1;
     }
@@ -191,7 +191,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     
     // !!! early return
     if (MAP_FAILED == shared_frame) {
-        perror("mmap() in FrameBufferInterface::PutNewFrame");
+        nims_perror("mmap() in FrameBufferInterface::PutNewFrame");
         shm_unlink(shared_name.c_str());
         return -1;
     }
@@ -223,7 +223,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
         {
             // TODO:  Need to handle an error here more comprehensively. 
             //        If there is problem with queue, may need to remove it from the list.
-            perror("mq_send() in FrameBufferInterface::PutNewFrame");
+            nims_perror("mq_send() in FrameBufferInterface::PutNewFrame");
         }
     } // for mq_readers_
     
