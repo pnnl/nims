@@ -23,29 +23,32 @@ const int kMaxSamples = 20000;
 //        frame rate.  
 const int kMaxFramesInBuffer = 100;
 
-struct FrameHeader
+// packed for sharing compatibility; we may want to manually align members
+// by padding
+struct __attribute__ ((__packed__)) FrameHeader
 {
-    char           device[64];      // may want a predefined list?
-    unsigned int   version;         // of data file or firmware, vendor-specific
-    unsigned int   ping_num;        // ping counter
-    unsigned int   ping_sec;        // time of ping in seconds since midnight 1-Jan-1970
-    unsigned int   ping_millisec;         // milliseconds part of ping time
-    float          soundspeed_mps;  // speed of sound (meters per second)
-    unsigned int   num_samples;     // number of samples per beam
-    float          range_min_m;     // near range (meters)
-    float          range_max_m;     // far range (meters)
-    float          winstart_sec;    // start of sampling window (sec)
-    float          winlen_sec;      // length of sampling window (sec)
-    unsigned int   num_beams;       // number of beams
-    float          beam_angles_deg[kMaxBeams]; // beam angles (deg)
-    unsigned int   freq_hz;         // sonar frequency (Hz)
-    unsigned int   pulselen_microsec;     // pulse length (microsec)
-    float          pulserep_hz;     // pulse repitition frequency (Hz)
+    // NB: braces allow C++0x initializer lists to set POD arrays to 0
+    char      device[64] { };  // may want a predefined list?
+    uint32_t  version;         // of data file or firmware, vendor-specific
+    uint32_t  ping_num;        // ping counter
+    uint32_t  ping_sec;        // time of ping in seconds since midnight 1-Jan-1970
+    uint32_t  ping_millisec;   // milliseconds part of ping time
+    float     soundspeed_mps;  // speed of sound (meters per second)
+    uint32_t  num_samples;     // number of samples per beam
+    float     range_min_m;     // near range (meters)
+    float     range_max_m;     // far range (meters)
+    float     winstart_sec;    // start of sampling window (sec)
+    float     winlen_sec;      // length of sampling window (sec)
+    uint32_t  num_beams;       // number of beams
+    float     beam_angles_deg[kMaxBeams] { }; // beam angles (deg)
+    uint32_t  freq_hz;         // sonar frequency (Hz)
+    uint32_t  pulselen_microsec;     // pulse length (microsec)
+    float     pulserep_hz;     // pulse repitition frequency (Hz)
     
     FrameHeader() 
     {
-        //device = { '\0' };  // compiler complains about this
-        device[0] = '\0';   
+      // POD array element[0] initialized here just as documentation
+        device[0] = '\0';   // C++0x initializer in declaration
         version = 0;         
         ping_num = 0;        
         ping_sec = 0;        
@@ -57,7 +60,7 @@ struct FrameHeader
         winstart_sec = 0.0;    
         winlen_sec = 0.0;      
         num_beams = 0;       
-        beam_angles_deg[kMaxBeams] = { 0.0 }; 
+        beam_angles_deg[0] = 0.0; // C++0x initializer in declaration
         freq_hz = 0;         
         pulselen_microsec = 0;
         pulserep_hz = 0.0;     
@@ -92,7 +95,8 @@ struct Frame
     };
     
 private:
-    size_t data_size;
+    // copied to shared memory: notionally a size_t and float *
+    uint64_t data_size;
     framedata_t *pdata;
 
 }; // struct Frame
