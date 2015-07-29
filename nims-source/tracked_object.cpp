@@ -11,19 +11,6 @@
 using namespace cv;
 using namespace std;
 
-/*
-Track2D::Track2D(const Point2f& initial_pos,  long initial_epoch)
-{
-	position_.push_back(initial_pos);
-	epoch_.push_back(initial_epoch);
-}
-
-void Track2D::update(const Point2f& newpos,  long epoch)
-{
-	position_.push_back(newpos);
-	epoch_.push_back(epoch);
-}
-*/
 
 TrackedObject::TrackedObject(const Point2f& initial_pos, InputArray initial_image, int initial_epoch, float process_noise, float measurement_noise)
 {
@@ -187,6 +174,112 @@ void   TrackedObject::get_last_image(OutputArray lastimg) const
 	backimg.copyTo(_lastimg);
 }
 
+void get_track_attributes(const vector<long>& framenum,
+                          const vector<Point2f>& frame_pos,
+                          float start_range,   // range of first sample in ping data
+                          float range_step,    // delta range for each sample
+                          float start_bearing, // beam angle of first beam in ping data
+                          float bearing_step,  // delta angle of each beam
+                          float ping_rate,
+                          //const vector<Mat>& img,
+                          TrackAttributes& attr)
+{
+    attr.first_frame = framenum.front();
+    attr.last_frame = framenum.back();
+    attr.first_range = start_range + range_step * ((int)frame_pos.front().y - 1);
+    attr.last_range = start_range + range_step * ((int)frame_pos.back().y - 1);
+    attr.first_bearing = start_bearing + bearing_step * ((int)frame_pos.front().x - 1);
+    attr.last_bearing = start_bearing + bearing_step * ((int)frame_pos.back().x - 1);
+    
+    double degtorad=0.0174533;
+    //float rawtodb=(float)90/(float)255;
+    vector<float> rng;
+    vector<float> brg;
+    //vector<double> intensity;
+    vector<float> speed; speed.push_back(0.0);
+    int Nsteps = framenum.size();
+    attr.max_run = 0;
+    int run = 1;
+    for (int n=0; n<Nsteps; ++n)
+    {
+        rng.push_back(start_range + range_step * ((int)frame_pos[n].y - 1));
+        brg.push_back(start_bearing + bearing_step * ((int)frame_pos[n].x - 1));
+        //double maxval;
+        //minMaxIdx(img[n],NULL,&maxval);
+        //intensity.push_back(maxval);
+        if (0<n)
+        {
+            float dist = sqrt( pow(rng[n-1],2) + pow(rng[n],2)
+                              - 2*rng[n-1]*rng[n]*cos(degtorad*(brg[n]-brg[n-1])) );
+            float dt = (float)(framenum[n]-framenum[n-1])/ping_rate;
+            speed.push_back( (0<dt) ? dist/dt : 0);
+            run = (framenum[n]-framenum[n-1] == 1) ? run+1 : 1;
+            if (attr.max_run < run) attr.max_run = run;
+        }
+    }
+    attr.min_range = *min_element(rng.begin(),rng.end());
+    attr.max_range = *max_element(rng.begin(),rng.end());
+    attr.min_bearing = *min_element(brg.begin(),brg.end());
+    attr.max_bearing = *max_element(brg.begin(),brg.end());
+    attr.frame_count = Nsteps;
+    Scalar meanval, stdval;
+    //meanStdDev(Mat(intensity),meanval,stdval);
+    //attr.mean_intensity = meanval[0]*rawtodb;
+    //attr.std_intensity = stdval[0]*rawtodb;
+    meanStdDev(Mat(speed),meanval,stdval);
+    attr.mean_speed = meanval[0];
+    attr.std_speed = stdval[0];
+}
+
+
+std::ostream& operator<<(std::ostream& strm, const TrackAttributes& attr)
+{
+    strm << attr.track_id << ", "
+    << attr.first_frame << ", "
+    << attr.last_frame << ", "
+    << attr.first_range << ", "
+    << attr.last_range << ", "
+    << attr.first_bearing << ", "
+    << attr.last_bearing << ", "
+    << attr.min_range << ", "
+    << attr.max_range << ", "
+    << attr.min_bearing << ", "
+    << attr.max_bearing << ", "
+    << attr.frame_count << ", "
+    << attr.max_run << ", "
+    //<< attr.mean_intensity << ", "
+    //<< attr.std_intensity << ", "
+    << attr.mean_speed << ", "
+    << attr.std_speed << ", "
+    ;
+    
+    return strm;
+    
+}
+
+
+void print_attribute_labels(std::ostream& strm)
+{
+    strm << "Track ID, "
+    << "First Ping, "
+    << "Last Ping, "
+    << "First Range (m), "
+    << "Last Range (m), "
+    << "First Bearing (deg), "
+    << "Last Bearing (deg), "
+    << "Min Range (m), "
+    << "Max Range (m), "
+    << "Min Bearing (deg), "
+    << "Max Bearing (deg), "
+    << "Pings Visible, "
+    << "Max Run, "
+    //<< "Mean Intensity (dB), "
+    //<< "Std Intensity (dB), "
+    << "Mean Speed (m/s), "
+    << "Std Speed (m/s), "
+    ;
+    
+}
 
 
 

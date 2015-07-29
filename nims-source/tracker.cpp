@@ -92,6 +92,7 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
 }
 
 // http://docs.opencv.org/modules/imgproc/doc/histograms.html
+// http://opencvexamples.blogspot.com/2013/10/histogram-calculation.html
 int HistImage(InputArray _im, int nbins, OutputArray _imhist)
 {
 
@@ -105,24 +106,41 @@ int HistImage(InputArray _im, int nbins, OutputArray _imhist)
     float ranges[2] = {(float)min_val, (float)max_val};
     
     // calc the histogram
-    int channels = 1;
+    int channels[] = {1};
+    int hist_size[] = {nbins};
+    const float *hist_ranges[] = {ranges};
     Mat hist;
-    //calcHist(&im, 1, &channels, Mat(),
-    //         hist, 1, &nbins, &ranges, true); // uniform bins
+    calcHist(&im, 1, channels, Mat(),
+             hist, 1, hist_size, hist_ranges, true); // uniform bins
     
     // create histogram image
-    
+    double total = im.rows * im.cols; // total pixels or cells
+    int scale = 10;
+    Mat imhist = Mat::zeros(1, nbins, CV_8UC3);
+    for (int k=0; k<nbins; ++k)
+    {
+        float bin_val = hist.at<float>(k);
+        
+    }
     return 0;
 }
 
-
+/*
 int MakePingImage(InputArray _ping, OutputArray _img)
 {
+    Mat ping = _ping.getMat();
     
+    // check for single channel gray scale
+       
+                 Mat img1;
+                 remap(ping.t(), img1, map_x, map_y, 
+                       INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+                Mat im_out;
+                img1.convertTo(im_out, CV_16U, 65535, 0);
     
     return 0;
 }
-
+*/
 int main (int argc, char * argv[]) {
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
@@ -174,8 +192,10 @@ int main (int argc, char * argv[]) {
 	
 	string fb_name;
 	int N;
-    //fs::path cfgfilepath( cfgpath );
-    try 
+    // TODO:  make these config parameters
+    int maxgap = 3; // maximum gap in frames allowed within a track
+    int mintrack = 10; // minimum number of steps to be considered a track
+    try
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
          fb_name = config["FRAMEBUFFER_NAME"].as<string>();
@@ -183,22 +203,13 @@ int main (int argc, char * argv[]) {
      }
      catch( const std::exception& e )
     {
-        NIMS_LOG_ERROR << "Error reading config file." << e.what();
-        NIMS_LOG_ERROR << desc;
+        NIMS_LOG_ERROR << "Error reading config file: " << cfgpath << endl; 
+        NIMS_LOG_ERROR << e.what() << endl;
+        NIMS_LOG_ERROR << desc << endl;
         return -1;
     }
     
     
-	
- 	/*
-     fs::path avifilepath("tracks.avi");
-   VideoWriter outvideo(avifilepath.string().c_str(), CV_FOURCC('D','I','V','X'), 10,
-						 Size(DUALFRAME ? 2*info.ixsize : info.ixsize, info.iysize));
-	if ( !outvideo.isOpened() )
-	{
-		NIMS_LOG_ERROR << "Could not open output video file " << avifilepath.string();
-		return -1;
-	}*/
     //-------------------------------------------------------------------------
 	// SETUP TRACKING
     
@@ -215,7 +226,7 @@ int main (int argc, char * argv[]) {
 	//        is very noisy.  The measurement noise is the resolution
 	//        of the sample space (range bin, beam width).
 	// TODO:  make these params in config file
-    float process_noise = 1e-1;     // process is fish swimming
+    float process_noise = 1e-1;     // process is animal swimming
     float measurement_noise = 1e-2; // measurement is backscatter
 	int pred_err_max = 15; // max difference in pixels between prediction and actual
 
@@ -301,15 +312,19 @@ int main (int argc, char * argv[]) {
         minMaxIdx(ping_mean.reshape(0,1), &min_val, &max_val);
         NIMS_LOG_DEBUG << "mean background values from " << min_val 
                        << " to " << max_val;
-       // Initialize the moving std dev. 
-       Mat ping_stdv = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type); 
+       // Initialize the moving std dev.
+       // v = sum( (x(k) - u)^2 ) / (N-1)
+       // s = sqrt( v )
+       Mat ping_var = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type);
         for (int k=0; k<N; ++k)
         {
             Mat sqrDiff;
             pow(ping_mean - pings.row(k).reshape(0,dim_sizes[0]),2.0f,sqrDiff);
-            ping_stdv += sqrDiff;
+            ping_var += sqrDiff;
         }
-        ping_stdv = ping_stdv/(N-1);
+        ping_var = ping_var/(N-1);
+        Mat ping_stdv;
+        sqrt(ping_var, ping_stdv);
  
          minMaxIdx(ping_stdv.reshape(0,1), &min_val, &max_val);
         NIMS_LOG_DEBUG << "background std. dev. values from " << min_val 
@@ -323,60 +338,181 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_DEBUG << "got frame " << frame_index << endl << next_ping.header;
             Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
             
+            Mat imc; // if not VIEW, this is never intitialized
+            if (VIEW)
+            {
+                // create 3-channel color image for viewing/saving
+                // ping data values are float from 0 to whatever
+                // need to scale in a consistent way to 0 to 1.
+                Mat imgray;
+                ping_data.convertTo(imgray, CV_8U, 255, 0);
+                cvtColor(imgray, imc, CV_GRAY2RGB);
+            }
             // update background
+            // http://www.johndcook.com/blog/standard_deviation/
             NIMS_LOG_DEBUG << "updating mean background";
             // u(k) = u(k-1) + (x - u(k-1))/N
             Mat new_mean = ping_mean + (ping_data - ping_mean)/N;
-            // s(k) = s(k-1) + (x - u(k-1))(x - u(k))/(N-1)
-            ping_stdv = ping_stdv + 
+            // s2(k) = s2(k-1) + (x - u(k-1))(x - u(k))/(N-1)
+            ping_var = ping_var +
                 (ping_data - ping_mean).mul(ping_data - new_mean)/(N-1);
+            sqrt(ping_var, ping_stdv);
             ping_mean = new_mean;
             
-            if (VIEW)
-            {
-                // display new ping image
-                Mat img1;
-                 remap(ping_data.t(), img1, map_x, map_y, 
-                       INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
-                Mat im_out;
-                img1.convertTo(im_out, CV_16U, 65535, 0);
-                stringstream pngfilepath;
-                static int image_name_index = 0;
-                image_name_index += 1;
-                if (image_name_index > 10)
-                    image_name_index = 0;
-                pngfilepath <<  "ping-" << image_name_index << ".png";
-                imwrite(pngfilepath.str(), im_out);
-                //imshow(WIN_PING, ping_data);
-                //waitKey(disp_ms); // have to call this to get image to display
-                // display updated mean image
-                Mat img2;
-                 remap(ping_mean, img2, map_x, map_y, 
-                       INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
-                 img2.convertTo(im_out, CV_16U, 65535, 0);
-                stringstream pngfilepath2;
-                pngfilepath2 <<  "mean_bg-" << image_name_index << ".png";
-                imwrite(pngfilepath2.str(), im_out);
-               //imshow(WIN_MEAN, ping_mean);
-                //waitKey(disp_ms);
-            }
-             
+            //minMaxIdx(ping_mean.reshape(0,1), &min_val, &max_val);
+             minMaxIdx(ping_mean, &min_val, &max_val);
+           NIMS_LOG_DEBUG << "mean background values from " << min_val
+            << " to " << max_val;
+            minMaxIdx(ping_stdv.reshape(0,1), &min_val, &max_val);
+            NIMS_LOG_DEBUG << "background std. dev. values from " << min_val
+            << " to " << max_val;
+            
             // detect targets
             NIMS_LOG_DEBUG << "detecting targets";
             // TODO: Make number of std devs a parameter
-            Mat foregroundMask = (ping_data - ping_mean) / ping_stdv > 3; 
+            Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > 3;
             int nz = countNonZero(foregroundMask);
+            NIMS_LOG_DEBUG << "number of samples above threshold: " 
+                           << nz << " (" 
+                           << ceil((float)nz/total_samples * 100.0) << "%)";
             if (nz > 0)
             {
                 PixelGrouping objects;
                 group_pixels(foregroundMask, objects);
                 int n_obj = objects.size();
-                cout << "found " << n_obj << " obj:";
+                NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
+                
+                if (VIEW)
+                {
+                    vector< vector<Point> > contours;
+                    findContours(foregroundMask, contours, noArray(), 
+                         CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE);
+                    // draw all contours in red
+                    drawContours(imc, contours, -1, Scalar(0,0,255)); 
+                }
 
+                // update tracks
+                NIMS_LOG_DEBUG << "tracking detected objects";
+                Mat_<float> detected_positions_x(1,n_obj,0.0);
+                Mat_<float> detected_positions_y(1,n_obj,0.0);
+                Mat detected_not_matched =  Mat::ones(1,n_obj,CV_8UC1);
+                
+                int n_active = active_tracks.size();
+                NIMS_LOG_DEBUG << n_active << " active tracks:";
+                if ( n_active > 0)
+                {
+                    Mat_<float> predicted_positions_x(1,n_active,0.0);
+                    Mat_<float> predicted_positions_y(1,n_active,0.0);
+                    Mat_<float> distances(n_active, n_obj, 0.0);
+                    for (int a=0; a<n_active; ++a)
+                    {
+                        Point2f pnt = active_tracks[a].predict(frame_index);
+                        predicted_positions_x(a) = pnt.x;
+                        predicted_positions_y(a) = pnt.y;
+                        
+                        NIMS_LOG_DEBUG << "   ID " << active_id[a] << ": predicted object at " << pnt.x
+                                       << ", " << pnt.y << ", last updated in frame "
+                                       << active_tracks[a].last_epoch();
+                        
+                        magnitude(predicted_positions_x(a)-detected_positions_x, 
+                                  predicted_positions_y(a)-detected_positions_y, 
+                                  distances.row(a));
+                    }
+                    NIMS_LOG_DEBUG << "distances between predicted and detected:" << endl << distances;
+                    
+                    
+                    // match detections to active tracks
+                    Mat active_not_matched  = Mat::ones(n_active,1,CV_8UC1);
+                    for (int f=0; f<n_obj; ++f)
+                    {
+                        // if all active tracks have been matched, break
+                        if ( countNonZero(active_not_matched) < 1 ) break; 
+                        
+                        // find closest active track
+                        double min_dist;
+                        int min_idx[2];
+                        minMaxIdx(distances.col(f), &min_dist, NULL, min_idx,
+                                  NULL,active_not_matched);
+                        // if detection is too far from all active tracks...
+                        if (pred_err_max < min_dist) continue; 
+                        
+                        // make sure one of the remaining detections is not 
+                        // closer to the found active track
+                        if ( countNonZero(distances(Range(min_idx[0],min_idx[0]+1),
+                                 Range(f+1,n_obj)) < min_dist) ) continue;
+                        
+                        NIMS_LOG_DEBUG << "ID " << active_id[min_idx[0]] 
+                                       << ": matched detection " << f;
+                        active_tracks[min_idx[0]].update(frame_index, 
+                             Point2f(detected_positions_x(f), detected_positions_y(f)));
+                        // mark as matched
+                        detected_not_matched.at<unsigned char>(f) = 0; 
+                        // mark as matched
+                        active_not_matched.at<unsigned char>(min_idx[0]) = 0; 
+                    } // for each detection
+
+                    // create new active tracks for unmatched detections
+                    for (int f=0; f<n_obj; ++f)
+                    {
+                        if ( detected_not_matched.at<unsigned char>(f) )
+                        {
+                            NIMS_LOG_DEBUG  << "ID " << next_id 
+                                            << ": starting new track at "
+                                            << detected_positions_x(f) << ", " 
+                                            << detected_positions_y(f);
+                            
+                            TrackedObject newfish(Point2f(detected_positions_x(f),
+                                          detected_positions_y(f)),
+                                          cv::noArray(), frame_index, 
+                                          process_noise, measurement_noise);
+                            active_tracks.push_back(newfish);
+                            active_id.push_back(next_id);
+                            ++next_id;
+                        }
+                    }
+
+                    
+                } // if active tracks
+
+                
             } // nz > 0
             
-            // update tracks
-            NIMS_LOG_DEBUG << "tracking";
+            // de-activate tracks
+            int idx = 0;
+            while (idx < active_tracks.size())
+            {
+                if ( frame_index - active_tracks[idx].last_epoch() > maxgap )
+                {
+                    NIMS_LOG_DEBUG << "ID " << active_id[idx] 
+                                   << ": deactivated, last updated in frame "
+                                   << active_tracks[idx].last_epoch();
+                    // save if greater than minimum length
+                    if ( active_tracks[idx].track_length() > mintrack )
+                    {
+                        completed_tracks.push_back(active_tracks[idx]); 
+                        completed_id.push_back(active_id[idx]);
+                        NIMS_LOG_DEBUG << "ID " << active_id[idx] 
+                                       << ": saved as completed track";
+                    }
+                    active_tracks.erase(active_tracks.begin()+idx);
+                    active_id.erase(active_id.begin()+idx);
+                }
+                else
+                {
+                    ++idx;
+                }
+            } // for each active
+            
+            if (VIEW)
+            {
+                Mat im_out;
+                remap(imc.t(), im_out, map_x, map_y,
+                      INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+                stringstream pngfilepath;
+                pngfilepath <<  "ping-" << frame_index % 10 << ".png";
+                imwrite(pngfilepath.str(), im_out);
+            }
+            
             
         }
      

@@ -162,7 +162,7 @@ void group_pixels(cv::InputArray imb, PixelGrouping& groups)
 			// add it to the current group
 			groupPix.push_back(ipix);
 			
-			// find all its neighbors, spatial and temporal
+			// find all its neighbors
 			getNeighbors(ipix,matimb.rows,matimb.cols,ineighbors);
 			//cout << "neighbors (" << ineighbors.size() << "):" << endl;
 			for (int j=0;j<ineighbors.size();j++)
