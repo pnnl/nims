@@ -308,7 +308,9 @@ int DataSourceM3::GetPing(Frame* pframe)
     // Okay, good to go.
     
     NIMS_LOG_DEBUG << "    extracting header";
-
+    
+    strncpy(pframe->header.device, "Kongsberg M3 Multibeam sonar", 
+            sizeof(pframe->header.device));
     pframe->header.version = header.dwVersion;
     pframe->header.ping_num = header.dwPingNumber;
     pframe->header.ping_sec = header.dwTimeSec;
