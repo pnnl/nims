@@ -1,0 +1,176 @@
+*{
+
+	border : 0;
+
+}
+
+
+ul.menu {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+li.menu {
+    float: left;
+}
+
+a:link.menu, a:visited.menu {
+    display: block;
+    width: 480px;
+    font-weight: bold;
+    color: #FFFFFF;
+    background-color: LightSeaGreen ;
+    text-align: center;
+
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+a:hover.menu, a:active.menu {
+    background-color: #7A991A;
+}
+
+
+a.canvasjs-chart-credit {
+	visibility : hidden;
+}
+
+
+
+
+
+body
+{
+	background-color: DarkCyan;
+	background-attachment : fixed;
+	background-size : 100% auto;
+}
+
+.main_grid
+{
+	margin: 30px;
+	display : block;
+	width : 960px;
+
+
+}
+
+.pageHeader
+{
+	clear : none;
+	height : 150px;
+	width : 960px;
+
+}
+
+.bsBlock
+{
+
+	display: block;
+	clear: none;
+	width:960px;
+	height:500px;
+ }
+
+.systemControls
+{
+	display: block;
+	clear: none;
+	float:left;
+	width:460px;
+	height:500px;
+
+}
+
+.system
+{
+	padding:10px;
+	line-height:5px;
+	float:left;
+	width:460px;
+	height:250px;
+
+}
+.bsContent
+{
+	float:left;
+	background-color: green;
+	float: left;
+	height : 500px;
+	width : 500px;
+}
+
+
+.graphBlock
+{
+	display: block;
+	clear: none;
+	width:960px;
+	height:150px;
+ }
+
+.graphControls
+{
+	float: left;
+	width: 200px;
+	height:150px;
+	background-color:gray;
+}
+
+
+.graphContent
+{
+	float:left;
+	float: left;
+	height : 150px;
+	width : 760px;
+}
+
+.image
+{
+	background-color:black;
+}
+
+.toggle-box {
+  display: none;
+}
+
+.toggle-box + label {
+  cursor: pointer;
+  display: block;
+  font-weight: bold;
+  line-height: 21px;
+  margin-bottom: 5px;
+}
+
+.toggle-box + label + div {
+  display: none;
+  margin-bottom: 10px;
+}
+
+.toggle-box:checked + label + div {
+  display: block;
+}
+
+.toggle-box + label:before {
+  background-color: #4F5150;
+  -webkit-border-radius: 10px;
+  -moz-border-radius: 10px;
+  border-radius: 10px;
+  color: #FFFFFF;
+  content: "+";
+  display: block;
+  float: left;
+  font-weight: bold;
+  height: 20px;
+  line-height: 20px;
+  margin-right: 5px;
+  text-align: center;
+  width: 20px;
+}
+
+.toggle-box:checked + label:before {
+  content: "\2212";
+}
