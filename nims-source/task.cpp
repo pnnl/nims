@@ -32,6 +32,11 @@ Task::~Task()
     
 }
 
+std::string Task::name()
+{
+    return absolute_path_.filename().string();
+}
+
 bool Task::launch()
 {
     char **env = environ;

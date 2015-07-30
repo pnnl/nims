@@ -35,17 +35,24 @@ namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
 static volatile sig_atomic_t sigint_received_ = 0;
+static volatile sig_atomic_t sigchld_received_ = 0;
 static vector<nims::Task *> *child_tasks_ = NULL;
 
 static void sigint_handler(int sig)
 {
     if (SIGINT == sig)
-        sigint_received_ = 1;
+        sigint_received_ += 1;
+}
+
+static void sigchld_handler(int sig)
+{
+    if (SIGCHLD == sig)
+        sigchld_received_ += 1;
 }
 
 static void InterruptChildProcesses()
 {
-    NIMS_LOG_WARNING << "running nims::InterruptChildProcesses";
+    NIMS_LOG_WARNING << "running InterruptChildProcesses";
 
     // !!! early return if it hasn't been created yet
     if (NULL == child_tasks_) return;
@@ -70,43 +77,13 @@ static void InterruptChildProcesses()
 */
 static void ExitHandler()
 {
-    NIMS_LOG_DEBUG << "running nims::ExitHandler";
+    NIMS_LOG_DEBUG << "running ExitHandler";
     InterruptChildProcesses();
     fflush(stderr);
 }
 
-static void LaunchProcessesFromConfig(const YAML::Node &config)
+static int WaitForTaskLaunch(nims::Task *task, const mqd_t mq)
 {
-    fs::path bin_dir(config["BINARY_DIR"].as<string>());
-    
-    YAML::Node applications = config["APPLICATIONS"];
-    child_tasks_ = new vector<nims::Task *>;
-    
-    mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
-    if (-1 == mq) {
-        NIMS_LOG_ERROR << "failed to create message queue";
-        exit(1);
-    }
-    
-    std::unordered_map<pid_t, std::string> checkin_map;
-    
-    for (int i = 0; i < applications.size(); i++) {
-        YAML::Node app = applications[i];
-        vector<string> app_args;
-        for (int j = 0; j < app["args"].size(); j++)
-            app_args.push_back(app["args"][j].as<string>());
-        fs::path name(app["name"].as<string>());
-        nims::Task *Task = new nims::Task(bin_dir / name, app_args);
-        if (Task->launch()) {
-            child_tasks_->push_back(Task);
-            NIMS_LOG_DEBUG << "Launched " << name.string() << " pid " << Task->get_pid();
-            checkin_map[Task->get_pid()] = name.string();
-        }
-        else {
-            NIMS_LOG_ERROR << "Failed to launch " << name.string();
-        }
-    }
-
     /*
       Ensure that all processes are launched before continuing. This
       is a way to sidestep some race conditions, but also ensures
@@ -119,32 +96,72 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     timeout.tv_nsec = 0;
 
     pid_t checkin_pid;
-    int remaining = applications.size();
-    NIMS_LOG_DEBUG << "waiting for tasks to check in...";
-    do { 
+    NIMS_LOG_DEBUG << "waiting for task " << task->name() << " to check in...";
         
-        if (mq_timedreceive(mq, (char *)&checkin_pid, sizeof(pid_t), NULL, 
-                &timeout) == -1) {
-            
-            // log which task(s) haven't checked in yet
-            for (auto it = checkin_map.begin(); it != checkin_map.end(); ++it)
-                NIMS_LOG_ERROR << it->second << " (pid " << it->first << ") failed to check in";
-            
-            if (ETIMEDOUT == errno) {
-                NIMS_LOG_ERROR << "check in timed out after " << CHECKIN_TIME_LIMIT_SECONDS << " seconds";
-                exit(errno);
-            }
-            
+    if (mq_timedreceive(mq, (char *)&checkin_pid, sizeof(pid_t), NULL, 
+            &timeout) == -1) {
+        
+        if (ETIMEDOUT == errno) {
+            NIMS_LOG_ERROR << "check in timed out after " << CHECKIN_TIME_LIMIT_SECONDS << " seconds";
+            exit(errno);
+        }
+        else if (EAGAIN != errno) {
             // any other error
             nims_perror("subtask checkin failed");
             exit(errno);
         }
         
-        checkin_map.erase(checkin_pid);
-
-    } while(--remaining);
+        assert(checkin_pid == task->get_pid());
+        
+    }
     
     time_t dt = timeout.tv_sec - CHECKIN_TIME_LIMIT_SECONDS - time(NULL);
+    NIMS_LOG_DEBUG << task->name() << " checked in after " << dt << " seconds";
+    
+}
+
+static void LaunchProcessesFromConfig(const YAML::Node &config)
+{
+    fs::path bin_dir(config["BINARY_DIR"].as<string>());
+    
+    YAML::Node applications = config["APPLICATIONS"];
+    
+    // in case we're relaunching processes
+    if (NULL != child_tasks_)
+        delete child_tasks_;
+    
+    child_tasks_ = new vector<nims::Task *>;
+    
+    mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
+    if (-1 == mq) {
+        NIMS_LOG_ERROR << "failed to create message queue";
+        exit(1);
+    }
+    
+    time_t start_time = time(NULL);
+        
+    for (int i = 0; i < applications.size(); i++) {
+        YAML::Node app = applications[i];
+        vector<string> app_args;
+        for (int j = 0; j < app["args"].size(); j++)
+            app_args.push_back(app["args"][j].as<string>());
+        fs::path name(app["name"].as<string>());
+        nims::Task *task = new nims::Task(bin_dir / name, app_args);
+        if (task->launch()) {
+            child_tasks_->push_back(task);
+            int err = WaitForTaskLaunch(task, mq);
+            if (0 == err) {
+                NIMS_LOG_DEBUG << "Launched " << name.string() << " pid " << task->get_pid();
+            } else {
+                exit(errno);
+            }
+        }
+        else {
+            NIMS_LOG_ERROR << "Failed to launch " << name.string();
+        }
+    }
+    
+    time_t dt = start_time - time(NULL);
     NIMS_LOG_DEBUG << "all tasks checked in after " << dt << " seconds";
     
     mq_close(mq);
@@ -192,23 +209,32 @@ int main (int argc, char * argv[]) {
     */
     atexit(ExitHandler);
     
-    // some default registrations for cleanup
     struct sigaction new_action, old_action;
-    new_action.sa_handler = sigint_handler;
     sigemptyset(&new_action.sa_mask);
     new_action.sa_flags = 0;
+
+    // register for SIGINT
+    new_action.sa_handler = sigint_handler;
     sigaction(SIGINT, NULL, &old_action);
     if (SIG_IGN != old_action.sa_handler)
         sigaction(SIGINT, &new_action, NULL);
+    
+    // register for SIGCHLD
+    new_action.sa_handler = sigchld_handler;
+    sigaction(SIGCHLD, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGCHLD, &new_action, NULL);
     
     // ignore SIGPIPE
     new_action.sa_handler = SIG_IGN;
     sigaction(SIGPIPE, NULL, &old_action);
     if (SIG_IGN != old_action.sa_handler)
         sigaction(SIGPIPE, &new_action, NULL);  
+    
+    YAML::Node config;
 	try 
 	{    
-        YAML::Node config = YAML::LoadFile(cfgpath);
+        config = YAML::LoadFile(cfgpath);
         // launch all default processes listed in the config file
         LaunchProcessesFromConfig(config);
     }
@@ -251,11 +277,31 @@ int main (int argc, char * argv[]) {
         // handle error condition first, in case we're exiting on a signal
         if (-1 == nfds) {
             
-            if (EINTR == errno && sigint_received_) {
+            if (EINTR == errno) {
             
                 // atexit will call InterruptChildProcesses
-                NIMS_LOG_WARNING << "nims: received SIGINT";            
-                break;
+                if (sigint_received_) {
+                    NIMS_LOG_WARNING << "caught SIGINT";            
+                    break;
+                }
+                else if (sigchld_received_) {
+                    NIMS_LOG_ERROR << "caught SIGCHLD";
+                    static time_t last_relaunch_time_ = 0;
+                    time_t current_time = time(NULL);
+                    if ((current_time - last_relaunch_time_) > 60) {
+                        NIMS_LOG_ERROR << "attempting warm restart";
+                        InterruptChildProcesses();
+                        LaunchProcessesFromConfig(config);
+                        last_relaunch_time_ = current_time;
+                    }
+                    else {
+                        // stop and let atexit clean up
+                        NIMS_LOG_ERROR << "Last relaunch was only " 
+                            << current_time - last_relaunch_time_
+                            << " seconds ago. Exiting.";
+                        break;
+                    }
+                }
                 
             } else if (EINTR != errno) {
                 // unhandled signal or some other error

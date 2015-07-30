@@ -25,6 +25,7 @@ public:
   pid_t get_pid() { return pid_; }
   void signal(int sig);
   bool launch();
+  std::string name();
 protected:
   pid_t                    pid_;
   fs::path                 absolute_path_;
