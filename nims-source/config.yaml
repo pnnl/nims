@@ -9,12 +9,12 @@ LOG_DIR: /var/tmp/NIMS/log
 
 # "name" is a path relative to BINARY_DIR
 APPLICATIONS:
-    - name: detector
-      args:
-          - -c
-          - config.yaml
-          - l
-          - debug
+    #- name: detector
+      #args:
+          #- -c
+          #- config.yaml
+          #- l
+          #- debug
     - name: ingester
       args:
           - -c
@@ -36,9 +36,15 @@ FRAMEBUFFER_NAME: nims_framebuffer
 SONAR_TYPE: 1
 
 # Specific to M3
-M3_HOST_ADDR: 130.20.41.25
+M3_HOST_ADDR: 130.20.41.225
 
-# Number of pings to use to calulate moving average
-# of backscatter intensity
-NUM_PINGS_FOR_MOVING_AVG: 10
+### TRACKER ###
+TRACKER:
+    num_pings_for_moving_avg : 10
+    max_ping_gap_in_track    : 3
+    min_pings_for_track      : 7
+    threshold_in_stdevs      : 3
+    process_noise            : 0.1
+    measurement_noise        : 0.001
+    max_prediction_error     : 15
 ...

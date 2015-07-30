@@ -190,16 +190,27 @@ int main (int argc, char * argv[]) {
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
 	
+    // Get parameters from config file.
 	string fb_name;
 	int N;
-    // TODO:  make these config parameters
     int maxgap = 3; // maximum gap in frames allowed within a track
     int mintrack = 10; // minimum number of steps to be considered a track
+    float thresh_stdevs = 3.0;
+    float process_noise = 1e-1;     // process is animal swimming
+    float measurement_noise = 1e-2; // measurement is backscatter
+	int pred_err_max = 15; // max difference in pixels between prediction and actual
     try
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
-         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
-         N = config["NUM_PINGS_FOR_MOVING_AVG"].as<int>();
+        fb_name = config["FRAMEBUFFER_NAME"].as<string>();
+        YAML::Node params = config["TRACKER"];
+        N                 = params["num_pings_for_moving_avg"].as<int>();
+        maxgap            = params["max_ping_gap_in_track"].as<int>();
+        mintrack          = params["min_pings_for_track"].as<int>();
+        thresh_stdevs     = params["threshold_in_stdevs"].as<float>();
+        process_noise     = params["process_noise"].as<float>();
+        measurement_noise = params["measurement_noise"].as<float>();
+        pred_err_max      = params["max_prediction_error"].as<int>();
      }
      catch( const std::exception& e )
     {
@@ -209,6 +220,13 @@ int main (int argc, char * argv[]) {
         return -1;
     }
     
+    NIMS_LOG_DEBUG << "num_pings_for_moving_avg = " << N;
+    NIMS_LOG_DEBUG << "max_ping_gap_in_track = " << maxgap;
+    NIMS_LOG_DEBUG << "min_pings_for_track = " << mintrack;
+    NIMS_LOG_DEBUG << "threshold_in_stdevs = " << thresh_stdevs;
+    NIMS_LOG_DEBUG << "process_noise = " << process_noise;
+    NIMS_LOG_DEBUG << "measurement_noise = " << measurement_noise;
+    NIMS_LOG_DEBUG << "max_prediction_error = " << pred_err_max;
     
     //-------------------------------------------------------------------------
 	// SETUP TRACKING
@@ -226,9 +244,6 @@ int main (int argc, char * argv[]) {
 	//        is very noisy.  The measurement noise is the resolution
 	//        of the sample space (range bin, beam width).
 	// TODO:  make these params in config file
-    float process_noise = 1e-1;     // process is animal swimming
-    float measurement_noise = 1e-2; // measurement is backscatter
-	int pred_err_max = 15; // max difference in pixels between prediction and actual
 
     NIMS_LOG_DEBUG << "tracking with process noise = " << process_noise 
                    << " and measurement noise = " << measurement_noise;
@@ -337,15 +352,17 @@ int main (int argc, char * argv[]) {
         {
             NIMS_LOG_DEBUG << "got frame " << frame_index << endl << next_ping.header;
             Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
+            minMaxIdx(ping_data, &min_val, &max_val);
+            NIMS_LOG_DEBUG << "values from " << min_val << " to " << max_val;
             
             Mat imc; // if not VIEW, this is never intitialized
             if (VIEW)
             {
                 // create 3-channel color image for viewing/saving
                 // ping data values are float from 0 to whatever
-                // need to scale in a consistent way to 0 to 1.
+                // need to scale from 0 to 1.
                 Mat imgray;
-                ping_data.convertTo(imgray, CV_8U, 255, 0);
+                Mat(ping_data/max_val).convertTo(imgray, CV_8U, 255, 0);
                 cvtColor(imgray, imc, CV_GRAY2RGB);
             }
             // update background
@@ -360,17 +377,16 @@ int main (int argc, char * argv[]) {
             ping_mean = new_mean;
             
             //minMaxIdx(ping_mean.reshape(0,1), &min_val, &max_val);
-             minMaxIdx(ping_mean, &min_val, &max_val);
-           NIMS_LOG_DEBUG << "mean background values from " << min_val
-            << " to " << max_val;
+            minMaxIdx(ping_mean, &min_val, &max_val);
+            NIMS_LOG_DEBUG << "mean background values from " << min_val
+                           << " to " << max_val;
             minMaxIdx(ping_stdv.reshape(0,1), &min_val, &max_val);
             NIMS_LOG_DEBUG << "background std. dev. values from " << min_val
-            << " to " << max_val;
+                           << " to " << max_val;
             
             // detect targets
             NIMS_LOG_DEBUG << "detecting targets";
-            // TODO: Make number of std devs a parameter
-            Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > 3;
+            Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > thresh_stdevs;
             int nz = countNonZero(foregroundMask);
             NIMS_LOG_DEBUG << "number of samples above threshold: " 
                            << nz << " (" 
