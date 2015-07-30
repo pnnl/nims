@@ -327,7 +327,7 @@ int FrameBufferReader::Connect()
         mqr_ = mq_open(mqr_name_.c_str(),O_RDONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
         if (mqr_ == -1) 
         {
-            nims_perror("FrameBufferReader");
+            nims_perror("FrameBufferReader::Connect mq_open reader");
             return -1;
         }
 
@@ -337,7 +337,7 @@ int FrameBufferReader::Connect()
        // TODO:  Should probably wait and try again and eventually time out.
        if (mqw_ == -1) 
        {
-           nims_perror("FrameBufferReader");
+           nims_perror("FrameBufferReader::Connect mq_open writer");
            // clean up
            mq_close(mqr_);
            mq_unlink(mqr_name_.c_str());
@@ -346,7 +346,7 @@ int FrameBufferReader::Connect()
        NIMS_LOG_DEBUG << "sending connection message";
        if (-1 == mq_send(mqw_, mqr_name_.c_str(), mqr_name_.size(), 0))
        {
-           nims_perror("FrameBufferReader");
+           nims_perror("FrameBufferReader::Connect mq_send");
            // clean up
            mq_close(mqr_);
            mq_unlink(mqr_name_.c_str());
