@@ -7,7 +7,7 @@
 <script type="text/javascript" src="/static/canvasjs/canvasjs.min.js"></script>
 <script type="text/javascript" src="/static/nims.js"></script>
 <script> 
-    var ws = new WebSocket("ws://nims1.pnl.gov:8888/websocket");
+    var ws = new WebSocket("ws://stokes-mintvm:8888/websocket");
 
     ws.onmessage = function (evt) {
         look_at_test_image(evt.data)
@@ -33,9 +33,9 @@
 		<canvas id="backscatter" class="imageplot" width="500px" height="500px"</canvas>
 	</div>
 
-	<span><pre>  Transducer: unknown     Resolution: 500px x 500px </span>
-	<span><pre>      PingID: xxxx         Num Beams: xxxxx</span>     
-	<span><pre>   Data Rage: x mb/s      Beam Width: xxxxx</pre></span>
+	<span><pre id='metal1'>  Transducer: unknown     Resolution: 500px x 500px </span>
+	<span><pre id='metal2'>      PingID: xxxx         Num Beams: xxxxx</span>     
+	<span><pre id='metal3'>   Data Rage: x mb/s      Beam Width: xxxxx</pre></span>
 </div>
 
 <input class="toggle-box" id="header1" type="checkbox" checked>

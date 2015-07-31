@@ -12,18 +12,21 @@ import math
 import random
 import time
 import frames
+import frame_thread
 from struct import *
 import mmap
+import logging
 
-# 3rd party modules
-import posix_ipc
 
+
+logging.basicConfig(level=logging.DEBUG,
+                    format='("webserver") %(message)s',
+                    )
 
 DEBUG = True
 DIRNAME = os.path.dirname(__file__)
 STATIC_PATH = os.path.join(DIRNAME, 'static')
 TEMPLATE_PATH = os.path.join(DIRNAME, 'templates')
-TIMER_DELAY=1
 
 clients = set()
 define("port", default=8888, help="run on the given port", type=int)
@@ -37,10 +40,34 @@ class MainHandler(tornado.web.RequestHandler):
 
 class EchoWebSocket(tornado.websocket.WebSocketHandler):
     def open(self):
-        print("WebSocket opened")
         clients.add(self)
-        self.timer = Timer(TIMER_DELAY, self.on_message, args=["timer went off"])
-        self.timer.start()
+        #self.timer = Timer(.1, self.on_message, args=["timer went off"])
+        #self.timer.start()
+
+    def send_image(self, image, f):
+        logging.info("Sending image to client.")
+        a={}
+        
+        a["device"] = "Unknown"
+        a["version"] = f.version[0]
+        a["pingid"] = f.ping_num[0]
+        a["ping_sec"] = f.ping_sec[0]
+        a["ping_ms"] = f.ping_millisec[0]
+        a["soundspeed"] = f.soundspeed_mps[0]
+        a["num_samples"] = f.num_samples[0]
+        a["range_min"] = f.range_min_m[0]
+        a["range_max"] = f.range_max_m[0]
+        a["num_beams"] = f.num_beams[0]
+        a["freq"] = f.freq_hz[0]
+        a["pulse_len"] = f.pulselen_microsec
+        a["pulserep"] = f.pulserep_hz
+
+        a["intensity"] = image
+        a["com"] = random.randint(0, 100)
+        a["sv"] = random.randint(0, 100)
+        a["sa"] = random.randint(0, 100)               
+        
+        self.write_message(a)
 
     def on_message(self, message):
 
@@ -52,7 +79,7 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         a["sv"] = random.randint(0, 100)
         a["sa"] = random.randint(0, 100)
         self.write_message(a)
-        self.timer = Timer(TIMER_DELAY, self.on_message, args=["timer went off"])
+        self.timer = Timer(.1, self.on_message, args=["timer went off"])
         self.timer.start()
 
     def on_close(self):
@@ -94,47 +121,12 @@ def main():
     }
 
     # first connect to the message q
-    mqr_name = "/nim_display_mq"
-    mqr = posix_ipc.MessageQueue(mqr_name, posix_ipc.O_CREAT)
-    mqCheckin = posix_ipc.MessageQueue("/nims_framebuffer",
-        posix_ipc.O_RDONLY)
-    mqCheckin.send(mqr_name)
-    print "Connected to nims message queue."
 
-    time.sleep(1)
 
-    while True:
-        print "waiting on recv..."
-        mqr_recv = mqr.receive()
-        print "mqr recv'd - attempting to parse ..."
-        mqr_recv = mqr_recv[0]
-        print "recv'd"
-        buff = frames.frame_message(mqr_recv)
-        if buff.valid is False:
-            continue
-        buff.print_message()
 
-        print "attempting to connection shm ..."
-        try:
-            memory = posix_ipc.SharedMemory(buff.shm_location, posix_ipc.O_RDONLY,
-                size=buff.frame_length)
-        except:
-            print "Error connecting to shared memory."
-            continue
+    t = frame_thread.frameThread(clients, target="daemon")
+    t.start()
 
-        mapfile = mmap.mmap(memory.fd, memory.size)
-        memory.close_fd()
-        frame_header = mapfile.read(buff.frame_length)
-        mapfile.close()
-
-        framebuf = frames.frame_buffer(frame_header)
-        if framebuf.valid is False:
-            continue
-        framebuf.print_header()
-        
-        break
-
-    print "building application"
     application = tornado.web.Application(handlers, **settings)
 
     http_server = tornado.httpserver.HTTPServer(application)

@@ -42,11 +42,17 @@ function look_at_test_image(image)
   }
   last_x += 1;
   
+  write_meta_data(obj)
   graph_sa.render()
   graph_sv.render()
   graph_com.render()
 }
 
+function write_meta_data(data)
+{
+  
+  return
+}
 function generate_test_image()
 {
 

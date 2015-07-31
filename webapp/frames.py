@@ -20,8 +20,8 @@ class frame_buffer:
         return unpack(fmt, buff[:size]), buff[size:]
 
     def parse_buffer(self, buff):
-        print "At parse buffer"
         try:
+            print "buffer len:", len(buff)
             self.device, buff = self.unpacker('c' * 64, buff)
             dev = ""
             for x in self.device:
@@ -40,11 +40,17 @@ class frame_buffer:
             self.winstart_sec, buff = self.unpacker('f', buff)
             self.winlen_sec, buff = self.unpacker('f', buff)
             self.num_beams, buff = self.unpacker('I', buff)
-            self.beam_angles_deg, buff = self.unpacker('f' * self.num_beams[0], buff)
             self.freq_hz, buff = self.unpacker('I', buff)
+            self.beam_angles_deg, buff = self.unpacker('f' * 512, buff)
+
             self.pulselen_microsec, buff = self.unpacker('I', buff)
             self.pulserep_hz, buff = self.unpacker('f', buff)
-            print "Parsed buffer.."
+            
+            self.data_len, buff = self.unpacker('Q', buff)
+
+            tot_samples = self.num_samples[0] * self.num_beams[0]
+            self.image, buff = self.unpacker('f' * tot_samples, buff)
+
             return True
         except:
             print "Failed to parse buff:", sys.exc_info()
@@ -55,15 +61,10 @@ class frame_buffer:
             return
         v = v[0]
         spaces= 14 - len(field)
-
         print ""*spaces-1, field,":",v[0] 
+
     def print_header(self):
-        #self.print_field("version", self.version)
-
-        #print "device: ", self.device
-        #print "version:", self.version
-        #return
-
+        print ""
         #print "          device:", self.device[0]
         print "         version:", self.version[0]
         print "     ping number:", self.ping_num[0]
@@ -76,10 +77,11 @@ class frame_buffer:
         print "    window start:", self.winstart_sec[0]
         print "   window length:",  self.winlen_sec[0]
         print "       num beams:", self.num_beams[0]
-        print "     beam angles:", self.beam_angles_deg
+        #print "     beam angles:", self.beam_angles_deg
         print "       freq (hz):", self.freq_hz[0]
         print "  pulse len (ms):", self.pulselen_microsec[0]
         print "  pulse rep (hz):", self.pulserep_hz[0]
+        print "        data len:", self.data_len
 
 
 class frame_message:
