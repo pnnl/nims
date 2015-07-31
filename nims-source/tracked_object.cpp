@@ -174,22 +174,20 @@ void   TrackedObject::get_last_image(OutputArray lastimg) const
 	backimg.copyTo(_lastimg);
 }
 
-void get_track_attributes(const vector<long>& framenum,
-                          const vector<Point2f>& frame_pos,
+void TrackedObject::get_track_attributes(
                           float start_range,   // range of first sample in ping data
                           float range_step,    // delta range for each sample
                           float start_bearing, // beam angle of first beam in ping data
                           float bearing_step,  // delta angle of each beam
                           float ping_rate,
-                          //const vector<Mat>& img,
                           TrackAttributes& attr)
 {
-    attr.first_frame = framenum.front();
-    attr.last_frame = framenum.back();
-    attr.first_range = start_range + range_step * ((int)frame_pos.front().y - 1);
-    attr.last_range = start_range + range_step * ((int)frame_pos.back().y - 1);
-    attr.first_bearing = start_bearing + bearing_step * ((int)frame_pos.front().x - 1);
-    attr.last_bearing = start_bearing + bearing_step * ((int)frame_pos.back().x - 1);
+    attr.first_frame = epoch_.front();
+    attr.last_frame = epoch_.back();
+    attr.first_range = start_range + range_step * ((int)position_.front().y - 1);
+    attr.last_range = start_range + range_step * ((int)position_.back().y - 1);
+    attr.first_bearing = start_bearing + bearing_step * ((int)position_.front().x - 1);
+    attr.last_bearing = start_bearing + bearing_step * ((int)position_.back().x - 1);
     
     double degtorad=0.0174533;
     //float rawtodb=(float)90/(float)255;
@@ -197,13 +195,13 @@ void get_track_attributes(const vector<long>& framenum,
     vector<float> brg;
     //vector<double> intensity;
     vector<float> speed; speed.push_back(0.0);
-    int Nsteps = framenum.size();
+    int Nsteps = epoch_.size();
     attr.max_run = 0;
     int run = 1;
     for (int n=0; n<Nsteps; ++n)
     {
-        rng.push_back(start_range + range_step * ((int)frame_pos[n].y - 1));
-        brg.push_back(start_bearing + bearing_step * ((int)frame_pos[n].x - 1));
+        rng.push_back(start_range + range_step * ((int)position_[n].y - 1));
+        brg.push_back(start_bearing + bearing_step * ((int)position_[n].x - 1));
         //double maxval;
         //minMaxIdx(img[n],NULL,&maxval);
         //intensity.push_back(maxval);
@@ -211,9 +209,9 @@ void get_track_attributes(const vector<long>& framenum,
         {
             float dist = sqrt( pow(rng[n-1],2) + pow(rng[n],2)
                               - 2*rng[n-1]*rng[n]*cos(degtorad*(brg[n]-brg[n-1])) );
-            float dt = (float)(framenum[n]-framenum[n-1])/ping_rate;
+            float dt = (float)(epoch_[n]-epoch_[n-1])/ping_rate;
             speed.push_back( (0<dt) ? dist/dt : 0);
-            run = (framenum[n]-framenum[n-1] == 1) ? run+1 : 1;
+            run = (epoch_[n]-epoch_[n-1] == 1) ? run+1 : 1;
             if (attr.max_run < run) attr.max_run = run;
         }
     }

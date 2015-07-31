@@ -40,10 +40,11 @@ M3_HOST_ADDR: 130.20.41.225
 
 ### TRACKER ###
 TRACKER:
-    num_pings_for_moving_avg : 10
+    num_pings_for_moving_avg : 20
     max_ping_gap_in_track    : 3
     min_pings_for_track      : 7
-    threshold_in_stdevs      : 3
+    threshold_in_stdevs      : 2.0
+    min_target_size          : 4
     process_noise            : 0.1
     measurement_noise        : 0.001
     max_prediction_error     : 15

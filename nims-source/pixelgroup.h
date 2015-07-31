@@ -47,7 +47,7 @@ struct PixelGrouping
 std::ostream& operator<<(std::ostream& strm, const PixelGrouping& fh);	
 
 // Get a list of the connected pixels in the binary image.
-void group_pixels(cv::InputArray imb, PixelGrouping& groups);
+void group_pixels(const cv::InputArray& imb, int min_size, PixelGrouping& groups);
 
 
 #endif // __NIMS_PIXELGROUP_H__

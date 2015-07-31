@@ -11,6 +11,7 @@
 #include <fstream>  // ifstream, ofstream
 #include <string>   // for strings
 #include <cmath>    // for trigonometric functions
+#include <ctime>    // date and time functions
 
 
 #include <boost/program_options.hpp>
@@ -142,6 +143,9 @@ int MakePingImage(InputArray _ping, OutputArray _img)
 }
 */
 int main (int argc, char * argv[]) {
+	time_t rawtime;
+	time(&rawtime);
+	
 	//--------------------------------------------------------------------------
     // PARSE COMMAND LINE
 	//
@@ -184,18 +188,19 @@ int main (int argc, char * argv[]) {
         //namedWindow(WIN_PING, CV_WINDOW_NORMAL );
         //namedWindow(WIN_MEAN, CV_WINDOW_NORMAL );
   }
-  int disp_ms = 100; // time duration of window display
+  //int disp_ms = 100; // time duration of window display
   
 	//--------------------------------------------------------------------------
 	// DO STUFF
 	cout << endl << "Starting " << argv[0] << endl;
-	
+
     // Get parameters from config file.
 	string fb_name;
 	int N;
     int maxgap = 3; // maximum gap in frames allowed within a track
     int mintrack = 10; // minimum number of steps to be considered a track
     float thresh_stdevs = 3.0;
+    int min_size = 1;
     float process_noise = 1e-1;     // process is animal swimming
     float measurement_noise = 1e-2; // measurement is backscatter
 	int pred_err_max = 15; // max difference in pixels between prediction and actual
@@ -208,6 +213,7 @@ int main (int argc, char * argv[]) {
         maxgap            = params["max_ping_gap_in_track"].as<int>();
         mintrack          = params["min_pings_for_track"].as<int>();
         thresh_stdevs     = params["threshold_in_stdevs"].as<float>();
+        min_size          = params["min_target_size"].as<int>();
         process_noise     = params["process_noise"].as<float>();
         measurement_noise = params["measurement_noise"].as<float>();
         pred_err_max      = params["max_prediction_error"].as<int>();
@@ -233,9 +239,10 @@ int main (int argc, char * argv[]) {
     
 	vector<TrackedObject> active_tracks;   // tracks still being updated
 	vector<int> active_id;                 // unique id for each track
-	vector<TrackedObject> completed_tracks;// completed tracks (no updates)
-	vector<int> completed_id;              // unique id
+//	vector<TrackedObject> completed_tracks;// completed tracks (no updates)
+//	vector<int> completed_id;              // unique id
 	int next_id = 0;
+	long completed_tracks_count = 0;
 	
 	// NOTE:  The noise values are somewhat arbitrary.  The important 
 	//        thing is their relative values. Here, the process noise
@@ -245,11 +252,22 @@ int main (int argc, char * argv[]) {
 	//        of the sample space (range bin, beam width).
 	// TODO:  make these params in config file
 
-    NIMS_LOG_DEBUG << "tracking with process noise = " << process_noise 
-                   << " and measurement noise = " << measurement_noise;
+ 
+ 	// output file for saving track data
+ 	char timestr[16]; // YYYYMMDD-hhmmss
+ 	strftime(timestr, 16, "%Y%m%d-%H%M%S", gmtime(&rawtime));
+    fs::path outtxtfilepath("nims_tracks-" + string(timestr) + ".csv");
+	NIMS_LOG_DEBUG << "saving track data to " << outtxtfilepath;
+	ofstream outtxtfile(outtxtfilepath.string().c_str(),ios::out | ios::binary);
+	if (!outtxtfile.is_open())
+	{
+		NIMS_LOG_ERROR << "Error opening output file: " << outtxtfilepath;
+		return (-1);
+	}
+	print_attribute_labels(outtxtfile);
+	outtxtfile << endl;
 
-
-        FrameBufferReader fb(fb_name);
+       FrameBufferReader fb(fb_name);
         if ( -1 == fb.Connect() )
         {
             NIMS_LOG_ERROR << "Error connecting to framebuffer.";
@@ -258,9 +276,11 @@ int main (int argc, char * argv[]) {
 
         // check in before calling GetNextFrame, to avoid timeout in the
         // NIMS parent process (and subsequent termination).
-        // FIXME: figure out why it takes so long to get the first ping
         SubprocessCheckin(getpid());
 
+    //-------------------------------------------------------------------------
+	// INITIALIZE MOVING AVG, STDEV
+    
         // Get one ping to get the dimensions of the ping data.
          Frame next_ping;
         
@@ -347,6 +367,20 @@ int main (int argc, char * argv[]) {
   
         NIMS_LOG_DEBUG << "moving average and std dev initialized";
         
+        // NOTE:  Assumes that these do not change.  If sonar mode/config is 
+        //        changed, then tracker should be restarted because any 
+        //        active tracks will be messed up.
+        float start_range = next_ping.header.range_min_m;
+        float range_step = (next_ping.header.range_max_m - next_ping.header.range_min_m)
+                     / (next_ping.header.num_samples - 1);
+        float start_bearing = next_ping.header.beam_angles_deg[0];
+        float bearing_step = next_ping.header.beam_angles_deg[1] -
+                             next_ping.header.beam_angles_deg[0];
+        float ping_rate = next_ping.header.pulserep_hz;
+
+    //-------------------------------------------------------------------------
+	// MAIN LOOP
+    
         int frame_index = -1;
         while ( (frame_index = fb.GetNextFrame(&next_ping)) != -1)
         {
@@ -354,7 +388,6 @@ int main (int argc, char * argv[]) {
             Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
             minMaxIdx(ping_data, &min_val, &max_val);
             NIMS_LOG_DEBUG << "values from " << min_val << " to " << max_val;
-            
             Mat imc; // if not VIEW, this is never intitialized
             if (VIEW)
             {
@@ -391,10 +424,11 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_DEBUG << "number of samples above threshold: " 
                            << nz << " (" 
                            << ceil((float)nz/total_samples * 100.0) << "%)";
+            
             if (nz > 0)
             {
                 PixelGrouping objects;
-                group_pixels(foregroundMask, objects);
+                group_pixels(foregroundMask, min_size, objects);
                 int n_obj = objects.size();
                 NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
                 
@@ -406,11 +440,29 @@ int main (int argc, char * argv[]) {
                     // draw all contours in red
                     drawContours(imc, contours, -1, Scalar(0,0,255)); 
                 }
+                
+                // guard against tracking a lot of noise              
+               if (n_obj > 50)
+               {
+                   NIMS_LOG_WARNING << "Too many false positives, not tracking";
+               }
+               else if (n_obj > 0)
+               {
 
                 // update tracks
                 NIMS_LOG_DEBUG << "tracking detected objects";
                 Mat_<float> detected_positions_x(1,n_obj,0.0);
                 Mat_<float> detected_positions_y(1,n_obj,0.0);
+			    for (int f=0; f<n_obj; ++f)
+			    {
+				   Rect bb = objects.bounding_box(f);
+				   NIMS_LOG_DEBUG << "   detected target at " 
+				                  << bb.x << ", " << bb.y 
+				                  << " with " << objects.size(f) 
+				                  << " pixels" << endl;
+				   detected_positions_x(f) = bb.x;
+				   detected_positions_y(f) = bb.y;
+			    }
                 Mat detected_not_matched =  Mat::ones(1,n_obj,CV_8UC1);
                 
                 int n_active = active_tracks.size();
@@ -426,7 +478,8 @@ int main (int argc, char * argv[]) {
                         predicted_positions_x(a) = pnt.x;
                         predicted_positions_y(a) = pnt.y;
                         
-                        NIMS_LOG_DEBUG << "   ID " << active_id[a] << ": predicted object at " << pnt.x
+                        NIMS_LOG_DEBUG << "   ID " << active_id[a] 
+                                       << ": predicted object at " << pnt.x
                                        << ", " << pnt.y << ", last updated in frame "
                                        << active_tracks[a].last_epoch();
                         
@@ -434,8 +487,6 @@ int main (int argc, char * argv[]) {
                                   predicted_positions_y(a)-detected_positions_y, 
                                   distances.row(a));
                     }
-                    NIMS_LOG_DEBUG << "distances between predicted and detected:" << endl << distances;
-                    
                     
                     // match detections to active tracks
                     Mat active_not_matched  = Mat::ones(n_active,1,CV_8UC1);
@@ -461,35 +512,34 @@ int main (int argc, char * argv[]) {
                                        << ": matched detection " << f;
                         active_tracks[min_idx[0]].update(frame_index, 
                              Point2f(detected_positions_x(f), detected_positions_y(f)));
-                        // mark as matched
+                        // mark detection as matched
                         detected_not_matched.at<unsigned char>(f) = 0; 
-                        // mark as matched
+                        // mark track as matched
                         active_not_matched.at<unsigned char>(min_idx[0]) = 0; 
                     } // for each detection
-
-                    // create new active tracks for unmatched detections
-                    for (int f=0; f<n_obj; ++f)
-                    {
-                        if ( detected_not_matched.at<unsigned char>(f) )
-                        {
-                            NIMS_LOG_DEBUG  << "ID " << next_id 
-                                            << ": starting new track at "
-                                            << detected_positions_x(f) << ", " 
-                                            << detected_positions_y(f);
-                            
-                            TrackedObject newfish(Point2f(detected_positions_x(f),
-                                          detected_positions_y(f)),
-                                          cv::noArray(), frame_index, 
-                                          process_noise, measurement_noise);
-                            active_tracks.push_back(newfish);
-                            active_id.push_back(next_id);
-                            ++next_id;
-                        }
-                    }
-
                     
-                } // if active tracks
+                 } // if active tracks
 
+                 // create new active tracks for unmatched detections
+                 for (int f=0; f<n_obj; ++f)
+                 {
+                     if ( detected_not_matched.at<unsigned char>(f) )
+                     {
+                         NIMS_LOG_DEBUG  << "ID " << next_id 
+                                         << ": starting new track at "
+                                         << detected_positions_x(f) << ", " 
+                                         << detected_positions_y(f);
+                            
+                         TrackedObject newfish(Point2f(detected_positions_x(f),
+                                       detected_positions_y(f)),
+                                       cv::noArray(), frame_index, 
+                                       process_noise, measurement_noise);
+                         active_tracks.push_back(newfish);
+                         active_id.push_back(next_id);
+                         ++next_id;
+                     }
+                 }
+              } // if not too many false detections
                 
             } // nz > 0
             
@@ -505,8 +555,18 @@ int main (int argc, char * argv[]) {
                     // save if greater than minimum length
                     if ( active_tracks[idx].track_length() > mintrack )
                     {
-                        completed_tracks.push_back(active_tracks[idx]); 
-                        completed_id.push_back(active_id[idx]);
+                        //completed_tracks.push_back(active_tracks[idx]); 
+                        //completed_id.push_back(active_id[idx]);
+                        // save completed track to disk
+                        ++completed_tracks_count;
+                         TrackAttributes attr;
+                        active_tracks[idx].get_track_attributes( 
+                                      start_range,range_step,
+                                      start_bearing,bearing_step,
+                                      ping_rate, attr);
+                        attr.track_id = completed_tracks_count;
+                        outtxtfile << attr << endl;
+
                         NIMS_LOG_DEBUG << "ID " << active_id[idx] 
                                        << ": saved as completed track";
                     }
@@ -530,7 +590,13 @@ int main (int argc, char * argv[]) {
             }
             
             
-        }
+        } // main loop
+        
+    //-------------------------------------------------------------------------
+	// CLEANUP
+    
+        // close output files
+        outtxtfile.close();
      
 	cout << endl << "Ending " << argv[0] << endl;
     return 0;

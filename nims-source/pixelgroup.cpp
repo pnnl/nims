@@ -119,7 +119,7 @@ std::ostream& operator<<(std::ostream& strm, const PixelGrouping& pg)
 }
 
 // Get a list of the connected pixels in the binary image.
-void group_pixels(cv::InputArray imb, PixelGrouping& groups)
+void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& groups)
 {
 
 	Mat matimb = imb.getMat();
@@ -180,7 +180,8 @@ void group_pixels(cv::InputArray imb, PixelGrouping& groups)
 			} // for each neighbor
 		} // pixels ready
 		// save group
-		groups.pixel_idx.push_back(groupPix);
+		if (groupPix.size() >= min_size)
+		    groups.pixel_idx.push_back(groupPix);
 		
 	} // ungrouped pixels
 	
