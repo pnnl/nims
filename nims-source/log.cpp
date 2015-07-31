@@ -22,6 +22,7 @@
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/support/date_time.hpp>
+#include <boost/log/sinks/text_file_backend.hpp>
 
 #include <boost/filesystem.hpp>
 #include "yaml-cpp/yaml.h"
@@ -130,6 +131,7 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
     logging::add_file_log(
         logging::keywords::file_name = log_file.string(),
         logging::keywords::rotation_size = 10 * 1024 * 1024,
+        logging::keywords::time_based_rotation = logging::sinks::file::rotation_at_time_point(12, 0, 0),
         logging::keywords::auto_flush = true,
         keywords::open_mode = (std::ios::out | std::ios::app),
         logging::keywords::format = (
