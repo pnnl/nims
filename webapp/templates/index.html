@@ -7,7 +7,7 @@
 <script type="text/javascript" src="/static/canvasjs/canvasjs.min.js"></script>
 <script type="text/javascript" src="/static/nims.js"></script>
 <script> 
-    var ws = new WebSocket("ws://stokes-mintvm:8888/websocket");
+    var ws = new WebSocket("ws://nims1.pnl.gov:8888/websocket");
 
     ws.onmessage = function (evt) {
         look_at_test_image(evt.data)
