@@ -25,8 +25,8 @@ case $1 in
        #   exit 1
        # fi
       log_daemon_msg "Starting NIMS applications" nims
-      if ! start-stop-daemon --start --chuid nims --background \
-            --chdir $APPLICATION_PATH --exec $APPLICATION_PATH/nims; then
+      if ! start-stop-daemon --start --chuid nims  --chdir $APPLICATION_PATH \
+         --exec $APPLICATION_PATH/nims -D; then
             log_end_msg 1
             exit 1
       fi

@@ -55,19 +55,28 @@ static void InterruptChildProcesses()
     NIMS_LOG_WARNING << "running InterruptChildProcesses";
 
     // !!! early return if it hasn't been created yet
-    if (NULL == child_tasks_) return;
+    if (NULL == child_tasks_) {
+        NIMS_LOG_ERROR << "no child tasks running";
+        return;
+    }
     
     vector<nims::Task *>::iterator it;
     for (it = child_tasks_->begin(); it != child_tasks_->end(); ++it) {
         nims::Task *t = *it;
         if (getpgid(getpid()) == getpgid(t->get_pid())) {
-            NIMS_LOG_WARNING << "sending signal to child " << t->get_pid();
+            NIMS_LOG_WARNING << "sending SIGINT to " << t->name()
+                << " [" << t->get_pid() << "]";
             t->signal(SIGINT);
             
             // make sure we reap all child processes
             waitpid(t->get_pid(), NULL, 0);
         }
     }
+    
+    // just in case we screw up and call InterruptChildProcesses twice...
+    delete child_tasks_;
+    child_tasks_ = NULL;
+    
 }
 
 /*
@@ -134,7 +143,7 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     
     mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
     if (-1 == mq) {
-        NIMS_LOG_ERROR << "failed to create message queue";
+        NIMS_LOG_ERROR << "failed to create checkin message queue";
         exit(1);
     }
     
@@ -177,6 +186,7 @@ int main (int argc, char * argv[]) {
 	("help",                                                    "print help message")
     ("cfg,c", po::value<string>()->default_value("config.yaml"),         "path to config file")
     ("log,l", po::value<string>()->default_value("warning"), "debug|warning|error")
+    ("daemon,D", "run in background")
 	//("bar,b",   po::value<unsigned int>()->default_value( 101 ),"an integer value")
 	;
 	po::variables_map options;
@@ -201,7 +211,14 @@ int main (int argc, char * argv[]) {
     
     std::string cfgpath = options["cfg"].as<string>();
     setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
-        
+    
+    if (options.count("daemon"))
+    {
+        NIMS_LOG_WARNING << "daemonizing nims";
+        // don't change directory
+        daemon(1, 0);
+    }
+    
     /*
      Use atexit to guarantee cleanup when we exit, primarily with
      nonzero status because of some error condition. I'd like to
@@ -246,18 +263,22 @@ int main (int argc, char * argv[]) {
         return -1;
     }
        
-     
     int epollfd = epoll_create(1);
     if (-1 == epollfd) {
         nims_perror("epollcreate() failed");
         exit(1);
     }
     
-    // monitor stdin, just to have a dummy fd for our event loop
+    // set up a dummy pipe for our event loop
+    int event_fd[2];
+    if (-1 == pipe(event_fd)) {
+        nims_perror("pipe failed");
+        exit(2);
+    }
     struct epoll_event ev;
     ev.events = EPOLLIN;
-    ev.data.fd = STDIN_FILENO;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &ev) == -1) {
+    ev.data.fd = event_fd[0];
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, event_fd[0], &ev) == -1) {
         nims_perror("epoll_ctl() failed");
         exit(2);
     }
@@ -288,16 +309,18 @@ int main (int argc, char * argv[]) {
                     NIMS_LOG_ERROR << "caught SIGCHLD";
                     static time_t last_relaunch_time_ = 0;
                     time_t current_time = time(NULL);
-                    if ((current_time - last_relaunch_time_) > 60) {
+#define MIN_RELAUNCH_TIME_INTERVAL 60
+                    if ((current_time - last_relaunch_time_) > MIN_RELAUNCH_TIME_INTERVAL) {
                         NIMS_LOG_ERROR << "attempting warm restart";
                         InterruptChildProcesses();
                         LaunchProcessesFromConfig(config);
                         last_relaunch_time_ = current_time;
+                        NIMS_LOG_ERROR << "warm restart succeeded";
                     }
                     else {
                         // stop and let atexit clean up
-                        NIMS_LOG_ERROR << "Last relaunch was only " 
-                            << current_time - last_relaunch_time_
+                        NIMS_LOG_ERROR << "Last relaunch was less than " 
+                            << MIN_RELAUNCH_TIME_INTERVAL
                             << " seconds ago. Exiting.";
                         break;
                     }
@@ -316,9 +339,5 @@ int main (int argc, char * argv[]) {
     close(epollfd);
     NIMS_LOG_DEBUG << "nims process shutting down";
     
-    // just in case we screw up and call InterruptChildProcesses twice...
-    delete child_tasks_;
-    child_tasks_ = NULL;
-
     return sigint_received_;
 }
