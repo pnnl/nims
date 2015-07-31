@@ -22,7 +22,7 @@ fi
 
 # set up after we get the IP right...
 SSH="sshpass -p $PASS ssh $SSH_OPTS $USER@$HOST"
-SCP="sshpass -p $PASS scp $SSH_OPTS"
+SCP="sshpass -p $PASS scp -r $SSH_OPTS"
 
 function copy_to_bin () {
     
@@ -40,9 +40,10 @@ if ! [ $? = 0 ]; then
 fi
 
 copy_to_bin $BUILD_DIR/config.yaml
-copy_to_bin $BUILD_DIR/nims.sh
+copy_to_bin $BUILD_DIR/nims-init
 
 copy_to_bin $BUILD_DIR/nims
 copy_to_bin $BUILD_DIR/detector
 copy_to_bin $BUILD_DIR/ingester
 copy_to_bin $BUILD_DIR/tracker
+copy_to_bin $BUILD_DIR/../webapp

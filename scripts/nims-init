@@ -21,12 +21,12 @@ test -x $APPLICATION_PATH/nims || exit 0
 case $1 in
 
    start)
-     	if init_is_upstart; then
-     		exit 1
-     	fi
+       # if init_is_upstart; then
+       #   exit 1
+       # fi
       log_daemon_msg "Starting NIMS applications" nims
-      if ! start-stop-daemon --start --chuid nims --chdir $APPLICATION_PATH \
-            --exec $APPLICATION_PATH/nims; then
+      if ! start-stop-daemon --start --chuid nims --background \
+            --chdir $APPLICATION_PATH --exec $APPLICATION_PATH/nims; then
             log_end_msg 1
             exit 1
       fi
@@ -34,18 +34,18 @@ case $1 in
       ;; 
 
    stop)
-    	if init_is_upstart; then
-    		exit 0
-    	fi
+      # if init_is_upstart; then
+      #   exit 0
+      # fi
       log_daemon_msg "Stopping NIMS applications" nims
       start-stop-daemon --stop --exec $APPLICATION_PATH/nims
       log_end_msg 0
       ;;
       
    restart)
-    	if init_is_upstart; then
-    		exit 1
-    	fi
+      # if init_is_upstart; then
+      #   exit 1
+      # fi
     	$0 stop
     	sleep 1
     	$0 start
