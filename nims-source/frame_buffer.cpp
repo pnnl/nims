@@ -103,6 +103,7 @@ FrameBufferWriter::FrameBufferWriter(const std::string &fb_name)
     shm_prefix_ = "/" + fb_name_ + "-";
     mqw_name_ = "/" + fb_name;
     mqw_ = -1;
+    (void) pthread_mutex_init(&mqr_lock_, NULL);
    
     NIMS_LOG_DEBUG << "max messsage size is " << kMaxMessageSize;
    
@@ -209,6 +210,8 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     shared_frame = nullptr;
         
     // create a message to notify the consumers
+    // lock around access to mq_readers_, since it's shared between threads
+    (void) pthread_mutex_lock(&mqr_lock_);
     NIMS_LOG_DEBUG << "sending frame messages to " << mq_readers_.size() << " readers";
     FrameMsg msg(frame_count_, map_length, shared_name);
     struct timespec tm;
@@ -226,6 +229,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
             nims_perror("mq_send() in FrameBufferInterface::PutNewFrame");
         }
     } // for mq_readers_
+    (void) pthread_mutex_unlock(&mqr_lock_);
     
     // unlink oldest shared frame and save the name of new frame
     int ind = frame_count_ % kMaxFramesInBuffer;
@@ -260,6 +264,8 @@ void FrameBufferWriter::CleanUp()
     for (int k=0; k<kMaxFramesInBuffer; ++k) shm_unlink(shm_names_[k].c_str());
     NIMS_LOG_DEBUG << __func__ << " cleaned up shared memory";
     
+    pthread_mutex_destroy(&mqr_lock_);
+    
 } // FrameBufferWriter::CleanUp
 	    
 //-----------------------------------------------------------------------------	    
@@ -286,7 +292,10 @@ void FrameBufferWriter::HandleMessages()
         // Open reader message queue.
         NIMS_LOG_DEBUG << "opening message queue " << msg;
         mqr = mq_open(msg,O_WRONLY);
+        
+        (void) pthread_mutex_lock(&mqr_lock_);
         mq_readers_.push_back(mqr); // Add it to the list.
+        (void) pthread_mutex_unlock(&mqr_lock_);
     }
     
 } // HandleMessages

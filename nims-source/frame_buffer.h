@@ -140,6 +140,7 @@ class FrameBufferWriter
         std::vector<mqd_t> mq_readers_;             // list of reader queues
         std::string shm_names_[kMaxFramesInBuffer]; // "slots" for frames in shared mem
         int64_t frame_count_;   // number of frames written
+        pthread_mutex_t mqr_lock_;
     
  }; // class FrameBufferWriter
 
