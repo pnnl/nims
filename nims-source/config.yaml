@@ -13,19 +13,19 @@ APPLICATIONS:
       #args:
           #- -c
           #- config.yaml
-          #- l
+          #- -l
           #- debug
     - name: ingester
       args:
           - -c
           - config.yaml
-          - l
+          - -l
           - debug
     - name: tracker
       args:
           - -c
           - config.yaml
-          - l
+          - -l
           - debug
  
 # Need this here for python code.
