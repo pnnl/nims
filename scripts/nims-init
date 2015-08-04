@@ -32,8 +32,7 @@ case $1 in
             exit 1
       fi
       if ! start-stop-daemon --start --chuid nims --background  \
-         --chdir $APPLICATION_PATH/webapp --make-pidfile \
-         --pidfile $NIMS_PY_PIDFILE \
+         --chdir $APPLICATION_PATH/webapp \
          --exec $APPLICATION_PATH/webapp/nims.py; then
             log_end_msg 1
             exit 1
@@ -48,11 +47,7 @@ case $1 in
       log_daemon_msg "Stopping NIMS applications" nims
       start-stop-daemon --stop --signal INT --user nims \
         --exec $APPLICATION_PATH/nims --retry 5
-      
-      if start-stop-daemon --stop --user nims \ 
-        --pidfile $NIMS_PY_PIDFILE --retry 5; then
-        rm -f $NIMS_PY_PIDFILE
-      fi
+      start-stop-daemon --stop --user nims --name nims.py
       log_end_msg 0
       ;;
       
