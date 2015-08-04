@@ -50,7 +50,7 @@ case $1 in
         --exec $APPLICATION_PATH/nims --retry 5
       
       if start-stop-daemon --stop --user nims \ 
-        --pidfile $NIMS_PY_PIDFILE -- retry 5; then
+        --pidfile $NIMS_PY_PIDFILE --retry 5; then
         rm -f $NIMS_PY_PIDFILE
       fi
       log_end_msg 0
