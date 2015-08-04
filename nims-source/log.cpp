@@ -124,8 +124,16 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
     
     // need auto flush with file-based log
     // not sure yet if rotate works with append
+        
+    // log_dir should be something like /var/tmp which is world-writeable
     YAML::Node config = YAML::LoadFile(cfgpath);
     fs::path log_dir(config["LOG_DIR"].as<std::string>());
+    
+    // we need to munge the directory name, or only one user can run it per host
+    // using "username-userid" is more readable than one by itself
+    std::string uid_str = std::string("NIMS") + "-" + 
+        getenv("USER") + "-" + boost::lexical_cast<std::string>(getuid());
+    log_dir = log_dir / uid_str / "log";
     fs::path log_file = log_dir / fs::path(task_name + "_%N.log");
     
     logging::add_file_log(
@@ -148,6 +156,7 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
     for (auto ch = task_name.begin(); ch != task_name.end(); ++ch)
         uc_task_name += std::toupper(*ch);
     NIMS_LOG_DEBUG << "**** WELCOME TO " << uc_task_name << " ****";
+    NIMS_LOG_DEBUG << "log files at: " << log_dir;
     
 }
 
