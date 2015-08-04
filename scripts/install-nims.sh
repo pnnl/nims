@@ -6,7 +6,7 @@ BUILD_DIR=../build
 # IP address is used for multiple hosts
 SSH_OPTS='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
-HOST=nimsvm
+HOST=nims1
 USER=nims
 PASS=$1
 
