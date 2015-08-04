@@ -192,8 +192,8 @@ int main (int argc, char * argv[]) {
   
 	//--------------------------------------------------------------------------
 	// DO STUFF
-	cout << endl << "Starting " << argv[0] << endl;
-
+    NIMS_LOG_DEBUG << "Starting " << argv[0];
+        
     // Get parameters from config file.
 	string fb_name;
 	int N;

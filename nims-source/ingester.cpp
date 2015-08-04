@@ -100,38 +100,6 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_ERROR << desc;
         return -1;
     }
-   
- 	DataSource *input; // This is a virtual class.   
-    
-	// TODO: Define an enum or ?
-	switch ( sonar_type )
-	{
-	    case NIMS_SONAR_M3 :  
-            input = new DataSourceM3(m3_host_addr);
-            break;
-        default :
-             NIMS_LOG_ERROR << "Ingester:  unknown sonar type: " << sonar_type;
-             return -1;
-             break;
-     } // switch SONAR_TYPE
-    
-    
-    
-	   
-     FrameBufferWriter fb(fb_name);
-     if ( -1 == fb.Initialize() )
-   {
-        NIMS_LOG_ERROR << "Error initializing frame buffer writer.";
-        return -1;
-    }
-     
-    
-   
-    if ( !input->is_good() )
-    {
-        NIMS_LOG_ERROR << "Error opening data source.";
-        return -1;
-    }
     
     struct sigaction new_action, old_action;
     new_action.sa_handler = sig_handler;
@@ -147,8 +115,39 @@ int main (int argc, char * argv[]) {
     if (SIG_IGN != old_action.sa_handler)
         sigaction(SIGPIPE, &new_action, NULL);  
    
+    // check in before blocking while creating the DataSource
     SubprocessCheckin(getpid()); // sync with main NIMS process
-      
+    
+    // create fb before datasource, so tracker doesn't bail out
+    // when it tries to open a nonexistent writer queue
+    FrameBufferWriter fb(fb_name);
+    if ( -1 == fb.Initialize() )
+    {
+       NIMS_LOG_ERROR << "Error initializing frame buffer writer.";
+       return -1;
+    }
+   
+ 	DataSource *input; // This is a virtual class.   
+    
+	// TODO: Define an enum or ?
+	switch ( sonar_type )
+	{
+	    case NIMS_SONAR_M3 :  
+            NIMS_LOG_DEBUG << "opening M3 sonar as datasource";
+            input = new DataSourceM3(m3_host_addr);
+            break;
+        default :
+             NIMS_LOG_ERROR << "Ingester:  unknown sonar type: " << sonar_type;
+             return -1;
+             break;
+     } // switch SONAR_TYPE    
+   
+    if ( !input->is_good() )
+    {
+        NIMS_LOG_ERROR << "Error opening data source.";
+        return -1;
+    }
+    
     NIMS_LOG_DEBUG << "source is open!";
     size_t frame_count=0;
     while ( input->more_data() )

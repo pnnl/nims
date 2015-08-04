@@ -205,6 +205,7 @@ DataSourceM3::DataSourceM3(std::string const &host_addr)
     input_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if ( connect(input_, (struct sockaddr *) &m3_host, sizeof(struct sockaddr)) < 0 )
     {
+        nims_perror("connect() failed in DataSourceM3 constructor");
         close (input_);
         input_ = -1;
     }
