@@ -11,6 +11,8 @@
 #include <log.h>
 #include <string>
 #include <pthread.h>
+#include <sys/types.h>
+#include <pwd.h>
 #include <boost/log/sources/severity_feature.hpp>
 #include <boost/log/sources/severity_logger.hpp>
 
@@ -131,8 +133,13 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
     
     // we need to munge the directory name, or only one user can run it per host
     // using "username-userid" is more readable than one by itself
+    
+    // can't trust getenv("USER") when launching with start-stop-daemon
+    struct passwd *passwd = getpwuid(geteuid());
+    const char *username = passwd ? passwd->pw_name : "UNKNOWN";
+    
     std::string uid_str = std::string("NIMS") + "-" + 
-        getenv("USER") + "-" + boost::lexical_cast<std::string>(getuid());
+        username + "-" + boost::lexical_cast<std::string>(geteuid());
     log_dir = log_dir / uid_str / "log";
     fs::path log_file = log_dir / fs::path(task_name + "_%N.log");
     
