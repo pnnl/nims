@@ -130,6 +130,28 @@ likely need to change for deployment; ideally, we'd have a GPS
 receiver onboard. Reboot or restart the ntp service after changing
 the config file.
 
+\subsection{Dependencies}
+The UW webapp and Echometrics have some dependencies, but they
+can be installed using the Mint package manager, with one exception.
+\begin{lstlisting}
+    sudo apt-get install python-scipy
+    sudo apt-get install python-pandas
+    sudo apt-get install python-matplotlib
+    sudo apt-get install python-tornado
+    sudo apt-get install chromium-browser
+    sudo apt-get install python2.7-dev
+\end{lstlisting}
+The exception is the \shell{posix\_ipc} package, which is not
+provided by Ubuntu. In that case, we can install \shell{python-pip},
+which is provided by Ubuntu, and install \shell{posix\_ipc} from
+PyPi as follows:
+\begin{lstlisting}
+    sudo apt-get install python-pip
+    sudo pip install posix_ipc
+\end{lstlisting}
+This avoids manual download and configuration/compile, and pip
+can also be used for later updates.
+
 \section{Installation and Startup}
 The \path{install-nims.sh} script in the Subversion repository can
 be used to install all of the PNNL binaries and the webapp via \shell{scp}
