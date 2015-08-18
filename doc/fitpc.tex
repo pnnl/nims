@@ -18,6 +18,8 @@
   xleftmargin=0.1\linewidth
 }
 
+\usepackage{dirtree}
+
 \newcommand{\path}[1]{{\small\bfseries\ttfamily{#1}}}
 \newcommand{\shell}[1]{{\small\bfseries\ttfamily{#1}}}
 
@@ -128,57 +130,82 @@ likely need to change for deployment; ideally, we'd have a GPS
 receiver onboard. Reboot or restart the ntp service after changing
 the config file.
 
-\section{Startup}
-The following script in \path{/etc/init.d} is used to
-start the NIMS binaries.
+\section{Installation and Startup}
+The \path{install-nims.sh} script in the Subversion repository can
+be used to install all of the PNNL binaries and the webapp via \shell{scp}
+(requires you to install the \shell{sshpass} program on your build
+machine). It requires a single
+argument, which is the password for the \shell{nims} account, and
+installs programs as follows:
+
+\dirtree{%
+.1 /.
+.2 home.
+.3 nims.
+.4 bin.
+.5 config.yaml\DTcomment{configuration file for NIMS binaries}.
+.5 detector.
+.5 ingester.
+.5 nims.
+.5 nims-init\DTcomment{init script; install at \path{/etc/init.d/nims}}.
+.5 tracker.
+.5 webapp.
+.6 nims.py\DTcomment{the main program; other files live alongside}.
+}
+
+\subsection{Startup}
+The init script must be copied manually, but it only changes if
+the path to the \shell{nims} binary changes or the path to the
+webapp (\shell{nims.py}) changes. To install the script,
 \begin{lstlisting}
-    #!/bin/sh
-
-    # System Startup for NIMS
-    # to be installed in /etc/init.d
-
-    APPLICATION_PATH=/home/nims/bin
-
-    killproc() {
-            pid=`pidof $1`
-            [ "$pid" != "" ] && kill -9 $pid
-    }
-
-    case $1 in
-
-       start)
-          echo "Starting NIMS applications."
-          if [ -e $APPLICATION_PATH/nims ]; then
-              pushd .
-              cd $APPLICATION_PATH
-              $APPLICATION_PATH/nims &
-              popd
-          fi
-          ;; 
-
-       stop)
-          echo "Stopping NIMS (Normal Mode)"
-          killall nims
-          ;;
-
-       *)
-         echo "Usage: nims.sh  {start|stop}"
-         exit 1
-         ;;
-    esac
-
-    exit 0
+    cd ~nims/bin
+    sudo cp nims-init /etc/init.d/nims
 \end{lstlisting}
-To activate it, we use
+will copy it to \shell{/etc/init.d} and rename it; this latter
+step is important, in order for the \shell{service} command to
+work as documented here.
+
+For one-time activation on a new machine, use
 \begin{lstlisting}
-    sudo service nims start|stop
-\end{lstlisting}
-from the command prompt. Eventually we'll set it to run at boot with
-\begin{lstlisting}
-    # set to start in runlevels [2-5] at S99, stop in [0,1,6] at K1
-    # was using S99 only in testing (K number = 100 - S number)
     /usr/sbin/update-rc.d nims start 99 2 3 4 5 . stop 1 0 1 6 .
 \end{lstlisting}
-or similar.
+This will set \shell{nims} to start in runlevels 2--5 at S99, 
+and stop in runlevels 0, 1, and 6 at K1 (last to start, first
+to stop in each runlevel).
+
+For regular start/stop/restart of the \shell{nims} system, you can use
+\begin{lstlisting}
+    sudo service nims [start|stop|restart]
+\end{lstlisting}
+from the command prompt as usual for system services. Note that
+the script must be run as root, but it will set each process to be
+owned by the \shell{nims} unprivileged user.
+
+\subsection{Philosophy}
+Briefly, the reason for setting this up as a service is to allow for
+operation as an embedded system. I think it's best to run our services
+as unprivileged processes, though, in order to avoid potential security
+issues. Since the system will be accessible remotely, we don't want
+webapp users or people just looking at data to accidentally reconfigure
+the network interface or disable the system.
+
+This does require hardcoded paths, notably in the init script, and
+in the config file. It also causes some issues with permissions if
+you're not careful.
+
+\subsection{Logging}
+The \shell{nims} binaries log all output to \path{/var/tmp}
+in a subfolder munged with the user's name and UID. For example,
+user \shell{amaxwell} with UID 1000 has log files in
+\path{/var/tmp/NIMS-amaxwell-1000/log}. This allows multiple users
+to run the program without hitting permissions problems. Log
+files are rotated periodically, and the latest log file has a
+higher number appended. You can monitor these in the shell with
+\begin{lstlisting}
+    tail -f /var/tmp/NIMS-$USER-$UID/log/nims_0.log
+\end{lstlisting}
+for example.
 
 \end{document}
+
+
