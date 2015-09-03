@@ -30,6 +30,7 @@ APPLICATIONS:
  
 # Need this here for python code.
 FRAMEBUFFER_NAME: nims_framebuffer
+TRACKER_NAME: nims_tracker
 
 # Define the type of sonar device connected to the system.
 # 1 = M3 (that's all we support for now.)
