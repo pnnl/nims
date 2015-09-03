@@ -11,12 +11,13 @@
 
 #include <iostream>
 #include <vector>
+#include <cstdint>  // fixed width integer types
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/video/tracking.hpp> // kalman filter
 
 struct TrackAttributes {
-    long track_id;
+    uint32_t track_id;
     int first_frame; // TODO: change these to time
     int last_frame;
     float first_range;
