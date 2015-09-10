@@ -158,6 +158,9 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     std::string shared_name(shm_prefix_);
     shared_name += boost::lexical_cast<std::string>(frame_count_++);
     
+    NIMS_LOG_DEBUG << "FrameBufferWriter: putting frame " 
+                   << new_frame.header.ping_num << " in " << shared_name;
+        
     /*
      Create -rw------- since we don't need executable pages.
      Using O_EXCL could be safer, but these can still exist
@@ -168,7 +171,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     
     // !!! early return
     if (-1 == fd) {
-        nims_perror("shm_open() in FrameBufferInterface::PutNewFrame");
+        nims_perror("shm_open() in FrameBufferWriter::PutNewFrame");
         return -1;
     }
     
@@ -178,7 +181,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     // !!! early return
     // could use fallocate or posix_fallocate, but ftruncate is portable
     if (0 != ftruncate(fd, map_length)) {
-        nims_perror("ftruncate() in FrameBufferInterface::PutNewFrame");
+        nims_perror("ftruncate() in FrameBufferWriter::PutNewFrame");
         shm_unlink(shared_name.c_str());
         return -1;
     }
@@ -213,7 +216,8 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     // lock around access to mq_readers_, since it's shared between threads
     (void) pthread_mutex_lock(&mqr_lock_);
     NIMS_LOG_DEBUG << "sending frame messages to " << mq_readers_.size() << " readers";
-    FrameMsg msg(frame_count_, map_length, shared_name);
+    //FrameMsg msg(frame_count_, map_length, shared_name);
+    FrameMsg msg(new_frame.header.ping_num, map_length, shared_name);
     struct timespec tm;
     clock_gettime(CLOCK_REALTIME, &tm); // get the current time
     for (int k=0; k<mq_readers_.size(); ++k)
@@ -399,11 +403,12 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
         fd = shm_open(msg.shm_open_name, O_RDONLY, S_IRUSR);
    }
     
-    NIMS_LOG_DEBUG << "GetNextFrame: getting " << msg.shm_open_name;
+     NIMS_LOG_DEBUG << "FrameBufferReader: getting frame " 
+                   << msg.frame_number << " in " << msg.shm_open_name
+                   << ", " << msg.mapped_data_size << " bytes";
     // size of mmap region
     assert(msg.mapped_data_size > sizeof(Frame));
-    NIMS_LOG_DEBUG << "GetNextFrame: data size = " << msg.mapped_data_size;
-    
+     
     // mmap a shared framebuffer on the file descriptor we have from shm_open
     char *shared_frame;
     shared_frame = (char *)mmap(NULL, msg.mapped_data_size,
