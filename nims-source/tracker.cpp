@@ -371,14 +371,14 @@ int main (int argc, char * argv[]) {
     }
     ping_mean = ping_mean/N;
     
-    double min_val, max_val;
+    double min_val,max_val, min_val1,max_val1, min_val2,max_val2;
     minMaxIdx(pings.row(N-1), &min_val, &max_val);
     NIMS_LOG_DEBUG << "ping data values from " << min_val
     << " to " << max_val;
     // NOTE:  Values in Dolphin(0) are from 0 to 13.0686
-    minMaxIdx(ping_mean.reshape(0,1), &min_val, &max_val);
-    NIMS_LOG_DEBUG << "mean background values from " << min_val
-    << " to " << max_val;
+    minMaxIdx(ping_mean.reshape(0,1), &min_val1, &max_val1);
+    NIMS_LOG_DEBUG << "mean background values from " << min_val1
+    << " to " << max_val1;
     // Initialize the moving std dev.
     // v = sum( (x(k) - u)^2 ) / (N-1)
     // s = sqrt( v )
@@ -393,9 +393,9 @@ int main (int argc, char * argv[]) {
     Mat ping_stdv;
     sqrt(ping_var, ping_stdv);
     
-    minMaxIdx(ping_stdv.reshape(0,1), &min_val, &max_val);
-    NIMS_LOG_DEBUG << "background std. dev. values from " << min_val
-    << " to " << max_val;
+    minMaxIdx(ping_stdv.reshape(0,1), &min_val2, &max_val2);
+    NIMS_LOG_DEBUG << "background std. dev. values from " << min_val2
+    << " to " << max_val2;
     
     NIMS_LOG_DEBUG << "moving average and std dev initialized";
     
@@ -419,7 +419,7 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "got frame " << frame_index << endl << next_ping.header;
         Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
         minMaxIdx(ping_data, &min_val, &max_val);
-        NIMS_LOG_DEBUG << "values from " << min_val << " to " << max_val;
+        NIMS_LOG_DEBUG << "frame values from " << min_val << " to " << max_val;
         Mat imc; // if not VIEW, this is never intitialized
         if (VIEW)
         {
@@ -441,13 +441,10 @@ int main (int argc, char * argv[]) {
         sqrt(ping_var, ping_stdv);
         ping_mean = new_mean;
         
-        //minMaxIdx(ping_mean.reshape(0,1), &min_val, &max_val);
-        minMaxIdx(ping_mean, &min_val, &max_val);
-        NIMS_LOG_DEBUG << "mean background values from " << min_val
-        << " to " << max_val;
-        minMaxIdx(ping_stdv.reshape(0,1), &min_val, &max_val);
-        NIMS_LOG_DEBUG << "background std. dev. values from " << min_val
-        << " to " << max_val;
+        minMaxIdx(ping_mean, &min_val1, &max_val1);
+        minMaxIdx(ping_stdv, &min_val2, &max_val2);
+        NIMS_LOG_DEBUG << "background mean from " << min_val1 << " to " << max_val1
+                       << ", std. dev. from " << min_val2 << " to " << max_val2;
         
         // detect targets
         NIMS_LOG_DEBUG << "detecting targets";
