@@ -162,6 +162,7 @@ mqd_t CreateUIMessageQueue(size_t message_size, const string &name)
     const int opts = O_CREAT | O_WRONLY;
     const int mode = S_IRUSR | S_IWUSR;
     
+    NIMS_LOG_DEBUG << "creating UI message queue " << name;
     mqd_t mqd = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == mqd)
         nims_perror("CreateMessageQueue mq_open()");
@@ -237,7 +238,7 @@ int main (int argc, char * argv[]) {
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
-        mq_name = config["TRACKER_NAME"].as<string>();
+        mq_name = "/" + config["TRACKER_NAME"].as<string>();
         YAML::Node params = config["TRACKER"];
         N                 = params["num_pings_for_moving_avg"].as<int>();
         maxgap            = params["max_ping_gap_in_track"].as<int>();
