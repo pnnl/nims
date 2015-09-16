@@ -162,7 +162,8 @@ mqd_t CreateUIMessageQueue(size_t message_size, const string &name)
     const int opts = O_CREAT | O_WRONLY;
     const int mode = S_IRUSR | S_IWUSR;
     
-    NIMS_LOG_DEBUG << "creating UI message queue " << name;
+    NIMS_LOG_DEBUG << "creating UI message queue " << name 
+                   << " with msg size " << message_size;
     mqd_t mqd = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == mqd)
         nims_perror("CreateMessageQueue mq_open()");
