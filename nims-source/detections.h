@@ -19,7 +19,7 @@
 // in one ping image.  Detections are possibly fish
 // or marine mammals or some other object moving
 // through the sonar field of view.
-struct Detection
+struct __attribute__ ((__packed__)) Detection
 {
     // location of the center of the detected object
     float center_range;
@@ -30,7 +30,7 @@ struct Detection
     bool new_track;
 };
 
-struct DetectionMessage
+struct __attribute__ ((__packed__)) DetectionMessage
 {
     uint32_t  ping_num; // same ping number as in FrameHeader
     uint32_t  num_detections; // number of detections
@@ -40,6 +40,7 @@ struct DetectionMessage
     {
         ping_num = pnum;
         num_detections = numdetects;
+        memset(detections, 0, sizeof(detections));
     };
     
 }; // Detections
