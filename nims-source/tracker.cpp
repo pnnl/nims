@@ -589,6 +589,9 @@ int main (int argc, char * argv[]) {
         
         // send UI message
         mq_send(mq_ui, (const char *)&msg_ui, sizeof(msg_ui), 0); // non-blocking
+        NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_ui) 
+                       << " bytes); ping_num = " << msg_ui.ping_num << "; num_detect = " 
+                       << msg_ui.num_detections;
         
         // de-activate tracks
         int idx = 0;
