@@ -21,14 +21,10 @@ class frame_buffer:
 
     def parse_buffer(self, buff):
         try:
-            print "buffer len:", len(buff)
+            #print "buffer len:", len(buff)
             self.device, buff = self.unpacker('c' * 64, buff)
-            dev = ""
-            for x in self.device:
-                if x == '\x00':
-                    break
-                dev = dev + x
-            self.device = dev
+
+            self.device = "".join(self.device)
             self.version, buff = self.unpacker('I', buff)
             self.ping_num, buff = self.unpacker('I', buff)
             self.ping_sec, buff = self.unpacker('I', buff)
@@ -40,12 +36,13 @@ class frame_buffer:
             self.winstart_sec, buff = self.unpacker('f', buff)
             self.winlen_sec, buff = self.unpacker('f', buff)
             self.num_beams, buff = self.unpacker('I', buff)
-            self.freq_hz, buff = self.unpacker('I', buff)
             self.beam_angles_deg, buff = self.unpacker('f' * 512, buff)
+            self.freq_hz, buff = self.unpacker('I', buff)
+            
 
             self.pulselen_microsec, buff = self.unpacker('I', buff)
             self.pulserep_hz, buff = self.unpacker('f', buff)
-            
+            #print self.pulserep_hz
             self.data_len, buff = self.unpacker('Q', buff)
 
             tot_samples = self.num_samples[0] * self.num_beams[0]
@@ -115,3 +112,56 @@ class frame_message:
         print "frame number:", self.frame_number
         print "frame length:", self.frame_length
         print "shm location:", self.shm_location
+
+#----------------------------------------------------------------------------
+
+
+class track_message:
+
+
+    def __init__(self, message, f):
+        self.f = f
+        self.tracks = []
+        self.valid = self.parse_message(message)
+        self.max_detections = 100
+        detections  = []
+
+    def unpacker(self, fmt, buff):
+        s = calcsize(fmt)
+        return unpack(fmt, buff[:s]), buff[s:]
+
+    def parse_message(self, message):
+        try:    
+            self.pingid, message = self.unpacker('i', message)
+            self.num_detections, message = self.unpacker('i', message)
+            self.f.write("%d\n" % self.pingid[0])
+            self.f.write("%d\n" % int(self.num_detections[0]))
+            print "pingid:", self.pingid
+            print "detections:", self.num_detections[0]
+            if self.num_detections[0] > 0:
+                for i in range(0, self.num_detections[0]):
+                    center_range, message = self.unpacker('f', message)
+                    center_beam, message = self.unpacker('f', message)
+                    track_id, message = self.unpacker('i', message)
+                    is_new_track = self.unpacker('?', message)
+                    try:
+                        self.f.write("%d " % int(center_range[0]))
+                    except Exception, e:
+                        self.f.write("0 ")
+
+                    try:
+                        self.f.write("%d\n" % int(center_beam[0]))
+                    except Exception, e:
+                        self.f.write("0\n")
+
+                    track = [track_id[0], center_range[0], center_beam[0], is_new_track[0]]
+                    self.tracks.append(track)
+                
+
+            return True
+        except:
+            print "Failed to parse buff:", sys.exc_info()
+            return False
+
+    def print_message(self):
+        return

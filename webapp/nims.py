@@ -16,8 +16,9 @@ import frame_thread
 from struct import *
 import mmap
 import logging
-
-
+import datetime
+import socket
+from random import randint
 
 logging.basicConfig(level=logging.DEBUG,
                     format='("webserver") %(message)s',
@@ -29,62 +30,91 @@ STATIC_PATH = os.path.join(DIRNAME, 'static')
 TEMPLATE_PATH = os.path.join(DIRNAME, 'templates')
 
 clients = set()
-define("port", default=8888, help="run on the given port", type=int)
+define("port", default=80, help="run on the given port", type=int)
 class MainHandler(tornado.web.RequestHandler):
     #def get_template_path(self):
     #    return "templates/"
 
     def get(self):
         cwd = os.getcwd()
-        self.render("index.html", curdir=cwd)
+        hostname = socket.gethostname()
+        #print "hostname = ", hostname
+        self.render("index.html", curdir=cwd, myhostname=hostname)
 
 class EchoWebSocket(tornado.websocket.WebSocketHandler):
     def open(self):
         clients.add(self)
+        logging.info("Added client")
+        print len(clients), "currently connected"
         #self.timer = Timer(.1, self.on_message, args=["timer went off"])
         #self.timer.start()
+        self.com = 50
+        self.sv = 50
+        self.sa = 50
 
-    def send_image(self, image, f):
-        logging.info("Sending image to client.")
+    def send_data(self, f, metrics):
+        #logging.info("Sending image to client.")
         a={}
         
-        a["device"] = "Unknown"
+        # sonar meta data
+        a["device"] = f.device #"Unknown"
         a["version"] = f.version[0]
         a["pingid"] = f.ping_num[0]
         a["ping_sec"] = f.ping_sec[0]
         a["ping_ms"] = f.ping_millisec[0]
         a["soundspeed"] = f.soundspeed_mps[0]
         a["num_samples"] = f.num_samples[0]
-        a["range_min"] = f.range_min_m[0]
-        a["range_max"] = f.range_max_m[0]
+        a["range_min"] = "%.1f" %f.range_min_m[0]
+        a["range_max"] = "%.lf" %f.range_max_m[0]
         a["num_beams"] = f.num_beams[0]
         a["freq"] = f.freq_hz[0]
-        a["pulse_len"] = f.pulselen_microsec
-        a["pulserep"] = f.pulserep_hz
+        a["pulse_len"] = f.pulselen_microsec[0]
+        a["pulse_rep"] = f.pulserep_hz[0]
 
-        a["intensity"] = image
-        a["com"] = random.randint(0, 100)
-        a["sv"] = random.randint(0, 100)
-        a["sa"] = random.randint(0, 100)               
+     	a["min_angle"] = f.beam_angles_deg[0]
+    	a["max_angle"] = f.beam_angles_deg[f.num_beams[0] -1]
+     	a["sector_size"] = math.fabs(a["max_angle"] - a["min_angle"])
+
+        # echo metrics 
+        a["intensity"] = f.image
+        a["center_of_mass"] = metrics['center_of_mass']
+        a["sv_area"] = metrics['avg_sv']
+        a["sv_volume"] = metrics['depth_integral']
+        a['inertia'] = metrics['inertia']
+        a['proportion_occupied'] = metrics['proportion_occupied']
+        a['aggregation_index'] = metrics['aggregation_index']
+        a['equivalent_area'] = metrics['equivalent_area']       
+                
+
+            
+        ts = datetime.datetime.fromtimestamp(f.ping_sec[0]).strftime("%H:%M:%S")
+        ts = ts + ".%d" % f.ping_millisec[0]
+        a["ts"] = ts
+
         
-        self.write_message(a)
 
+       # print "writing message..."
+       # print a
+      #  print "Ping:", a['pingid']    
+        self.write_message(a)
     def on_message(self, message):
 
         a={}
         image = self.generate_test_image()
 
-        a["intensity"] = image
-        a["com"] = random.randint(0, 100)
-        a["sv"] = random.randint(0, 100)
-        a["sa"] = random.randint(0, 100)
+        #a["intensity"] = image
+        a["com"] = self.com
+        a["sv"] = self.sv
+        a["sa"] = self.sa
         self.write_message(a)
         self.timer = Timer(.1, self.on_message, args=["timer went off"])
         self.timer.start()
 
     def on_close(self):
         print("WebSocket closed")
+        print len(clients), "currently connected"
         clients.discard(self)
+
 
     def generate_test_image(self):
         rows = []
@@ -125,6 +155,7 @@ def main():
 
 
     t = frame_thread.frameThread(clients, target="daemon")
+    t.daemon = True
     t.start()
 
     application = tornado.web.Application(handlers, **settings)
