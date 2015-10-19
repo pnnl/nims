@@ -39,18 +39,26 @@ a.canvasjs-chart-credit {
 
 
 
+.metadiv {
 
+    float:left;
+    display:block;
+    max-width: 500px;
+    min-width: 500px; 
+    min-height: 800px; 
+
+}
 
 body
 {
-	background-color: DarkCyan;
+	background-color: LightCyan;
 	background-attachment : fixed;
 	background-size : 100% auto;
 }
 
 .main_grid
 {
-	margin: 30px;
+	margin-top: 10px;
 	display : block;
 	width : 960px;
 
@@ -67,6 +75,7 @@ body
 
 .bsBlock
 {
+
 
 	display: block;
 	clear: none;
@@ -86,46 +95,48 @@ body
 
 .system
 {
-	padding:10px;
+
 	line-height:5px;
 	float:left;
 	width:460px;
 	height:250px;
 
 }
+
 .bsContent
 {
+
+    
+    padding:0px;
 	float:left;
 	background-color: green;
 	float: left;
 	height : 500px;
 	width : 500px;
+    display:block;
 }
 
 
 .graphBlock
 {
+
+    padding-left: 10px;
+    float:left;
 	display: block;
 	clear: none;
-	width:960px;
-	height:150px;
+	width:auto;
+	height:174px;
  }
 
-.graphControls
-{
-	float: left;
-	width: 200px;
-	height:150px;
-	background-color:gray;
-}
+
 
 
 .graphContent
 {
+ 
 	float:left;
-	float: left;
 	height : 150px;
-	width : 760px;
+	width : 220px;
 }
 
 .image
@@ -138,6 +149,7 @@ body
 }
 
 .toggle-box + label {
+
   cursor: pointer;
   display: block;
   font-weight: bold;
@@ -148,10 +160,12 @@ body
 .toggle-box + label + div {
   display: none;
   margin-bottom: 10px;
+  float:left;
 }
 
 .toggle-box:checked + label + div {
   display: block;
+    float:left;
 }
 
 .toggle-box + label:before {
@@ -173,4 +187,63 @@ body
 
 .toggle-box:checked + label:before {
   content: "\2212";
+
 }
+
+.report_input {
+  width: 50px;
+  ;
+}
+.modalDialog {
+  position: fixed;
+  font-family: Arial, Helvetica, sans-serif;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0,0,0,0.8);
+  z-index: 99999;
+  opacity:0;
+  -webkit-transition: opacity 400ms ease-in;
+  -moz-transition: opacity 400ms ease-in;
+  transition: opacity 400ms ease-in;
+  pointer-events: none;
+}
+
+.modalDialog:target {
+  opacity:1;
+  pointer-events: auto;
+}
+
+.modalDialog > div {
+  width: 400px;
+  position: relative;
+  margin: 10% auto;
+  padding: 5px 20px 13px 20px;
+  border-radius: 0px;
+  background: #fff;
+  background: -moz-linear-gradient(#ddd, #999);
+  background: -webkit-linear-gradient(#ddd, #999);
+  background: -o-linear-gradient(#ddd, #999);
+}
+
+.close {
+  background: #606061;
+  color: #FFFFFF;
+  line-height: 25px;
+  position: absolute;
+  right: -12px;
+  text-align: center;
+  top: -10px;
+  width: 24px;
+  text-decoration: none;
+  font-weight: bold;
+  -webkit-border-radius: 12px;
+  -moz-border-radius: 12px;
+  border-radius: 12px;
+  -moz-box-shadow: 1px 1px 3px #000;
+  -webkit-box-shadow: 1px 1px 3px #000;
+  box-shadow: 1px 1px 3px #000;
+}
+
+.close:hover { background: #00d9ff; }

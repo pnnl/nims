@@ -1,92 +1,459 @@
-  var graph_com;
-  var graph_com_dps = [];
-  var graph_sa ;
-  var graph_sa_dps= [];
-  var graph_sv;
-  var graph_sv_dps = [];
-  var test_img;
-  var last_x = 0;
-
-
-
-function look_at_test_image(image)
+var graphs;
+var color_map;
+var initial_connection = true;
+var last_ping = 0;
+/* ----------------------------------------------------------------------------
+ - Name:
+ - Desc:
+ - Input:
+ - Output:
+---------------------------------------------------------------------------- */
+function handle_web_socket()
 {
-  obj = JSON.parse(image)
-  var img = document.createElement('img');
-  img.src = generateBMPDataURL(obj.intensity);
-  img.alt = 'doesnt support data url';
-  img.title = ' generate an image ...';
+	console.log("handle_web_socket")
+	if (initial_connection == true)
+	{
+		console.log(" - initial connection");
+		initial_connection = false;
+		color_map = generate_heat_map();
+		graphs =
+		{
+			Sv_area: new graph_object("Sv Area"),
+			Sv_volume: new graph_object("Sv Volume"),
+			center_of_mass: new graph_object("Center of Mass"),
+			inertia: new graph_object("Inertia", 25),
+			proportion_occupied: new graph_object("Proportion Occupied", .1),
+			equivalent_area: new graph_object("Equivalent Area"),
+			aggregate_index: new graph_object("Aggregation Index", .1)
+		};
 
-  c = document.getElementById('backscatter');
-  ctx = c.getContext('2d');
-  ctx.drawImage(img, 0,0, 500,500);
+		image = render_static_image();
+		display_image(image, "BSCAN");
 
-  sa = obj.sa;
-  sv = obj.sv;
-  com = obj.com;
-  graph_sa_dps.push({x: last_x, y: sa});
-  if (graph_sa_dps.length > 25) {
-      graph_sa_dps.shift()
-  }
-  
-  graph_sv_dps.push({x: last_x, y: sv});
-  if (graph_sv_dps.length > 25) {
-      graph_sv_dps.shift()
-  }
-  
+		var device = "Unknown Transducer Model"
+		var version = "xx"
+ 		var pingid = "xxxx"
+   		var soundspeed = "xxxx"
+    	var num_samples = "xxxx"
+    	var range_min = "xx"
+    	var range_max = "xx"
+	    var num_beams = "xxx"
+  		var freq = "xxxxxxxx"
+ 	 	var pulse_len = "xx"
+ 	 	var pulse_rep = "xx"
+ 	 	var ts = "xxxxxxxxx"
 
-  graph_com_dps.push({x: last_x, y: com});
+		var elem = document.getElementById("meta")
+   	 	var inner =""
+ 	  	inner += "<span><pre>" + device + ", version " + version + "</span>\n"
+  	  	inner += "<span><pre>     Ping ID: " + pingid + "\t\t"
+    	inner += "   Ping Time: " + ts + "</span>\n"
+		inner += "<span><pre>        Freq: " + freq + "\t\t"
+		inner += " Sound Speed: " + soundspeed + "</span>\n"
+		inner += "<span><pre>   Range Min: " + range_min + "\t\t"
+		inner += "   Range Max: " + range_max + "</span>\n"
+		inner += "<span><pre>   Num Beams: " + num_beams + "\t\t"
+		inner += " Num Samples: " + num_samples + "</span>\n"
+		inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t"
+		inner += "   Pulse Rep: " + pulse_rep + "</span>\n"
 
-  if (graph_com_dps.length > 25) {
-      graph_com_dps.shift()
-  }
-  last_x += 1;
-  
-  write_meta_data(obj)
-  graph_sa.render()
-  graph_sv.render()
-  graph_com.render()
+	    elem.innerHTML=inner
+		
+		return;
+	}
+
+	console.log(" - handling possible reconnection.");
 }
 
+
+/* ----------------------------------------------------------------------------
+ - Name: graph_object()
+ - Input: str: graph title
+       int: num values on x
+       int: interval to grpah on y (10)
+ - Output: a graph object
+ - Desc: Generates a graph for ChartJS with some default values
+---------------------------------------------------------------------------- */
+function graph_object(graph_name, y_interval)
+{
+	y_interval = typeof y_interval != 'undefined' ? y_interval : 10;
+	console.log(graph_name + ":" + y_interval);
+  this.name = graph_name;
+	this.points = [];
+	this.graph = new CanvasJS.Chart(graph_name,
+	{
+		exportEnabled:true,
+		zoomEnabled:true,
+		axisX: 
+		{ 
+			interval: 50,
+			title: "Ping",
+			labelAngle: 45,
+		},
+
+		axisY: 
+		{ 
+			interval: y_interval,
+			title: graph_name
+		},
+	
+		title: { text: graph_name },
+
+		data: 
+		[{
+			type: "line",
+			dataPoints: this.points
+		}]
+
+	});
+	this.graph.render();	
+	return this;
+	 
+}
+
+graph_object.prototype.append = function (x_val, y_val, num_values) 
+	{
+		num_values = typeof num_values !== 'undefined' ? num_values : 50;
+		this.points.push({x: x_val, y: y_val});
+		if (this.points.length > num_values)
+			this.points.shift();
+		this.graph.render();
+	};
+
+graph_object.prototype.reset = function()
+{
+    while (this.points.length > 0)
+      this.points.shift();
+    this.graph.render();
+}
+/* ----------------------------------------------------------------------------
+ - Name: generate_heat_map()
+ - Desc: creates a red scale rgb array from 0 to 256; maps intensity to rgb
+ - Input:
+ - Output: Array of rgb arrays
+----------------------------------------------------------------------------- */
+function generate_heat_map()
+{
+	var cmap = [];
+	for (var i = 0; i < 256; i++)
+	{
+		var color = [i, Math.floor(.4 * i), Math.floor(.2 * i)];
+		for (var j = 0; j < 4; j++)
+		{
+			cmap.push(color)
+		}
+	}
+	return cmap;
+}
+/* ----------------------------------------------------------------------------
+ - Name: process_ping()
+ - Desc: processes JSON ping data and updates the screen
+ - Input: data: JSON ping data
+ - Output: none
+----------------------------------------------------------------------------- */
+function process_ping(data)
+{
+
+	var obj = JSON.parse(data)
+  if(obj.hasOwnProperty('tracks'))
+  {
+    console.log(obj.tracks)
+  }
+	write_meta_data(obj);
+
+  //var image = render_ppi_image(obj); 
+  var image = render_bscan_image(obj);
+	display_image(image, "BSCAN", obj);
+
+  if (obj.pingid < last_ping)
+  {
+    graphs.Sv_area.reset();
+    graphs.Sv_volume.reset();
+    graphs.center_of_mass.reset();
+    graphs.inertia.reset();
+    graphs.equivalent_area.reset();
+    graphs.aggregate_index.reset();
+    graphs.proportion_occupied.reset();
+
+  }
+
+  last_ping = obj.pingid;
+	graphs.Sv_area.append(obj.pingid, obj.sv_area);
+	graphs.Sv_volume.append(obj.pingid, obj.sv_volume);
+	graphs.center_of_mass.append(obj.pingid, obj.center_of_mass);
+	graphs.inertia.append(obj.pingid, obj.inertia);
+	graphs.equivalent_area.append(obj.pingid, obj.equivalent_area);
+	graphs.aggregate_index.append(obj.pingid, obj.aggregation_index);
+	graphs.proportion_occupied.append(obj.pingid, obj.proportion_occupied);
+
+}
+
+/* ----------------------------------------------------------------------------
+ - Name: display_image(image, image_type)
+ - Desc: takes an image an lays it out on the website
+ - Input: Image array (rgb values)
+	   str: image_type (PPI, BSCAN, WATER_COLUMN)
+ - Output: None	
+----------------------------------------------------------------------------- */
+function display_image(image, image_type, obj)
+{
+	// ignoring image type for now
+	var img = document.createElement('img');
+	img.src = generateBMPDataURL(image);
+	img.alt = "Your browser doesn't support data URLs.";
+	img.title = "PPI Display";
+
+	c = document.getElementById('backscatter');
+	ctx = c.getContext('2d');
+	ctx.drawImage(img, 0, 0, 500, 500);
+
+  if (image_type == "BSCAN")
+  { // draw axis layers here, but we need the sonar data ...
+    // i.e. range and num samples.
+    ctx.strokeStyle="#CCCCCC";
+    ctx.fillStyle="#CCCCCC";
+    console.log("Drawing AXIS Layer for BSCAN");
+    var min_range = obj.range_min;
+    var max_range = obj.range_max;
+    var num_samples = obj.num_samples;
+    var num_beams = obj.num_beams;
+
+    var range = max_range - min_range;
+    var samps_per_meter = num_samples / range;
+    // decide how many lines to draw - lets say 5 since the m3 ppi does this
+    var interval = num_samples / 5;
+
+    var axis = new Path2D();
+    for (var i = 0; i < 5; i++)
+    {
+      axis.moveTo(0, i *100 + 1 );
+      axis.lineTo(500, i * 100 + 1);
+
+      meters = max_range - (i * (max_range / 5));
+      label = meters + " m";
+      ctx.fillText(label, 5, (i * 100) + 12);
+      ctx.fillText(label, 475 , (i * 100) + 12);
+    }
+    ctx.stroke(axis);
+
+    sector_size = obj.sector_size;
+    min_angle = obj.min_angle;
+    max_angle = obj.max_angle;
+
+    beam_width = sector_size / num_beams;
+
+
+    var axis = new Path2D();
+    var interval = 500 / 7;
+    var beam_interval = sector_size / 7;
+
+    for (var i = 1; i < 7; i++)
+    {
+      axis.moveTo(i * interval, 500);
+      axis.lineTo(i * interval, 490);
+
+      angle = min_angle + (beam_interval * i);
+      angle = angle.toPrecision(3);
+      label = angle + ' d';   
+      ctx.fillText(label, i * interval - 10, 487);
+
+    }
+    label = max_angle + " deg"
+    //ctx.FillText(label, i * interval - 40, 487);
+
+    ctx.stroke(axis);
+
+    
+
+
+  }
+
+}
+
+/* ----------------------------------------------------------------------------
+ - Name:  write_meta_data
+ - Desc: JSON ping meta data is written to screen
+ - Input: JSON Ping meta data
+ - Output:
+----------------------------------------------------------------------------- */
 function write_meta_data(data)
 {
+  var device = data.device;
+  var version = data.version;
+  var pingid = data.pingid;
+  var ping_sec = data.ping_sec;
+  var ping_ms = data.ping_ms;
+  var soundspeed = data.soundspeed;
+  var num_samples = data.num_samples;
+  var range_min = data.range_min;
+  var range_max = data.range_max;
+  var num_beams = data.num_beams;
+  var freq = data.freq;
+  var pulse_len = data.pulse_len;
+  var pulse_rep = data.pulse_rep;
+
+  var elem = document.getElementById("meta");
+  var inner ="";
+  inner += "<span><pre>" + device + ", version " + version + "</span>\n";
+  inner += "<span><pre>         Ping ID: " + pingid + "\t\t";
+  inner += "   Ping Time (HMS): " + data.ts + "</span>\n";
+  inner += "<span><pre>       Freq (hz): " + freq + "\t";
+  inner += " Sound Speed (m/s): " + soundspeed + "</span>\n";
+  inner += "<span><pre>   Range Min (m): " + range_min + "\t\t";
+  inner += "     Range Max (m): " + range_max + "</span>\n";
+  inner += "<span><pre>       Num Beams: " + num_beams + "\t\t";
+  inner += "       Num Samples: " + num_samples + "</span>\n";
+  inner += "<span><pre>  Pulse Len (ms): " + pulse_len + "\t\t";
+  inner += "    Pulse Rep (hz): " + pulse_rep + "</span>\n";
   
-  return
+  
+  //console.log("inner = " + inner)
+  elem.innerHTML=inner;
+  return;
 }
-function generate_test_image()
+
+function render_bscan_image(ping_data)
+{
+  data = ping_data.intensity;
+  numX = ping_data.num_beams;
+  numY = ping_data.num_samples;
+
+ 
+  rows = [];
+  for (var y = 0; y < numY; y++)
+  {
+    row = [];
+    for (var x = 0; x < numX; x++)
+    {
+      var xx = (numX-1) - x;
+      var target = data[y + (xx * numY)];
+      var key = Math.floor(target * 500); // magic number
+      if (key < 0)
+        key = 0;
+      if (key > 1000)
+        key = 1000;      
+
+      row[x] = color_map[key];
+    }
+    rows[y] = row
+  }
+
+  return rows;
+}
+/* ----------------------------------------------------------------------------
+ - Name: create_ppi_image
+ - Desc: Take 2d ping intensity data and converts it to an rgb 2d array
+ - Input: ping data parsed from JSON
+ - Output: Array[Num Samples][Num Beams] in RGB
+---------------------------------------------------------------------------- */
+function render_ppi_image(ping_data)
 {
 
-    rows = [];
+	var deg_to_rad = 0.0174532925;
+	
+	data = ping_data.intensity;
+	numX = ping_data.num_beams;
+	numY = ping_data.num_samples;
+	min_angle = ping_data.min_angle;
+	max_angle = ping_data.max_angle;
+	sector_size = ping_data.sector_size;
 
+
+
+	angle_offset = (180 - sector_size) / 2;
+	beam_width = sector_size / numX;
+
+	max_reach = numY * Math.cos(deg_to_rad * angle_offset);
+	max_reach = Math.floor(max_reach);
+
+	rows = new Array(numY + 1);
+
+
+  rows = [];
+  for (var r = 0; r < numY; r++)
+  {
+    row = [];
+    for (var i = 0; i < max_reach; i++)
+    {
+      px = [0, 0, 0];
+      row[i] = px;
+      //console.log(bmp.pixel[r,i]);
+    }  
+    rows[r] = row;
+  }
+
+
+
+	var beam_angles = new Array(numX);
+	for (var i = 0; i < numX; i++)
+		beam_angles[i] = 180 - angle_offset - (i * beam_width);
+
+	for (var y = 0; y < numY; y++)
+	{
+		for (var x = 0; x < numX; x++)
+		{
+      var angle = beam_angles[x];
+      var center_angle = beam_angles[x];
+      var left_angle = center_angle - beam_width;
+      var right_angle = center_angle + beam_width;
+      var angle_step = beam_width / 5.0;
+
+      for (var angle = left_angle; angle < right_angle; angle += angle_step)
+      {
+        if (angle > 180) 
+          continue;
+        if (angle < 0)
+          continue;
+  			var xx = (numX-1) - x;
+  			var target = data[y + (xx * numY)];
+  			var key = Math.floor(target ); // magic number
+  			if (key < 0)
+  				key = 0;
+  			if (key > 1000)
+  				key = 1000;
+  			beam_angle = angle; //beam_angles[x];
+  			xcoord = y * Math.cos(deg_to_rad * beam_angle) + numY / 2;		
+  			ycoord = y * Math.sin(deg_to_rad * beam_angle);
+
+        if (typeof color_map[key] == 'undefined')
+        {
+          console.log("undefined cmap: key = ", + key)
+        }
+  			rows[Math.floor(ycoord)][Math.floor(xcoord)] = color_map[key];
+      } 
+		}
+	}
+
+	return rows;
+
+}
+
+
+/* ----------------------------------------------------------------------------
+ - Name: render_static_image()
+ - Desc: generates a static image for the initial display
+ - Input: None
+ - Output: Array: [rows[row]] in (r, g, b)
+---------------------------------------------------------------------------- */
+function render_static_image()
+{
+    rows = [];
     for (var r = 0; r < 255; r++)
     {
       row = [];
       for (var i = 0; i < 255; i++)
       {
-        b = Math.floor(Math.random() * 255);
-        px = [0, 0, b];
+        b = Math.floor(Math.random() * 128);
+        //px = [b, .5 * b, 0];
+        px = [0, 0, 0];
         row[i] = px;
         //console.log(bmp.pixel[r,i]);
       }
       rows[r] = row;
     }
 
-
-
-    var img = document.createElement('img');
-    img.src = generateBMPDataURL(rows);
-    img.alt = 'doesnt support data url';
-    img.title = ' generate an image ...';
-    return img;
+    return rows;
 }
-
-
-
-  
-
-        
-   
-
 
   /*----------------------------------------------------------------------------
   - Name: generate_data()
@@ -96,83 +463,35 @@ function generate_test_image()
   --------------------------------------------------------------------------- */
   function onBodyLoad() {
 
-    graph_sa_dps = []
-    graph_sa = new CanvasJS.Chart("graph_sa",
-    {
-      exportEnabled: true,
-      zoomEnabled: true,
-      axisX: { interval: 1,
-      		   title: "Sample Number",
-      		  // labelAngle: 45,
-      		 },
+    var device = ""
+    var version = ""
+    var pingid = ""
+    var soundspeed = ""
+    var num_samples = ""
+    var range_min = ""
+    var range_max = ""
+    var num_beams = ""
+    var freq = ""
+    var pulse_len = ""
+    var pulse_rep = ""
+    var ts = ""
 
-      axisY: { interval: 10,
-      		   title: "s_a",
-      		 },
+    var elem = document.getElementById("meta")
+    var inner =""
+    inner += "<span><pre>" + device + ", version " + version + "</span>\n"
+    inner += "<span><pre>     Ping ID: " + pingid + "\t\t"
+    inner += "   Ping Time: " + ts + "</span>\n"
+    inner += "<span><pre>        Freq: " + freq + "\t\t"
+    inner += " Sound Speed: " + soundspeed + "</span>\n"
+    inner += "<span><pre>   Range Min: " + range_min + "\t\t"
+    inner += "   Range Max: " + range_max + "</span>\n"
+    inner += "<span><pre>   Num Beams: " + num_beams + "\t\t"
+    inner += " Num Samples: " + num_samples + "</span>\n"
+    inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t"
+    inner += "   Pulse Rep: " + pulse_rep + "</span>\n"
+    
+    elem.innerHTML=inner
 
-      title:  { text: "S_A: Random samples, 10hz" },
-
-
-
-      data: [{
-        type: "line",
-        dataPoints: graph_sa_dps
-      }]
-
-    });
-
-    graph_sv_dps = []
-  	var xinterval = Math.floor(graph_sv_dps.length / 5);
-    graph_sv = new CanvasJS.Chart("graph_sv",
-    {
-      exportEnabled: true,
-      zoomEnabled: true,
-      axisX: { interval: 1,
-      		   title: "Sample Number",
-      		  // labelAngle: 45,
-      		 },
-
-      axisY: { interval: 10,
-      		   title: "s_v",
-      		 },
-
-      title:  { text: "S_V: Random Random samples, 10hz" },
-
-
-
-      data: [{
-        type: "line",
-        dataPoints: graph_sv_dps
-      }]
-
-    });
-
-  	graph_com_dps = []
-
-    graph_com = new CanvasJS.Chart("graph_com",
-    {
-      exportEnabled: true,
-      zoomEnabled: true,
-      axisX: { interval: 1,
-      		   title: "Sample Number",
-      		  // labelAngle: 45,
-      		 },
-
-      axisY: { interval: 10,
-      		   title: "Center of Mass",
-      		 },
-
-      title:  { text: "Center of Mass: Random Random samples, 10hz"},
-      data: [{
-        type: "line",
-        dataPoints: graph_com_dps
-      }]
-
-    });
-
-    graph_com.render();
-    graph_sa.render();
-    graph_sv.render();
 
     test_img = generate_test_image();
     c = document.getElementById('backscatter');
@@ -232,9 +551,19 @@ function _collapseData(rows, row_padding) {
     for (i=0; i<rows_len; i++) {
         for (j=0; j<pixels_len; j++) {
             pixel = rows[i][j];
+            try
+            {
             result.push(String.fromCharCode(pixel[2]) +
                         String.fromCharCode(pixel[1]) +
                         String.fromCharCode(pixel[0]));
+            }
+            catch(err)
+            {
+              console.log("ERROR: " + err.message);
+            //  console.log("Pixel at i,j:" + i + "," + j);
+            //  console.log(pixel);
+            continue;
+            }
         }
         result.push(padding);
     }
@@ -252,24 +581,24 @@ function generateBMPDataURL(rows) {
       // Expects rows starting in bottom left
       // formatted like this: [[[255, 0, 0], [255, 255, 0], ...], ...]
       // which represents: [[red, yellow, ...], ...]
-
       if (!window.btoa) {
           alert('Your browser does not support base64 encoding.  Cannot render bitmap.');
           return false;
       }
 
+      console.log("Rendering Image");
       var height = rows.length,                                // the number of rows
           width = height ? rows[0].length : 0,                 // the number of columns per row
           row_padding = (4 - (width * 3) % 4) % 4,             // pad each row to a multiple of 4 bytes
           num_data_bytes = (width * 3 + row_padding) * height, // size in bytes of BMP data
           num_file_bytes = 54 + num_data_bytes,                // full header size (offset) + size of data
           file;
-
+	console.log(" - " + height + "x" + width + " px");
       height = _asLittleEndianHex(height, 4);
       width = _asLittleEndianHex(width, 4);
       num_data_bytes = _asLittleEndianHex(num_data_bytes, 4);
       num_file_bytes = _asLittleEndianHex(num_file_bytes, 4);
-
+ 
       // these are the actual bytes of the file...
 
       file = ('BM' +               // "Magic Number"
