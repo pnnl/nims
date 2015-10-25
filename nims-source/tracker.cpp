@@ -23,6 +23,7 @@
 
 #include "log.h"            // NIMS_LOG_* macros
 #include "queues.h"         // SubprocessCheckin()
+#include "nims_ipc.h"       // shared mem
 #include "frame_buffer.h"   // sensor data
 #include "tracked_object.h" // tracking
 #include "pixelgroup.h"     // connected components
@@ -93,39 +94,6 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
     }
 }
 
-// http://docs.opencv.org/modules/imgproc/doc/histograms.html
-// http://opencvexamples.blogspot.com/2013/10/histogram-calculation.html
-int HistImage(InputArray _im, int nbins, OutputArray _imhist)
-{
-    
-    Mat im = _im.getMat();
-    
-    // check for single channel gray scale
-    
-    // select bins based on data range
-    double min_val, max_val;
-    minMaxIdx(im.reshape(0,1), &min_val, &max_val);
-    float ranges[2] = {(float)min_val, (float)max_val};
-    
-    // calc the histogram
-    int channels[] = {1};
-    int hist_size[] = {nbins};
-    const float *hist_ranges[] = {ranges};
-    Mat hist;
-    calcHist(&im, 1, channels, Mat(),
-             hist, 1, hist_size, hist_ranges, true); // uniform bins
-    
-    // create histogram image
-    double total = im.rows * im.cols; // total pixels or cells
-    int scale = 10;
-    Mat imhist = Mat::zeros(1, nbins, CV_8UC3);
-    for (int k=0; k<nbins; ++k)
-    {
-        float bin_val = hist.at<float>(k);
-        
-    }
-    return 0;
-}
 
 /*
  int MakePingImage(InputArray _ping, OutputArray _img)
@@ -235,6 +203,13 @@ int main (int argc, char * argv[]) {
     float process_noise = 1e-1;     // process is animal swimming
     float measurement_noise = 1e-2; // measurement is backscatter
 	int pred_err_max = 15; // max difference in pixels between prediction and actual
+	// NOTE:  The noise values are somewhat arbitrary.  The important
+	//        thing is their relative values. Here, the process noise
+	//         should be much greater than the measurement noise because
+	//        an animals's progress through the 3D space of moving water
+	//        is very noisy.  The measurement noise is the resolution
+	//        of the sample space (range bin, beam width).
+    
     try
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
@@ -276,15 +251,6 @@ int main (int argc, char * argv[]) {
 	int next_id = 0;
 	long completed_tracks_count = 0;
 	
-	// NOTE:  The noise values are somewhat arbitrary.  The important
-	//        thing is their relative values. Here, the process noise
-	//         should be much greater than the measurement noise because
-	//        an animals's progress through the 3D space of moving water
-	//        is very noisy.  The measurement noise is the resolution
-	//        of the sample space (range bin, beam width).
-	// TODO:  make these params in config file
-    
-    
  	// output file for saving track data
  	char timestr[16]; // YYYYMMDD-hhmmss
  	strftime(timestr, 16, "%Y%m%d-%H%M%S", gmtime(&rawtime));
@@ -448,9 +414,21 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "background mean from " << min_val1 << " to " << max_val1
                        << ", std. dev. from " << min_val2 << " to " << max_val2;
         
+        // construct detection message for UI
+        // TODO:  Make max shared mem objects a constant at beginning of code.
+        // TODO:  This could mess up the consumer, overwriting old shared mem.
+        DetectionMessage msg_ui(next_ping.header.ping_num, 0);
+        string shared_name = "mean_bg-" + to_string(next_ping.header.ping_num%10);
+        size_t data_size = ping_mean.step[0] * ping_mean.rows;
+        int ret = share_data(shared_name, 0, nullptr, data_size, (char*)ping_mean.ptr(0) );
+        if (ret != -1)
+        {
+            msg_ui.background_data_size = data_size;
+            strcpy(msg_ui.background_shm_name, shared_name.c_str());
+        }
+
         // detect targets
         NIMS_LOG_DEBUG << "detecting targets";
-        DetectionMessage msg_ui(next_ping.header.ping_num, 0);
         Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > thresh_stdevs;
         int nz = countNonZero(foregroundMask);
         NIMS_LOG_DEBUG << "number of samples above threshold: "

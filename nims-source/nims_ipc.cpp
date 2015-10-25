@@ -13,9 +13,9 @@
 #include <assert.h>   // assert
 #include <sys/mman.h> // mmap, shm_open
 
-#include <string>
 #include <cstring> // memcpy
 
+#include "nims_ipc.h"
 #include "log.h"
 
 using namespace std;

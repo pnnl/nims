@@ -35,14 +35,34 @@ struct __attribute__ ((__packed__)) DetectionMessage
     uint32_t  ping_num; // same ping number as in FrameHeader
     uint32_t  num_detections; // number of detections
     Detection detections[MAX_DETECTIONS_PER_FRAME];
-    
+    // shared memory containing the mean background echo strength
+    uint64_t background_data_size;
+    char     background_shm_name[NAME_MAX];
+
     DetectionMessage(uint32_t pnum = 0, uint32_t numdetects = 0 )
     {
         ping_num = pnum;
         num_detections = numdetects;
         memset(detections, 0, sizeof(detections));
+        background_data_size = 0;
+        background_shm_name[0] = '\0';
+
     };
     
+    
 }; // Detections
+
+std::ostream& operator<<(std::ostream& strm, const DetectionMessage& dm)
+{
+    strm << "    ping_num = " << dm.ping_num << "\n"
+         << "    num_detections = " << dm.num_detections << "\n"
+         << "    background_data_size = " << dm.background_data_size << "\n"
+         << "    background_shm_name = " << dm.background_shm_name << "\n"
+    << std::endl;
+    
+    
+    return strm;
+};
+
 
 #endif // __NIMS_DETECTIONS_H__
