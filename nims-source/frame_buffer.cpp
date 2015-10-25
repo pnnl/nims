@@ -58,9 +58,10 @@ const size_t kMaxMessage = 8; // maximum number of messages that can exist on th
  for the length you pass in, but we'll do that anyway. If other
  components start sharing memory, we can make this external.
 */
-
+const size_t kPageSize = sysconf(_SC_PAGE_SIZE);
 static size_t SizeForSharedFrame(const Frame &f)
 {
+/*
     static size_t page_size = 0;
     if (0 == page_size)
         page_size = sysconf(_SC_PAGE_SIZE);
@@ -69,6 +70,12 @@ static size_t SizeForSharedFrame(const Frame &f)
     const size_t len = f.size() + sizeof(f);
     const size_t number_of_pages = len / page_size + 1;
     return page_size * number_of_pages;
+*/
+    assert(kPageSize > 0);
+    const size_t len = f.size() + sizeof(f);
+    const size_t number_of_pages = len / kPageSize + 1;
+    return kPageSize * number_of_pages;
+
 }
 
 std::ostream& operator<<(std::ostream& strm, const FrameHeader& fh)
