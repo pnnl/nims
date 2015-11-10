@@ -377,7 +377,7 @@ int main (int argc, char * argv[]) {
     float bearing_step = next_ping.header.beam_angles_deg[1] -
     next_ping.header.beam_angles_deg[0];
     float ping_rate = next_ping.header.pulserep_hz;
-    
+    Mat imc(ping_mean.size(), CV_8UC3); // used for VIEW
     //-------------------------------------------------------------------------
 	// MAIN LOOP
     
@@ -388,17 +388,8 @@ int main (int argc, char * argv[]) {
         Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
         minMaxIdx(ping_data, &min_val, &max_val);
         NIMS_LOG_DEBUG << "frame values from " << min_val << " to " << max_val;
-        Mat imc; // if not VIEW, this is never intitialized
-        if (VIEW)
-        {
-            // create 3-channel color image for viewing/saving
-            // ping data values are float from 0 to whatever
-            // need to scale from 0 to 1.
-            Mat imgray;
-            Mat(ping_data/max_val).convertTo(imgray, CV_8U, 255, 0);
-            cvtColor(imgray, imc, CV_GRAY2RGB);
-        }
-        // update background
+        
+         // update background
         // http://www.johndcook.com/blog/standard_deviation/
         NIMS_LOG_DEBUG << "updating mean background";
         // u(k) = u(k-1) + (x - u(k-1))/N
@@ -414,10 +405,31 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "background mean from " << min_val1 << " to " << max_val1
                        << ", std. dev. from " << min_val2 << " to " << max_val2;
         
+       if (VIEW)
+        {
+            // create 3-channel color image for viewing/saving
+            // ping data values are float from 0 to whatever
+            // need to scale from 0 to 1.
+            Mat imgray;
+            Mat(ping_data/50.0).convertTo(imgray, CV_8U, 255, 0);
+            // convert grayscale to color image
+            
+            cvtColor(imgray, imc, CV_GRAY2RGB);
+            /*
+            double min_valc, max_valc;
+            minMaxIdx(imc.reshape(1), &min_valc, &max_valc);
+            NIMS_LOG_DEBUG << "imc values from " << min_valc << " to " << max_valc;
+            */
+           
+            
+         }
         // construct detection message for UI
         // TODO:  Make max shared mem objects a constant at beginning of code.
         // TODO:  This could mess up the consumer, overwriting old shared mem.
+        
         DetectionMessage msg_ui(next_ping.header.ping_num, 0);
+       // TODO:  Debug this.  As is, causes tracker to hang.
+        /*
         string shared_name = "mean_bg-" + to_string(next_ping.header.ping_num%10);
         size_t data_size = ping_mean.step[0] * ping_mean.rows;
         int ret = share_data(shared_name, 0, nullptr, data_size, (char*)ping_mean.ptr(0) );
@@ -426,7 +438,7 @@ int main (int argc, char * argv[]) {
             msg_ui.background_data_size = data_size;
             strcpy(msg_ui.background_shm_name, shared_name.c_str());
         }
-
+        */
         // detect targets
         NIMS_LOG_DEBUG << "detecting targets";
         Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > thresh_stdevs;
@@ -441,7 +453,7 @@ int main (int argc, char * argv[]) {
             group_pixels(foregroundMask, min_size, objects);
             int n_obj = objects.size();
             NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
-            
+            /*
             if (VIEW)
             {
                 vector< vector<Point> > contours;
@@ -450,7 +462,7 @@ int main (int argc, char * argv[]) {
                 // draw all contours in red
                 drawContours(imc, contours, -1, Scalar(0,0,255));
             }
-            
+            */
             // guard against tracking a lot of noise
             if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
             {
@@ -527,10 +539,12 @@ int main (int argc, char * argv[]) {
                         // mark track as matched
                         active_not_matched.at<unsigned char>(min_idx[0]) = 0;
                         // update UI message
+                        
                         msg_ui.detections[f].center_range = detected_positions_y(f);
                         msg_ui.detections[f].center_beam = detected_positions_x(f);
                         msg_ui.detections[f].track_id = active_id[min_idx[0]];
                         msg_ui.detections[f].new_track = false;
+                        
                     } // for each detection
                     
                 } // if active tracks
@@ -553,6 +567,7 @@ int main (int argc, char * argv[]) {
                         active_id.push_back(next_id);
                         
                         // update UI message
+                        
                         msg_ui.detections[f].center_range = detected_positions_y(f);
                         msg_ui.detections[f].center_beam = detected_positions_x(f);
                         msg_ui.detections[f].track_id = next_id;
@@ -566,6 +581,7 @@ int main (int argc, char * argv[]) {
         } // nz > 0
         
         // send UI message
+        
         mq_send(mq_ui, (const char *)&msg_ui, sizeof(msg_ui), 0); // non-blocking
         NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_ui) 
                        << " bytes); ping_num = " << msg_ui.ping_num << "; num_detect = " 
@@ -613,8 +629,9 @@ int main (int argc, char * argv[]) {
             remap(imc.t(), im_out, map_x, map_y,
                   INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
             stringstream pngfilepath;
-            pngfilepath <<  "ping-" << frame_index % 10 << ".png";
-            imwrite(pngfilepath.str(), im_out);
+            pngfilepath <<  "ping-" << frame_index % 20 << ".png";
+            //imwrite(pngfilepath.str(), im_out);
+            imwrite(pngfilepath.str(), imc);
         }
         
         
