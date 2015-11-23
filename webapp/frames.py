@@ -119,8 +119,8 @@ class frame_message:
 class track_message:
 
 
-    def __init__(self, message, f):
-        self.f = f
+    def __init__(self, message):
+        #self.f = f
         self.tracks = []
         self.valid = self.parse_message(message)
         self.max_detections = 100
@@ -134,25 +134,27 @@ class track_message:
         try:    
             self.pingid, message = self.unpacker('i', message)
             self.num_detections, message = self.unpacker('i', message)
-            self.f.write("%d\n" % self.pingid[0])
-            self.f.write("%d\n" % int(self.num_detections[0]))
-            print "pingid:", self.pingid
-            print "detections:", self.num_detections[0]
+            #self.f.write("%d\n" % self.pingid[0])
+            #self.f.write("%d\n" % int(self.num_detections[0]))
+            #print " - pingid:", self.pingid[0]
+            #print " - detections:", self.num_detections[0]
+            if self.num_detections[0] > 0:
+                print " FOUND DETECTIONS"
             if self.num_detections[0] > 0:
                 for i in range(0, self.num_detections[0]):
                     center_range, message = self.unpacker('f', message)
                     center_beam, message = self.unpacker('f', message)
                     track_id, message = self.unpacker('i', message)
                     is_new_track = self.unpacker('?', message)
-                    try:
-                        self.f.write("%d " % int(center_range[0]))
-                    except Exception, e:
-                        self.f.write("0 ")
+                    #try:
+                    #    self.f.write("%d " % int(center_range[0]))
+                    #except Exception, e:
+                    #    self.f.write("0 ")
 
-                    try:
-                        self.f.write("%d\n" % int(center_beam[0]))
-                    except Exception, e:
-                        self.f.write("0\n")
+                    #try:
+                    #    self.f.write("%d\n" % int(center_beam[0]))
+                    #except Exception, e:
+                    #    self.f.write("0\n")
 
                     track = [track_id[0], center_range[0], center_beam[0], is_new_track[0]]
                     self.tracks.append(track)

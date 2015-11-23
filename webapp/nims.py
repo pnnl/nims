@@ -35,13 +35,27 @@ class MainHandler(tornado.web.RequestHandler):
     #def get_template_path(self):
     #    return "templates/"
 
-    def get(self):
+    def get(self, *args, **kwargs):
+        print "MainHandler"
         cwd = os.getcwd()
         hostname = socket.gethostname()
         #print "hostname = ", hostname
         self.render("index.html", curdir=cwd, myhostname=hostname)
+        
+        
+class ConfigHandler(tornado.web.RequestHandler):
+    #def get_template_path(self):
+    #    return "templates/"
 
-class EchoWebSocket(tornado.websocket.WebSocketHandler):
+    def get(self, *args, **kwargs):
+        print "ConfigHandler"
+        cwd = os.getcwd()
+        hostname = socket.gethostname()
+        #print "hostname = ", hostname
+        self.render("config.html")
+        
+        
+class EchoWebSocket(tornado.websocket.WebSocketHandler):       
     def open(self):
         clients.add(self)
         logging.info("Added client")
@@ -52,7 +66,7 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         self.sv = 50
         self.sa = 50
 
-    def send_data(self, f, metrics):
+    def send_data(self, f, metrics, tracks):
         #logging.info("Sending image to client.")
         a={}
         
@@ -86,7 +100,26 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         a['equivalent_area'] = metrics['equivalent_area']       
                 
 
-            
+        #if tracks.num_detections[0] > 0:
+        #    print "Sending track data"
+        #    a['tracks'] = tracks.
+        self.init_track = True
+        if self.init_track:
+            self.center_range = 300
+            self.center_beam = 40
+            self.is_new_track = True
+            self.tracks = []
+            track = (25, self.center_range, self.center_beam, self.is_new_track)
+            self.tracks.append(track)
+            self.init_track = False
+
+        for i in range(len(self.tracks)):
+            self.center_range += randint(-2, 2)
+            self.center_beam += randint(-1, 1)
+            self.is_new_track = False
+            self.tracks[i] = (25, self.center_range, self.center_beam, self.is_new_track)
+
+        a['tracks'] = self.tracks
         ts = datetime.datetime.fromtimestamp(f.ping_sec[0]).strftime("%H:%M:%S")
         ts = ts + ".%d" % f.ping_millisec[0]
         a["ts"] = ts
@@ -127,7 +160,17 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         return rows
 
 
+
+def readYAMLConfig():
+    import yaml
+    from pprint import pprint as pp
+    with open("/home/rhytnen/Desktop/trunk/build/config.yaml", 'r') as stream:
+       pp(yaml.load(stream))
+        
+    
 def main():
+
+    readYAMLConfig()
     tornado.options.parse_command_line()
 
     settings = {
@@ -140,7 +183,10 @@ def main():
     #])
 
     handlers = [
+        (r"/config", ConfigHandler),
+        (r"/config.html", ConfigHandler),
         (r"/", MainHandler),
+        (r"/index.html", MainHandler),
         (r"/websocket", EchoWebSocket)
     ]
     

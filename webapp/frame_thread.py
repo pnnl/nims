@@ -264,7 +264,7 @@ class frameThread(threading.Thread):
 		#			line = f.readline()
 		#			line.rstrip('\n')
 		#			track = line.split()
-        #
+		#
 		#			track[0] = int(track[0])
 		#			track[1] = int(track[1])
 					
@@ -305,11 +305,17 @@ class frameThread(threading.Thread):
 			if framebuf.valid is False:
 				continue
 
-			#self.frames[framebuf.ping_num[0]] = framebuf
+			self.frames[framebuf.ping_num[0]] = framebuf
 
-			#track = mqTracker.receive()
-			#track = track[0]
-			#track_frame = frames.track_message(track, self.f)
+			#print "looking for ping id:", framebuf.ping_num[0]
+			#track_id = -1
+			#while track_id != framebuf.ping_num[0]:
+			#	track = mqTracker.receive()
+		  	#	track = track[0]
+			#	track_frame = frames.track_message(track)
+			#	track_id = track_frame.pingid[0]
+
+			#	print "want:", framebuf.ping_num[0], "-- found", track_frame.pingid[0]
 
 			#print framebuf.ping_num[0], ":", track_frame.pingid[0]
 			#if self.frames.has_key(track_frame.pingid[0]) == False:
@@ -321,6 +327,7 @@ class frameThread(threading.Thread):
 
 			#framebuf = self.frames.pop(track_frame.pingid[0])
 
+            
 			if len(self.clients) == 0:
 				continue
 
@@ -340,7 +347,7 @@ class frameThread(threading.Thread):
 					#else:
 					#	track_frame = None
 					#	print "missing track frame for:", framebuf.ping_num[0]
-					client.send_data(framebuf, metrics)
+					client.send_data(framebuf, metrics, None)
 				except:
 					logging.info("Error sending image to client")
 					print sys.exc_info()
