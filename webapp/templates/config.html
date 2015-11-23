@@ -1,0 +1,54 @@
+<!doctype html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<!--meta http-equiv="refresh"; content="7"-->
+<title>NIMS</title>
+<link rel="stylesheet" type="text/css" href="/static/layout.css">
+<script type="text/javascript" src="/static/jquery-1.11.3.min.js"></script>
+<script type="text/javascript" src="/static/canvasjs/canvasjs.min.js"></script>
+<script type="text/javascript" src="/static/nims.js"></script>
+<script> 
+
+    //var ws = new WebSocket("ws://128.208.73.200:80/websocket");
+    //var ws = new WebSocket("ws://")
+    //ws.onclose = function (evt) { window.location.reload();};
+    
+</script>
+</head>
+
+<body onload="handle_web_socket()">
+
+<div id="header" class="pageHeader">
+<img class="pageHeader" src="/static/images/logo.jpg">
+</div>
+
+<ul class="menu">
+  <li class="menu"><a class="menu" href="index.html">NIMS Interface</a></li>
+  <li class="menu"><a class="menu" href="config.html">Control Panel</a></li>
+</ul class="menu">
+
+
+</div>
+
+<pre> Tracker Parameters </pre>
+  <div id="table" class="table-editable">
+    <span class="table-add glyphicon glyphicon-plus"></span>
+    <table class="table">
+
+      <tr>
+        <td contenteditable="true">Stir Fry</td>
+        <td contenteditable="true">stir-fry</td>
+      </tr>
+      <!-- This is our clonable table line -->
+      <tr class="hide">
+        <td contenteditable="true">Untitled</td>
+        <td contenteditable="true">undefined</td>
+      </tr>
+    </table>
+  </div>
+  
+  <button id="export-btn" class="btn btn-primary">Export Data</button>
+  <p id="export"></p>
+</div>
+</body>
+</html>
