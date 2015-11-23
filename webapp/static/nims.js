@@ -2,6 +2,7 @@ var graphs;
 var color_map;
 var initial_connection = true;
 var last_ping = 0;
+var paths = [];
 /* ----------------------------------------------------------------------------
  - Name:
  - Desc:
@@ -28,7 +29,7 @@ function handle_web_socket()
 		};
 
 		image = render_static_image();
-		display_image(image, "BSCAN");
+		//display_image(image, "BSCAN");
 
 		var device = "Unknown Transducer Model"
 		var version = "xx"
@@ -161,6 +162,40 @@ function process_ping(data)
   }
 	write_meta_data(obj);
 
+
+  // here we want to add our paths in before we render image.
+  tracks = obj.tracks;
+  for (var i = 0;i < tracks.length; i++)
+  {
+    var track = tracks[i];
+    var track_id = track[0];
+    for (var j = 0; j < paths.length; j++)
+    {
+      paths[j].age++;
+      if (paths[j].age > 10)
+      {
+        paths[j].age = 10;
+        paths[j].points.shift();
+      }
+
+      path = paths[j];
+      var found = false;
+      if (path.id == track_id)
+      {
+        var point = [track[1], track[2]];
+        path.points.push(point);
+        found = true;
+      }
+      if (found == false)
+      {
+        var new_path = {id:track_id, age:1, points:[[track[1], track[2]]]};
+        paths.push(path);
+      }
+
+
+    }
+  }
+
   //var image = render_ppi_image(obj); 
   var image = render_bscan_image(obj);
 	display_image(image, "BSCAN", obj);
@@ -263,7 +298,30 @@ function display_image(image, image_type, obj)
 
     ctx.stroke(axis);
 
-    
+    ctx = c.getContext('2d')
+    var tracks = obj.tracks;
+    //console.log("Tracks:" + tracks)
+    for (var i = 0; i < tracks.length; i++)
+    {
+        track = tracks[i]
+        console.log("Track:" + track);
+      ctx.beginPath();
+      var py = 500 - ((track[1] / num_samples) * 500);
+      var px = (track[2] / num_beams) * 500;
+     // console.log("px:" + px)
+     // console.log("py:" + py)
+      ctx.globalAlpha = .55;
+      ctx.arc(px, py, 10, 0, 2 * Math.PI, false);      
+      //ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();  
+      ctx.globalAlpha = 1;
+    //}
+    }
+    //ctx.arc(250, 250, 20, 0, 2 * Math.PI, false);
+    //ctx.fillStyle = 'green';
+
+    //ctx.lineWidth = 2;
 
 
   }
@@ -630,3 +688,57 @@ function generateBMPDataURL(rows) {
 - Input:
 - Output:
 --------------------------------------------------------------------------- */
+var $TABLE = $('#table');
+var $BTN = $('#export-btn');
+var $EXPORT = $('#export');
+
+$('.table-add').click(function() {
+  var $clone = $TABLE.find('tr.hide').clone(true).removeClass('hide table-line');
+  $TABLE.find('table').append($clone);
+});
+
+$('.table-remove').click(function() {
+  $(this).parents('tr').detach();
+});
+
+$('.table-up').click(function() {
+  var $row = $(this).parents('tr');
+  if ($row.index() === 1) return; // Don't go above the header
+  $row.prev().before($row.get(0));
+});
+
+$('.table-down').click(function() {
+  var $row = $(this).parents('tr');
+  $row.next().after($row.get(0));
+});
+
+// A few jQuery helpers for exporting only
+jQuery.fn.pop = [].pop;
+jQuery.fn.shift = [].shift;
+
+$BTN.click(function() {
+  var $rows = $TABLE.find('tr:not(:hidden)');
+  var headers = [];
+  var data = [];
+
+  // Get the headers (add special header logic here)
+  $($rows.shift()).find('th:not(:empty)').each(function() {
+    headers.push($(this).text().toLowerCase());
+  });
+
+  // Turn all existing rows into a loopable array
+  $rows.each(function() {
+    var $td = $(this).find('td');
+    var h = {};
+
+    // Use the headers from earlier to name our hash keys
+    headers.forEach(function(header, i) {
+      h[header] = $td.eq(i).text();
+    });
+
+    data.push(h);
+  });
+
+  // Output the result
+  $EXPORT.text(JSON.stringify(data));
+});
