@@ -1,15 +1,15 @@
 <!doctype html>
 <head>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
-<!--meta http-equiv="refresh"; content="7"-->
-<title>NIMS</title>
-<link rel="stylesheet" type="text/css" href="/static/layout.css">
-<script type="text/javascript" src="/static/jquery-1.11.3.min.js"></script>
-<script type="text/javascript" src="/static/canvasjs/canvasjs.min.js"></script>
-<script type="text/javascript" src="/static/nims.js"></script>
-<script> 
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <!--meta http-equiv="refresh"; content="7"-->
+    <title>NIMS</title>
+    <link rel="stylesheet" type="text/css" href="/static/layout.css">
+    <script type="text/javascript" src="/static/jquery-1.11.3.min.js"></script>
+    <script type="text/javascript" src="/static/canvasjs/canvasjs.min.js"></script>
+    <script type="text/javascript" src="/static/nims.js"></script>
+    <script>
 
-    var ws = new WebSocket("ws://128.208.73.200:80/websocket");
+    var ws = new WebSocket("ws://128.208.73.200:80/echosocket");
     //var ws = new WebSocket("ws://")
 
     ws.onmessage = function (evt) {
@@ -19,33 +19,35 @@
 
     ws.onclose = function (evt) { window.location.reload();};
     
-</script>
+
+    </script>
 </head>
 
 
 <body onload="handle_web_socket()">
 
 <div id="header" class="pageHeader">
-<img class="pageHeader" src="/static/images/logo.jpg">
+    <img class="pageHeader" src="/static/images/logo.jpg">
 </div>
 
 <ul class="menu">
-  <li class="menu"><a class="menu" href="index.html">NIMS Interface</a></li>
-  <li class="menu"><a class="menu" href="config.html">Control Panel</a></li>
+    <li class="menu"><a class="menu" href="index.html">NIMS Interface</a></li>
+    <li class="menu"><a class="menu" href="config.html">Control Panel</a></li>
 </ul class="menu">
 
 <div class="main_grid">
-<!-- Main body content -->
-<div class="bsBlock">
-	<div  class="bsContent">
-		<canvas id="backscatter" class="imageplot" width="500px" height="500px"</canvas>
-	</div>
-  
- 
+    <!-- Main body content -->
+    <div class="bsBlock">
+        <div class="bsContent">
+            <canvas id="backscatter" class="imageplot" width="500px" height="500px"
+            </canvas>
+        </div>
+
+        <fieldset>
         <div class="graphBlock">
             <div id="Sv Volume" class="graphContent"></div>
         </div>
-     
+
         <div class="graphBlock">
             <div id="Sv Area" class="graphContent"></div>
         </div>
@@ -53,67 +55,80 @@
         <div class="graphBlock">
             <div id="Center of Mass" class="graphContent"></div>
         </div>
-<div class="graphBlock" float="left">
-    <div id="Inertia" class="graphContent"></div>
-</div>
+        <div class="graphBlock" float="left">
+            <div id="Inertia" class="graphContent"></div>
+        </div>
 
-<div class="graphBlock" float="left">
-    <div id="Proportion Occupied" class="graphContent"></div>
-</div>
+        <div class="graphBlock" float="left">
+            <div id="Proportion Occupied" class="graphContent"></div>
+        </div>
 
-<div class="graphBlock" float="left">
-    <div id="Aggregation Index" class="graphContent"></div>
-</div>
-
-
-
-</div>
-
-<div class=metadiv id=meta>
-<span><pre id='metal1'>  Transducer: unknown     Resolution: 500px x 500px </span>
-<span><pre id='metal2'>      PingID: xxxx         Num Beams: xxxxx</span>     
-<span><pre id='metal3'>   Data Rage: x mb/s      Beam Width: xxxxx</pre></span>
-
-</div>
-<div class="graphBlock" float="left">
-    <div id="Equivalent Area" class="graphContent"></div>
-</div>
-<div class="graphBlock" width="500px" float = "left" padding-top="10">
-<a href="#openModal">Generate Report</a>
-
-<div id="openModal" class="modalDialog">
-    <div>
-        <a href="#close" title="Close" class="close">X</a>
-        <pre>Ping Range</pre>
-        <form>
-            <pre>  Start: <input class="report_input" type="text" value ="0" width="25" name="start_ping"> Stop: <input class="report_input" type="text" value="99999" name="stop_ping"> </pre>
-        
-        <br>
-        <pre>Include:</pre>
-        <pre><input type="checkbox" name="report_areasv" value="areasv" checked>Area Sv</pre>
-        <pre><input type="checkbox" name="report_volumesv" value="areasv" checked>Volume Sv</pre>
-        <pre><input type="checkbox" name="report_com" value="com" checked>Center of Mass</pre>
-        <pre><input type="checkbox" name="report_inertia" value="inertia" checked>Inertia</pre>
-        <pre><input type="checkbox" name="report_propocc" value="propocc" checked>Proportion Occupied</pre>
-        <pre><input type="checkbox" name="report_eqarea" value="eqarea" checked>Equivalent Area</pre>
-        <pre><input type="checkbox" name="report_aggindex" value="aggindex" checked>Aggregation Index</pre>
-        <br>
-        <button type="button">Generate Report</button>
-        </form>
+        <div class="graphBlock" float="left">
+            <div id="Aggregation Index" class="graphContent"></div>
+        </div>
+    <div class="graphBlock" float="left">
+        <div id="Equivalent Area" class="graphContent"></div>
     </div>
-</div>
-<br><br>For more information <br>
-<a href="/static/urmy.pdf">EchoMetrics, Urmy et. al.</a>
-</div>
-<div class="graphBlock" float="left" padding-top="10">
+      <div class="graphBlock" float="left">
+          <pre>  For more information:</pre>
+          <pre></pre><a href="/static/urmy.pdf"><cite padding-right="5px">EchoMetrics, Urmy et. al.</cite></a>
+      </div>
+        </fieldset>
+    </div>
+
+    <div class=metadiv id=meta>
+        <fieldset>
+            <legend>Sonar Settings</legend>
+            <span><pre id='metal1'>  Transducer: unknown     Resolution: 500px x 500px </span>
+            <span><pre id='metal2'>      PingID: xxxx         Num Beams: xxxxx</span>
+            <span><pre id='metal3'>   Data Rage: x mb/s      Beam Width: xxxxx</pre></span>
+        </fieldset>
+    </div>
 
 </div>
 
-<!-- End main body content -->
+
+        <div class="logdiv">
+        <fieldset class="logbar">
+            <label id="log"> Connecting to NIMS monitoring system ... </label>
+        </fieldset>
+        </div>
+
+
+
+    <!-- End main body content         <br><br>For more information <br>
+        <a href="/static/urmy.pdf">EchoMetrics, Urmy et. al.</a>
+
+            <div class="graphBlock" width="500px" float="left" padding-top="10">
+        <a href="#openModal">Generate Report</a>
+
+        <div id="openModal" class="modalDialog">
+            <div>
+                <a href="#close" title="Close" class="close">X</a>
+                <pre>Ping Range</pre>
+                <form>
+                    <pre>  Start: <input class="report_input" type="text" value="0" width="25" name="start_ping"> Stop: <input
+                            class="report_input" type="text" value="99999" name="stop_ping"> </pre>
+
+                    <br>
+                    <pre>Include:</pre>
+                    <pre><input type="checkbox" name="report_areasv" value="areasv" checked>Area Sv</pre>
+                    <pre><input type="checkbox" name="report_volumesv" value="areasv" checked>Volume Sv</pre>
+                    <pre><input type="checkbox" name="report_com" value="com" checked>Center of Mass</pre>
+                    <pre><input type="checkbox" name="report_inertia" value="inertia" checked>Inertia</pre>
+                    <pre><input type="checkbox" name="report_propocc" value="propocc" checked>Proportion Occupied</pre>
+                    <pre><input type="checkbox" name="report_eqarea" value="eqarea" checked>Equivalent Area</pre>
+                    <pre><input type="checkbox" name="report_aggindex" value="aggindex" checked>Aggregation Index</pre>
+                    <br>
+                    <button type="button">Generate Report</button>
+                </form>
+            </div>
+        </div>
+
+    </div>-->
 
 
 </div>
-
 
 
 </body>

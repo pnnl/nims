@@ -7,37 +7,61 @@
 <script type="text/javascript" src="/static/jquery-1.11.3.min.js"></script>
 <script type="text/javascript" src="/static/canvasjs/canvasjs.min.js"></script>
 <script type="text/javascript" src="/static/nims.js"></script>
-<script> 
+<script>
 
-    //var ws = new WebSocket("ws://128.208.73.200:80/websocket");
-    //var ws = new WebSocket("ws://")
-    //ws.onclose = function (evt) { window.location.reload();};
-    
+    function GetChar (event){
+
+        var chCode = ('charCode' in event) ? event.charCode : event.keyCode;
+        if (chCode == 13)
+        {
+            exportConfig()
+            event.preventDefault();
+        }
+
+
+    }
+
+    var ws = new WebSocket("ws://128.208.73.200:80/pagesocket");
+    ws.onmessage = function (evt) {
+        console.log("recvd message");
+        process_config(evt.data);
+
+
+    };
+
 </script>
 </head>
 
-<body onload="handle_web_socket()">
+<body >
 
-<div id="header" class="pageHeader">
-<img class="pageHeader" src="/static/images/logo.jpg">
-</div>
+  <div id="header" class="pageHeader">
+  <img class="pageHeader" src="/static/images/logo.jpg">
+  </div>
 
-<ul class="menu">
-  <li class="menu"><a class="menu" href="index.html">NIMS Interface</a></li>
-  <li class="menu"><a class="menu" href="config.html">Control Panel</a></li>
-</ul class="menu">
+  <ul class="menu">
+    <li class="menu"><a class="menu" href="index.html">NIMS Interface</a></li>
+    <li class="menu"><a class="menu" href="config.html">Control Panel</a></li>
+  </ul class="menu">
 
 
-</div>
+  </div>
 
-<pre> Tracker Parameters </pre>
-  <div id="table" class="table-editable">
-    <span class="table-add glyphicon glyphicon-plus"></span>
-    <table class="table">
+<br>
 
+  <div class="table-editable">
+    <table id="tracker_table" class="table" onkeypress="GetChar(event)">
       <tr>
-        <td contenteditable="true">Stir Fry</td>
-        <td contenteditable="true">stir-fry</td>
+            <th colspan="2" bgColor="LightSeaGreen"><pre>Tracker Detection Properties</pre></th>
+            <th colspan="2" bgColor="LightSeaGreen"><pre>  NIMS System Settings  </pre></th>
+      <tr>
+          <th bgColor="LightSeaGreen"><pre>Parameter</th>
+          <th bgColor="LightSeaGreen"><pre>  Value  </th>
+          <th bgColor="LightSeaGreen"><pre>Parameter</th>
+          <th bgColor="LightSeaGreen"><pre>  Value  </th>
+      </tr>
+      <tr>
+        <td contenteditable="true">test</td>
+        <td contenteditable="true">test</td>
       </tr>
       <!-- This is our clonable table line -->
       <tr class="hide">
@@ -46,9 +70,16 @@
       </tr>
     </table>
   </div>
-  
-  <button id="export-btn" class="btn btn-primary">Export Data</button>
+<br>
+
+  <div>
+  <button onClick="exportConfig()" id="export-btn" class="btn" bgColor="CadetBlue"><pre>Export Data</button>
+
   <p id="export"></p>
-</div>
+  </div>
+
+        <fieldset class="logbar">
+            <label id="log"> Connecting to NIMS monitoring system ... </label>
+        </fieldset>
 </body>
 </html>

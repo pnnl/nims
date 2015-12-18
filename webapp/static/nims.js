@@ -3,6 +3,9 @@ var color_map;
 var initial_connection = true;
 var last_ping = 0;
 var paths = [];
+
+var app_config;
+
 /* ----------------------------------------------------------------------------
  - Name:
  - Desc:
@@ -12,8 +15,10 @@ var paths = [];
 function handle_web_socket()
 {
 	console.log("handle_web_socket")
+
 	if (initial_connection == true)
 	{
+	    write_log("Established initial connection to NIMS.");
 		console.log(" - initial connection");
 		initial_connection = false;
 		color_map = generate_heat_map();
@@ -45,7 +50,7 @@ function handle_web_socket()
  	 	var ts = "xxxxxxxxx"
 
 		var elem = document.getElementById("meta")
-   	 	var inner =""
+   	 	var inner ="<fieldset><legend>Sonar Settings</legend>"
  	  	inner += "<span><pre>" + device + ", version " + version + "</span>\n"
   	  	inner += "<span><pre>     Ping ID: " + pingid + "\t\t"
     	inner += "   Ping Time: " + ts + "</span>\n"
@@ -57,12 +62,12 @@ function handle_web_socket()
 		inner += " Num Samples: " + num_samples + "</span>\n"
 		inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t"
 		inner += "   Pulse Rep: " + pulse_rep + "</span>\n"
-
+        inner += "</fieldset>"
 	    elem.innerHTML=inner
 		
 		return;
 	}
-
+    write_log("Reconnected.");
 	console.log(" - handling possible reconnection.");
 }
 
@@ -145,6 +150,118 @@ function generate_heat_map()
 		}
 	}
 	return cmap;
+}
+
+function exportConfig()
+{
+    write_log("Wrote new configuration.")
+    // read every row in the table, edit the config, stringify it, send it
+    var tracker_table = document.getElementById('tracker_table');
+    var rowNum = 2;
+    for (var i = rowNum; i < tracker_table.rows.length; i++)
+    {
+        // cell0+1 = tracker data, cell3+4 = other non-editables.  So lets ignore them for now.
+        row = tracker_table.rows[i];
+        app_config['TRACKER'][row.cells[0].innerText.trim()] = row.cells[1].innerText.trim();
+    }
+
+
+    config = JSON.stringify(app_config)
+    ws.send(config)
+
+}
+
+function write_log(message)
+{
+    var elem = document.getElementById("log")
+    log.innerHTML= "<pre>     " +message + " :: " + Date() + "</pre>";
+}
+function process_config(data)
+{
+
+    write_log("Received new configuration data.");
+
+    app_config = JSON.parse(data);
+    console.log("app_config:" + app_config)
+
+    var track_config = app_config['TRACKER'];
+    var application = app_config['APPLICATIONS']
+    // remove all existing rows and populate with new data
+    var tracker_table = document.getElementById('tracker_table');
+    var rowCount = tracker_table.rows.length;
+    while(--rowCount > 1)
+        tracker_table.deleteRow(rowCount);
+
+    length = track_config.length;
+    for (var key in track_config) {
+        if (track_config.hasOwnProperty(key)) {
+            console.log(key + " -> " + track_config[key]);
+            var row = tracker_table.insertRow()
+            var cell1 = row.insertCell(0);
+            cell1.bgColor="CadetBlue"
+            cell1.align="right"
+            cell1.innerHTML =  "<pre>" + key
+            var cell2 = row.insertCell(1);
+            cell2.align="left"
+            cell2.innerHTML = "<pre>" + String(track_config[key]);
+            cell2.contentEditable="true"
+
+        }
+     }
+
+
+
+    var rowNum = 2; // first td
+    for (var key in app_config) {
+        if (key == "TRACKER")
+            continue;
+        if (!app_config.hasOwnProperty(key)){
+            continue;
+        }
+
+        if (key == "APPLICATIONS")
+        {
+            var apps = app_config['APPLICATIONS']; // apps is an array for some reason ...
+            for (var i = 0; i < apps.length; i++) // for every app running
+            {
+                app = apps[i]
+                var arg_string = app["name"];
+                for (var j = 0; j < app["args"].length; j++)
+                    arg_string = arg_string + " " + app["args"][j];
+                console.log(arg_string);
+
+                if (rowNum >= tracker_table.rows.length)
+                    tracker_table.insertRow();
+                var row = tracker_table.rows[rowNum];
+
+
+                var cell3 = row.insertCell(2);
+                cell3.bgColor = "CadetBlue";
+                cell3.innerHTML =  "<pre>" + "APPLICATION"
+                cell3.align="right"
+                var cell4 = row.insertCell(3);
+                cell4.bgColor = "LightSeaGreen";
+                cell4.innerHTML =  "<pre>" +  arg_string;
+                rowNum++;
+            }
+
+            continue;
+
+        }
+        if (rowNum >= tracker_table.rows.length)
+            tracker_table.insertRow();
+        var row = tracker_table.rows[rowNum];
+        var cell3 = row.insertCell(2);
+        cell3.bgColor = "CadetBlue";
+        cell3.innerHTML =  "<pre>" +  key
+        cell3.align="right"
+        var cell4 = row.insertCell(3);
+        cell4.bgColor = "LightSeaGreen";
+        cell4.innerHTML =   "<pre>" + app_config[key];
+        cell4.align="left"
+        rowNum++;
+
+    }
 }
 /* ----------------------------------------------------------------------------
  - Name: process_ping()
@@ -351,7 +468,7 @@ function write_meta_data(data)
   var pulse_rep = data.pulse_rep;
 
   var elem = document.getElementById("meta");
-  var inner ="";
+  var inner ="<fieldset><legend>Sonar Settings</legend>";
   inner += "<span><pre>" + device + ", version " + version + "</span>\n";
   inner += "<span><pre>         Ping ID: " + pingid + "\t\t";
   inner += "   Ping Time (HMS): " + data.ts + "</span>\n";
@@ -363,9 +480,9 @@ function write_meta_data(data)
   inner += "       Num Samples: " + num_samples + "</span>\n";
   inner += "<span><pre>  Pulse Len (ms): " + pulse_len + "\t\t";
   inner += "    Pulse Rep (hz): " + pulse_rep + "</span>\n";
+  inner +="</fieldset>"
   
-  
-  //console.log("inner = " + inner)
+  console.log("inner = " + inner)
   elem.innerHTML=inner;
   return;
 }
