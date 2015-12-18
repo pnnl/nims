@@ -1,0 +1,11 @@
+
+if [ ! -d /dev/mqueue ]; then
+    sudo mkdir /dev/mqueue
+    sudo mount -t mqueue none /dev/mqueue
+fi
+
+sudo rm -rf /dev/mqueue/*
+PID=`ps aux | grep nims.py | grep root | cut -d ' ' --fields=6`
+sudo kill -9 $PID
+
+sudo ./nims.py
