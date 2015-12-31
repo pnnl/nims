@@ -31,6 +31,7 @@ APPLICATIONS:
 # Need this here for python code.
 FRAMEBUFFER_NAME: nims_framebuffer
 TRACKER_NAME: nims_tracker
+TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
 # 1 = M3 (that's all we support for now.)
@@ -41,7 +42,7 @@ M3_HOST_ADDR: 130.20.41.225
 
 ### TRACKER ###
 TRACKER:
-    num_pings_for_moving_avg : 20
+    num_pings_for_moving_avg : 60
     max_ping_gap_in_track    : 3
     min_pings_for_track      : 7
     threshold_in_stdevs      : 2.0
