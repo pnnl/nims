@@ -118,19 +118,19 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
 // of the last message matches the ping number of the last frame
 // that the UI received.  The queue will persist, so if the tracker
 // dies and restarts it will write to this same queue (I think.)
-mqd_t CreateUIMessageQueue(size_t message_size, const string &name)
+mqd_t CreateTrackerMessageQueue(size_t message_size, const string &name)
 {
     struct mq_attr attr;
     memset(&attr, 0, sizeof(struct mq_attr));
     
     attr.mq_maxmsg = 10;
     attr.mq_msgsize = message_size;
-    attr.mq_flags = O_NONBLOCK;  // non-blocking, don't need to sync with UI
+    attr.mq_flags = O_NONBLOCK;  // non-blocking, don't need to sync 
     
     const int opts = O_CREAT | O_WRONLY;
     const int mode = S_IRUSR | S_IWUSR;
     
-    NIMS_LOG_DEBUG << "creating UI message queue " << name 
+    NIMS_LOG_DEBUG << "creating tracker message queue " << name 
                    << " with msg size " << message_size;
     mqd_t mqd = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == mqd)
@@ -194,8 +194,9 @@ int main (int argc, char * argv[]) {
     
     // Get parameters from config file.
 	string fb_name;
-    string mq_name;
-	int N;
+    string mq_ui_name;
+	 string mq_socket_name;
+    int N;
     int maxgap = 3; // maximum gap in frames allowed within a track
     int mintrack = 10; // minimum number of steps to be considered a track
     float thresh_stdevs = 3.0;
@@ -214,7 +215,8 @@ int main (int argc, char * argv[]) {
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
-        mq_name = "/" + config["TRACKER_NAME"].as<string>();
+        mq_ui_name = "/" + config["TRACKER_NAME"].as<string>();
+         mq_socket_name = "/" + config["TRACKER_SOCKET_NAME"].as<string>();
         YAML::Node params = config["TRACKER"];
         N                 = params["num_pings_for_moving_avg"].as<int>();
         maxgap            = params["max_ping_gap_in_track"].as<int>();
@@ -272,7 +274,8 @@ int main (int argc, char * argv[]) {
         return -1;
     }
     
-    mqd_t mq_ui = CreateUIMessageQueue(sizeof(DetectionMessage), mq_name);
+    mqd_t mq_ui = CreateTrackerMessageQueue(sizeof(DetectionMessage), mq_ui_name);
+    mqd_t mq_socket = CreateTrackerMessageQueue(sizeof(DetectionMessage), mq_socket_name);
     
     // check in before calling GetNextFrame, to avoid timeout in the
     // NIMS parent process (and subsequent termination).
@@ -299,7 +302,7 @@ int main (int argc, char * argv[]) {
     size_t total_samples = next_ping.header.num_samples*next_ping.header.num_beams;
     
     NIMS_LOG_DEBUG << "   num samples = " << dim_sizes[0]
-    << ", num beams = " << dim_sizes[1];
+                   << ", num beams = " << dim_sizes[1];
     NIMS_LOG_DEBUG << "   bytes per sample = " << sizeof(framedata_t);
     NIMS_LOG_DEBUG << "   total samples = " << total_samples;
     
@@ -324,6 +327,7 @@ int main (int argc, char * argv[]) {
     
     // Initialize the moving average.
     Mat ping_mean = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type);
+    double temp, ping_max_mean = 0.0;
     for (int k=0; k<N; ++k)
     {
         if ( fb.GetNextFrame(&next_ping)==-1 )
@@ -336,8 +340,11 @@ int main (int argc, char * argv[]) {
         Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
         ping_data.reshape(0,1).copyTo(pings.row(k));
         ping_mean += ping_data;
+        minMaxIdx(ping_data, nullptr, &temp);
+        ping_max_mean += temp;
     }
     ping_mean = ping_mean/N;
+    ping_max_mean = ping_max_mean/N;
     
     double min_val,max_val, min_val1,max_val1, min_val2,max_val2;
     minMaxIdx(pings.row(N-1), &min_val, &max_val);
@@ -400,6 +407,10 @@ int main (int argc, char * argv[]) {
         sqrt(ping_var, ping_stdv);
         ping_mean = new_mean;
         
+        ping_max_mean = ping_max_mean + (max_val - ping_max_mean)/N;
+        NIMS_LOG_DEBUG << "average ping max value is " << ping_max_mean;
+        
+        // This is optional, could be removed for optimization.
         minMaxIdx(ping_mean, &min_val1, &max_val1);
         minMaxIdx(ping_stdv, &min_val2, &max_val2);
         NIMS_LOG_DEBUG << "background mean from " << min_val1 << " to " << max_val1
@@ -580,9 +591,10 @@ int main (int argc, char * argv[]) {
             
         } // nz > 0
         
-        // send UI message
+        // send UI and socket messages
         
         mq_send(mq_ui, (const char *)&msg_ui, sizeof(msg_ui), 0); // non-blocking
+        mq_send(mq_socket, (const char *)&msg_ui, sizeof(msg_ui), 0);
         NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_ui) 
                        << " bytes); ping_num = " << msg_ui.ping_num << "; num_detect = " 
                        << msg_ui.num_detections;
@@ -639,9 +651,12 @@ int main (int argc, char * argv[]) {
     
     //-------------------------------------------------------------------------
 	// CLEANUP
-     // close message queue
+     // close message queues
     mq_close(mq_ui);
-    
+    mq_close(mq_socket);
+    //mq_unlink(mq_ui_name.c_str());
+    //mq_unlink(mq_socket_name.c_str());
+   
     // close output files
     outtxtfile.close();
     
