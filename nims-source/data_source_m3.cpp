@@ -15,11 +15,9 @@
 #include <cstdlib>  // malloc, free
 #include <stdint.h> // fixed width integer types
 #include <math.h>   // sqrt, pow
-//#include <complex>  // complex numbers
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h> // inet_addr
 #include <unistd.h> // close
 
@@ -195,25 +193,34 @@ std::ostream& operator<<(std::ostream& strm, const Data_Header_Struct& hdr);
 // expecting a host address in xxx.xxx.xxx.xxx form
 DataSourceM3::DataSourceM3(std::string const &host_addr)
 {
-    struct sockaddr_in m3_host;
     
-    m3_host.sin_family = AF_INET;
-    m3_host.sin_addr.s_addr = inet_addr(host_addr.c_str());
-    m3_host.sin_port = htons(20001); // TODO: maybe make this an arg
+    m3_host_.sin_family = AF_INET;
+    m3_host_.sin_addr.s_addr = inet_addr(host_addr.c_str());
+    m3_host_.sin_port = htons(20001); // TODO: maybe make this an arg
     
     input_ = -1;
-    input_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if ( connect(input_, (struct sockaddr *) &m3_host, sizeof(struct sockaddr)) < 0 )
-    {
-        nims_perror("connect() failed in DataSourceM3 constructor");
-        close (input_);
-        input_ = -1;
-    }
 
     
 } // DataSourceM3::DataSourceM3
 
 DataSourceM3::~DataSourceM3() { close(input_); }
+
+//-----------------------------------------------------------------------------
+// DataSourceM3::open
+// connect to the M3 host
+int DataSourceM3::open()
+{
+     input_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if ( connect(input_, (struct sockaddr *) &m3_host_, sizeof(struct sockaddr)) < 0 )
+    {
+        nims_perror("connect() failed in DataSourceM3::open()");
+        close (input_);
+        input_ = -1;
+    }
+
+} // DataSourceM3::open
+
+//void DataSourceM3::close() { close(input_); input_=-1; }
 
 //-----------------------------------------------------------------------------
 // DataSourceM3::GetPing

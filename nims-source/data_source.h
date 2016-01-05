@@ -15,7 +15,7 @@
 #include "frame_buffer.h"
 /*-----------------------------------------------------------------------------
 Base class for sonar data sources.  Classes for specific devices will be
-derived from this class.  The unit of data is a ping, which is both the ping
+derived from this class.  The unit of data is a ping, which includes both the ping
 attributes (metadata) and the received echo data.
 */
 
@@ -24,6 +24,8 @@ class DataSource {
     DataSource() {};  // Constructor
     ~DataSource() {}; // Destructor
   
+  virtual int open() =0;   // open data source
+ // virtual void close() =0; // close data source
   virtual bool is_good()   =0;  // check if source is in a good state
   virtual bool more_data() =0;  // check for not "end of file" condition
   virtual int GetPing(Frame* pdata) =0;     // get the next ping from the source
