@@ -139,7 +139,7 @@ void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& groups
 	vector<unsigned>  ineighbors;     // list of pixel neighbors
 	int               ipix;           // pixel index
 	
-	while (!ungroupedIdx.empty()) // while ugrouped pixels
+	while (!ungroupedIdx.empty()) // while ungrouped pixels
 	{
 		// start a new group
 		//cout << endl << "starting a new group " << endl;
