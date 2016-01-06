@@ -34,11 +34,11 @@ TRACKER_NAME: nims_tracker
 TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
-# 1 = M3 (that's all we support for now.)
+# 1 = M3, 2 = BlueView, 3 = EK60
 SONAR_TYPE: 1
 
-# Specific to M3
-M3_HOST_ADDR: 130.20.41.225
+# Used for M3, BlueView and EK60
+SONAR_HOST_ADDR: 130.20.41.47
 
 ### TRACKER ###
 TRACKER:
