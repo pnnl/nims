@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6) 
+cmake_minimum_required (VERSION 2.6)
 project (NIMS) 
 
 include(CheckCXXCompilerFlag)
@@ -12,7 +12,11 @@ else()
         message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
-set(BLUEVIEW "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
+# link statically
+set(Boost_USE_STATIC_LIBS   ON)
+set(OpenCV_STATIC ON)
+
+#set(BLUEVIEW "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
 
 # find yaml cmake config
 # http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
@@ -25,9 +29,6 @@ find_package(Boost REQUIRED COMPONENTS filesystem system program_options log_set
 find_package(Yaml-cpp REQUIRED)
 find_package(Threads REQUIRED)
 
-# link statically
-set(Boost_USE_STATIC_LIBS   ON)
-set(OpenCV_STATIC ON)
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
@@ -46,8 +47,7 @@ add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
 #add_executable(test_frame_buffer_get test_frame_buffer_get.cpp frame_buffer.cpp log.cpp)
 #add_executable(test_frame_buffer test_frame_buffer.cpp log.cpp)
 
-# WARNING: Target "ingester" requests linking to directory "/home/shari/Developer/NIMS/nims-source/../vendorsrc/bvt_sdk_4.2.0.9446/lib/".  Targets may link only to libraries.  CMake is dropping the item.
-target_link_libraries(ingester -L ${BLUEVIEW}/lib/ -lbvtsdk ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
+target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 #target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt ${YAML_CPP_LIBRARIES})
 target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
