@@ -85,13 +85,13 @@ int main (int argc, char * argv[]) {
 	NIMS_LOG_DEBUG << "Starting " << argv[0];
 	
 	int sonar_type;
-	string m3_host_addr;
+	string sonar_host_addr;
 	string fb_name;
     try 
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
         sonar_type = config["SONAR_TYPE"].as<int>();
-        m3_host_addr = config["M3_HOST_ADDR"].as<string>();
+        sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
      }
      catch( const std::exception& e )
@@ -129,12 +129,12 @@ int main (int argc, char * argv[]) {
    
  	DataSource *input; // This is a virtual class.   
     
-	// TODO: Define an enum or ?
+	// TODO: Define an enum or ?  Need to match config file definition.
 	switch ( sonar_type )
 	{
 	    case NIMS_SONAR_M3 :  
             NIMS_LOG_DEBUG << "opening M3 sonar as datasource";
-            input = new DataSourceM3(m3_host_addr);
+            input = new DataSourceM3(sonar_host_addr);
             break;
         default :
              NIMS_LOG_ERROR << "Ingester:  unknown sonar type: " << sonar_type;
@@ -142,13 +142,16 @@ int main (int argc, char * argv[]) {
              break;
      } // switch SONAR_TYPE    
    
-    if ( !input->is_good() )
+    // TODO:  May want to check errno to see why connect failed.
+    input->connect();
+    while ( !input->is_good() )
     {
-        NIMS_LOG_ERROR << "Error opening data source.";
-        return -1;
-    }
+        NIMS_LOG_DEBUG << "waiting to connect to source...";
+        sleep(5);
+        input->connect();
+   }
     
-    NIMS_LOG_DEBUG << "source is open!";
+    NIMS_LOG_DEBUG << "connected to source!";
     size_t frame_count=0;
     while ( input->more_data() )
     {
