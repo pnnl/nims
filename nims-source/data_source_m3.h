@@ -31,8 +31,7 @@ class DataSourceM3 : public DataSource {
     bool is_good()   { return (input_ != -1); };  // check if source is in a good state
     bool more_data() { return true; };  // TODO: check for not "end of file"
 
-  int open();
- // void close();
+  int connect();
   int GetPing(Frame* pdata);  // get the next ping from the source
   //size_t ReadPings(Frame* pdata, const size_t& num_pings); // read consecutive pings
   

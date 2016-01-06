@@ -206,27 +206,37 @@ DataSourceM3::DataSourceM3(std::string const &host_addr)
 DataSourceM3::~DataSourceM3() { close(input_); }
 
 //-----------------------------------------------------------------------------
-// DataSourceM3::open
+// DataSourceM3::connect
 // connect to the M3 host
-int DataSourceM3::open()
+int DataSourceM3::connect()
 {
      input_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if ( connect(input_, (struct sockaddr *) &m3_host_, sizeof(struct sockaddr)) < 0 )
+    // NOTE:  Have to indicate external connect with "::"
+    //        to distguish from member function connect()
+    // NOTE:  ::connect() will block for some time interval, waiting for connection
+    //        and eventually time out.  POSIX does not specify interval.
+    if ( ::connect(input_, (struct sockaddr *) &m3_host_, sizeof(struct sockaddr)) < 0 )
     {
-        nims_perror("connect() failed in DataSourceM3::open()");
+        nims_perror("DataSourceM3::connect() failed");
         close (input_);
         input_ = -1;
+        return -1;
     }
+    return 0;
 
-} // DataSourceM3::open
+} // DataSourceM3::connect
 
-//void DataSourceM3::close() { close(input_); input_=-1; }
 
 //-----------------------------------------------------------------------------
 // DataSourceM3::GetPing
 // get the next ping from the source
 int DataSourceM3::GetPing(Frame* pframe)
 {
+    if ( input_ == -1 ) {
+        NIMS_LOG_ERROR << ("DataSourceM3::GetPing() Not connected to source.");
+        return -1;
+    }
+    
     // Initialize variables
     Packet_Header_Struct packet_header;
     Data_Header_Struct   header;

@@ -24,8 +24,7 @@ class DataSource {
     DataSource() {};  // Constructor
     ~DataSource() {}; // Destructor
   
-  virtual int open() =0;   // open data source
- // virtual void close() =0; // close data source
+  virtual int connect() =0;   // connect to data source
   virtual bool is_good()   =0;  // check if source is in a good state
   virtual bool more_data() =0;  // check for not "end of file" condition
   virtual int GetPing(Frame* pdata) =0;     // get the next ping from the source
