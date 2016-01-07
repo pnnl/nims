@@ -29,7 +29,7 @@ TEMPLATE_PATH = os.path.join(DIRNAME, 'templates')
 echo_clients = set()
 config_clients = set()
 
-define("port", default=80, help="run on the given port", type=int)
+define("port", default=8080, help="run on the given port", type=int)
 
 #Handler for index.html
 class EchoHandler(tornado.web.RequestHandler):
