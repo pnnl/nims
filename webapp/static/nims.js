@@ -24,8 +24,8 @@ function handle_web_socket()
 		color_map = generate_heat_map();
 		graphs =
 		{
-			Sv_area: new graph_object("Sv Area"),
-			Sv_volume: new graph_object("Sv Volume"),
+			Sv_area: new graph_object("Area Backscattering Strength (Sa)"),
+			Sv_volume: new graph_object("Vol. Backscattering Strength (Sv)"),
 			center_of_mass: new graph_object("Center of Mass"),
 			inertia: new graph_object("Inertia", 25),
 			proportion_occupied: new graph_object("Proportion Occupied", .1),
@@ -284,6 +284,7 @@ function process_ping(data)
   tracks = obj.tracks;
   for (var i = 0;i < tracks.length; i++)
   {
+    break;
     var track = tracks[i];
     var track_id = track[0];
     for (var j = 0; j < paths.length; j++)
@@ -415,6 +416,7 @@ function display_image(image, image_type, obj)
 
     ctx.stroke(axis);
 
+    return;
     ctx = c.getContext('2d')
     var tracks = obj.tracks;
     //console.log("Tracks:" + tracks)

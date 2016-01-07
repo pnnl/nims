@@ -1,5 +1,7 @@
 import tornado.websocket
-
+import math
+from random import randint
+import datetime
 class EchoWebSocket(tornado.websocket.WebSocketHandler):       
 
     def initialize(self, register_socket):
@@ -14,8 +16,8 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         self.sa = 50
 
     def send_data(self, f, metrics, tracks):
-        print "EchoWebSocket::send_data()"
-        #logging.info("Sending image to client.")
+   #     print "EchoWebSocket::send_data()"
+
         a={}
         
         # sonar meta data
