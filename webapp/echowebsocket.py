@@ -74,7 +74,6 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
         ts = ts + ".%d" % f.ping_millisec[0]
         a["ts"] = ts
 
-        print type(a)
         self.write_message(a)
 
 

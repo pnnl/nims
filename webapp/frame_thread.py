@@ -87,7 +87,6 @@ class frameThread(threading.Thread):
         ar = np.array(data)
         # ar = em.to_dB(ar)
         ar = ar.reshape(numY, numX, )
-
         echo = em.Echogram(ar, np.array(yrange), index=np.array(xindex))
         metrics = {}
 
@@ -243,9 +242,7 @@ class frameThread(threading.Thread):
 
 
         while True:
-            print "recv'ing frame"
             mqr_recv = mqr.receive()
-            print "recv'd"
             mqr_recv = mqr_recv[0]
 
             buff = frames.frame_message(mqr_recv)
@@ -253,7 +250,6 @@ class frameThread(threading.Thread):
                 logging.info("invalid message: ignoring")
                 continue
 
-            print "shm location:", buff.shm_location
             try:
                 memory = posix_ipc.SharedMemory(buff.shm_location, posix_ipc.O_RDONLY,
                                                 size=buff.frame_length)
@@ -266,7 +262,7 @@ class frameThread(threading.Thread):
             frame_header = mapfile.read(buff.frame_length)
             mapfile.close()
 
-            print "Creating frame"
+            #print "Creating frame"
             framebuf = frames.frame_buffer(frame_header)
             if framebuf.valid is False:
                 continue
@@ -280,7 +276,6 @@ class frameThread(threading.Thread):
             # framebuf.num_samples = (framebuf.num_samples[0] / 2, 0 )
 
             clients = copy.copy(self.clients)
-            print "Num Clients:", len(clients)
             for client in clients:
                 try:
                     # print "trying to send data"
