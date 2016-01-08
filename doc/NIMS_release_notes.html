@@ -1,0 +1,19 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html><head><meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>NIMS Release Notes</title></head><body>NIMS Release Notes<br>
+<br>
+<span style="font-weight: bold;">Features</span><br>
+<ul>
+  <li>Support for Kongsberg M3 Multi-beam sonar.</li>
+  <li>Real-time display of sonar data and EchoMetrics.</li>
+  <li>Tracks written to csv file.</li>
+</ul>
+<br>
+<span style="font-weight: bold;">Known Issues</span><br>
+The nims processes must be started and running before starting the
+web-based user interface, nims.py.&nbsp; nims.py looks for the
+frame_buffer message queue which is created by the ingester
+module.&nbsp; If the queue does not exist, nims.py runs but is not
+connected to the sonar device.&nbsp; <br>
+
+
+</body></html>
