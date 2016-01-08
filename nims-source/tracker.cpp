@@ -125,9 +125,9 @@ mqd_t CreateTrackerMessageQueue(size_t message_size, const string &name)
     
     attr.mq_maxmsg = 10;
     attr.mq_msgsize = message_size;
-    attr.mq_flags = O_NONBLOCK;  // non-blocking, don't need to sync 
     
-    const int opts = O_CREAT | O_WRONLY;
+    // non-blocking, don't need to sync 
+    const int opts = O_CREAT | O_WRONLY | O_NONBLOCK;
     const int mode = S_IRUSR | S_IWUSR;
     
     NIMS_LOG_DEBUG << "creating tracker message queue " << name 
