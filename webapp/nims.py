@@ -29,21 +29,20 @@ TEMPLATE_PATH = os.path.join(DIRNAME, 'templates')
 echo_clients = set()
 config_clients = set()
 
-define("port", default=8080, help="run on the given port", type=int)
+
 
 #Handler for index.html
 class EchoHandler(tornado.web.RequestHandler):
     def get(self, *args, **kwargs):
         cwd = os.getcwd()
-        hostname = socket.gethostname()
-        self.render("index.html", curdir=cwd, myhostname=hostname)
-        
+        self.render("index.html", host=self.request.host)
+
 #Handler for config.html
 class ConfigHandler(tornado.web.RequestHandler):
     def get(self, *args, **kwargs):    
         cwd = os.getcwd()
         hostname = socket.gethostname()
-        self.render("config.html")
+        self.render("config.html",  host=self.request.host)
 
 
 # Webconnections from index.html callback here
@@ -105,16 +104,23 @@ def readYAMLConfig():
 def main():
     global globalYAML
     readYAMLConfig()
-    from pprint import pprint as pp
-    logging.info("Starting nims webserver with the following configuration:" + str(globalYAML))
+    port = 80 #this is the default port
+    if globalYAML.has_key('WEB_SERVER_PORT'):
+        port = globalYAML['WEB_SERVER_PORT']
+    define("port", default=port, help="run on the given port", type=int)
 
+
+    logging.info("Starting nims webserver with the following configuration:")
+    from pprint import pprint as pp
+    pp(globalYAML)
+
+    print "Running server on:", socket.gethostname(),"(",socket.gethostbyname(socket.gethostname()), '):', port
     tornado.options.parse_command_line()
 
     settings = {
         "static_path": os.path.join(os.getcwd(), "static"),
     }
 
-    logging.info("static_path: " + os.path.join(os.getcwd(), "static"))
 
     handlers = [
         (r"/", EchoHandler),
