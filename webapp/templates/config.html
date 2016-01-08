@@ -21,7 +21,7 @@
 
     }
 
-    var ws = new WebSocket("ws://128.208.73.200:80/pagesocket");
+    var ws = new WebSocket("ws://128.208.73.200:8080/pagesocket");
     ws.onmessage = function (evt) {
         console.log("recvd message");
         process_config(evt.data);
