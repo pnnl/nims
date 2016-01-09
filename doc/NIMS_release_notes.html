@@ -1,5 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html><head><meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>NIMS Release Notes</title></head><body>NIMS Release Notes<br>
+release 0.1 2016-01-08<br>
 <br>
 <span style="font-weight: bold;">Features</span><br>
 <ul>
@@ -14,6 +15,20 @@ web-based user interface, nims.py.&nbsp; nims.py looks for the
 frame_buffer message queue which is created by the ingester
 module.&nbsp; If the queue does not exist, nims.py runs but is not
 connected to the sonar device.&nbsp; <br>
+<br>
+Chrome is currently the only supported browser.<br>
+<br>
+The tracks are not displayed in the user interface.<br>
+<br>
+Tracking is not validated.<br>
+<br>
+The user interface shows the current parameter settings from the config
+file, and the user can edit them, but there is no validation of the
+user input and the configuration does not actually get changed.&nbsp;
+For new parameters to take effect, the nims processes need to be
+restarted and this should happen from the user interface.&nbsp; <br>
+<br>
+<br>
 
 
 </body></html>
