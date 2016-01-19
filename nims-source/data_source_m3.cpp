@@ -196,10 +196,9 @@ DataSourceM3::DataSourceM3(std::string const &host_addr)
     
     m3_host_.sin_family = AF_INET;
     m3_host_.sin_addr.s_addr = inet_addr(host_addr.c_str());
-    m3_host_.sin_port = htons(20001); // TODO: maybe make this an arg
-    
-    input_ = -1;
-
+    // TODO: maybe make the port an arg
+    // Port 20001 is default for M3 host
+    m3_host_.sin_port = htons(20001);
     
 } // DataSourceM3::DataSourceM3
 

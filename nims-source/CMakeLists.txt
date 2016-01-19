@@ -37,15 +37,10 @@ include_directories(${CMAKE_SOURCE_DIR})
 
 set(Common_SOURCES log.cpp queues.cpp nims_ipc.cpp)
 
-add_executable(ingester ingester.cpp data_source_m3.cpp frame_buffer.cpp ${Common_SOURCES})
+add_executable(ingester ingester.cpp data_source_m3.cpp data_source_ek60.cpp frame_buffer.cpp ${Common_SOURCES})
 #add_executable(detector detector.cpp frame_buffer.cpp ${Common_SOURCES})
 add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp pixelgroup.cpp ${Common_SOURCES})
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
-
-# moved to test dir with its own CMakeLists.txt
-#add_executable(test_frame_buffer_put test_frame_buffer_put.cpp frame_buffer.cpp log.cpp)
-#add_executable(test_frame_buffer_get test_frame_buffer_get.cpp frame_buffer.cpp log.cpp)
-#add_executable(test_frame_buffer test_frame_buffer.cpp log.cpp)
 
 target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 #target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt ${YAML_CPP_LIBRARIES})

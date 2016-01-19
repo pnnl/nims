@@ -21,7 +21,7 @@ attributes (metadata) and the received echo data.
 
 class DataSource {
  public:
-    DataSource() {};  // Constructor
+    DataSource() { input_ = -1; };  // Constructor
     ~DataSource() {}; // Destructor
   
   virtual int connect() =0;   // connect to data source
