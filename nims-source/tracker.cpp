@@ -12,7 +12,7 @@
 #include <string>   // for strings
 #include <cmath>    // for trigonometric functions
 #include <ctime>    // date and time functions
-
+#include <signal.h> // signal handler
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -36,6 +36,14 @@ namespace fs = boost::filesystem;
 using namespace cv;
 
 #define PI 3.14159265
+
+static volatile int sigint_received = 0;
+
+static void sig_handler(int sig)
+{
+    if (SIGINT == sig)
+        sigint_received++;
+}
 
 // Generate the mapping from beam-range to x-y for display
 int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
@@ -277,6 +285,20 @@ int main (int argc, char * argv[]) {
     mqd_t mq_ui = CreateTrackerMessageQueue(sizeof(DetectionMessage), mq_ui_name);
     mqd_t mq_socket = CreateTrackerMessageQueue(sizeof(DetectionMessage), mq_socket_name);
     
+    struct sigaction new_action, old_action;
+    new_action.sa_handler = sig_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGINT, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGINT, &new_action, NULL);
+    
+    // ignore SIGPIPE
+    new_action.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGPIPE, &new_action, NULL);  
+    
     // check in before calling GetNextFrame, to avoid timeout in the
     // NIMS parent process (and subsequent termination).
     SubprocessCheckin(getpid());
@@ -333,7 +355,7 @@ int main (int argc, char * argv[]) {
         if ( fb.GetNextFrame(&next_ping)==-1 )
         {
             NIMS_LOG_ERROR << argv[0]
-            << "Error getting ping for initial moving average.";
+            << " Error getting ping for initial moving average.";
             return -1;
         }
         // Create a cv::Mat wrapper for the ping data
@@ -391,6 +413,11 @@ int main (int argc, char * argv[]) {
     int frame_index = -1;
     while ( (frame_index = fb.GetNextFrame(&next_ping)) != -1)
     {
+        if (sigint_received) {
+            NIMS_LOG_WARNING << "tracker start of loop: exiting due to SIGINT";
+            break;
+        }
+        
         NIMS_LOG_DEBUG << "got frame " << frame_index << endl << next_ping.header;
         Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
         minMaxIdx(ping_data, &min_val, &max_val);
@@ -646,7 +673,11 @@ int main (int argc, char * argv[]) {
             imwrite(pngfilepath.str(), imc);
         }
         
-        
+        if (sigint_received) {
+            NIMS_LOG_WARNING << "tracker end of loop: exiting due to SIGINT";
+            break;
+        }
+                
     } // main loop
     
     //-------------------------------------------------------------------------
