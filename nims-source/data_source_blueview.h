@@ -12,14 +12,19 @@
 #define __NIMS_DATA_SOURCE_BLUEVIEW_H__
 
 
-#include "data_source.h"
+#include "data_source.h" // base class
+
+ #include <string>
+
+#include <bvt_sdk.h> // BlueView SDK
+
 /*-----------------------------------------------------------------------------
 Class for Simrad BlueView Echosounder.
 */
 
 class DataSourceBlueView : public DataSource {
  public:
-    DataSourceBlueView();  // Constructor
+    DataSourceBlueView(std::string const &host_addr);  // Constructor
     ~DataSourceBlueView(); // Destructor
   
   int connect();   // connect to data source
@@ -28,6 +33,11 @@ class DataSourceBlueView : public DataSource {
   int GetPing(Frame* pdata);     // get the next ping from the source
   //virtual size_t ReadPings(Frame* pdata, const size_t& num_pings) =0; // read consecutive pings
     
+    private:
+    	std::string host_addr_;
+    	BVTSonar son_;
+    	BVTHead  head_;
+
 }; // DataSourceBlueView
    
 

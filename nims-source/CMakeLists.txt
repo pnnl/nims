@@ -16,13 +16,15 @@ endif()
 set(Boost_USE_STATIC_LIBS   ON)
 set(OpenCV_STATIC ON)
 
-#set(BLUEVIEW "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
-
 # find yaml cmake config
 # http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
+# BlueView SDK
+set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
+
+# note, video component is needed for Kalman filter
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
 # order of these matters for log_setup/log/thread
 find_package(Boost REQUIRED COMPONENTS filesystem system program_options log_setup log thread filesystem)
@@ -34,6 +36,7 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${YAML_CPP_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${Bvtsdk_DIR}/include)
 
 set(Common_SOURCES log.cpp queues.cpp nims_ipc.cpp)
 
@@ -42,14 +45,13 @@ add_executable(ingester ingester.cpp data_source_m3.cpp data_source_ek60.cpp dat
 add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp pixelgroup.cpp ${Common_SOURCES})
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
 
-target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
+find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
+MESSAGE( STATUS "Bvtsdk_LIB:  " ${Bvtsdk_LIB} )
+
+target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} ${Bvtsdk_LIB} rt)
 #target_link_libraries(detector ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} rt ${YAML_CPP_LIBRARIES})
 target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-
-#target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-#target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-#target_link_libraries(test_frame_buffer ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
 
 
 ADD_CUSTOM_COMMAND(TARGET nims
