@@ -228,6 +228,40 @@ higher number appended. You can monitor these in the shell with
 \end{lstlisting}
 for example.
 
+\subsection{Networking}
+The outer Ethernet port (near the edge of the box) is set for
+DHCP, to be used on the PNNL or other managed networks. The
+other port can be configured for a static IP, in order to be
+used with instrument networks. To configure it for
+a static ip, use \shell{sudo nm-connection-editor} if you
+have an X11 display.
+
+If you don't have X11, then you can try to
+edit \path{/etc/NetworkManager/system-connections/Wired connection 2} 
+or \path{/etc/NetworkManager/system-connections/Wired connection 1}. Check the
+MAC adress in the connection file vs. the output of \shell{ifconfig -a} to
+make sure you edit the right file, if you're doing this over ssh. If you
+kill the port that you're connected on, you'll have to connect over the
+other port or on the console.
+
+For DHCP, the IPV4 section should look like this:
+\begin{lstlisting}
+    [ipv4]
+    method=auto
+    dhcp-client-id=nims1
+\end{lstlisting}
+
+For a static IP of 192.168.5.100, it should look like this:
+\begin{lstlisting}
+    method=manual
+    address1=192.168.5.100/24,0.0.0.0
+\end{lstlisting}
+(i.e., a subnet mask of 255.255.255.0 and no gateway).
+The supported way to modify those files is using \shell{nmcli}, but
+it throws errors about mismatched versions and generally doesn't
+work.
+
+
 \end{document}
 
 
