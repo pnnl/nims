@@ -143,32 +143,54 @@ int main (int argc, char * argv[]) {
      } // switch SONAR_TYPE    
    
     // TODO:  May want to check errno to see why connect failed.
-    input->connect();
-    while ( !input->is_good() )
+    do
     {
-        NIMS_LOG_DEBUG << "waiting to connect to source...";
-        sleep(5);
         input->connect();
-   }
-    
-    NIMS_LOG_DEBUG << "connected to source!";
-    size_t frame_count=0;
-    while ( input->more_data() )
-    {
-        Frame frame;
-        if ( -1 == input->GetPing(&frame) ) break;
         
-        // if we get INT during a recv(), GetPing returns -1 before this is hit
+        // may get SIGINT at any time to reload config
         if (sigint_received) {
             NIMS_LOG_WARNING << "ingester: exiting due to SIGINT";
             break;
         }
         
-        NIMS_LOG_DEBUG << "got frame!";
-        NIMS_LOG_DEBUG << frame.header << endl;
-        fb.PutNewFrame(frame);
-        ++frame_count;
-     }
+        // no need to sleep if we connected
+        if (input->is_good())
+            break;
+        
+        NIMS_LOG_DEBUG << "waiting to connect to source...";
+        sleep(5);
+        
+   } while ( !input->is_good() );
+    
+   // Sprinkling the checks for sigint_received everywhere is kind
+   // of gross, but we have multiple loops on blocking calls that
+   // can be interrupted by a signal, so there's not much choice.
+   // If the IP is wrong and you edit the config file and send HUP
+   // to nims to reload, it'll send ingester an INT; if we only break
+   // out of the first loop, we could then enter the one below.
+   // Calling exit() is an option, but may prevent destructors from
+   // running. Could just return and avoid any final cleanup?
+   if (0 == sigint_received) 
+   {
+       NIMS_LOG_DEBUG << "connected to source!";
+       size_t frame_count=0;
+       while ( input->more_data() )
+       {
+           Frame frame;
+           if ( -1 == input->GetPing(&frame) ) break;
+    
+           // if we get INT during a recv(), GetPing returns -1 
+           if (sigint_received) {
+               NIMS_LOG_WARNING << "ingester: exiting due to SIGINT";
+               break;
+           }
+    
+           NIMS_LOG_DEBUG << "got frame!";
+           NIMS_LOG_DEBUG << frame.header << endl;
+           fb.PutNewFrame(frame);
+           ++frame_count;
+        }
+    }
         
 	NIMS_LOG_DEBUG << "Ending runloop; SIGINT: " << sigint_received;
     return 0;

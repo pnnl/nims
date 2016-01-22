@@ -11,7 +11,10 @@
 # System Startup for NIMS
 # to be installed in /etc/init.d
 
-APPLICATION_PATH=/home/nims/bin
+# export for all applications
+export NIMS_HOME=/home/nims/bin
+
+APPLICATION_PATH=$NIMS_HOME
 NIMS_PY_PIDFILE=/var/run/nims.py.pid
 
 # make sure our application is there

@@ -79,12 +79,15 @@ def editGlobalConfig(yaml=None, who=None):
                 client.send_data(globalYAML)
 
         writeYAMLConfig()
+        # tell nims/ingester/tracker to reload config
+        os.system("/usr/bin/killall -HUP nims")
 
 def writeYAMLConfig():
     print "in write YAML ..."
     globalYAML
     import yaml
-    yaml_file = open("../build/config.yaml", 'w')
+    yaml_path = os.path.join(os.getenv("NIMS_HOME"), "config.yaml")
+    yaml_file = open(yaml_path, 'w')
     yaml.dump(globalYAML, yaml_file, encoding=('utf-8'))
     yaml_file.close()
 
@@ -97,7 +100,8 @@ def readYAMLConfig():
     """
     global globalYAML
     import yaml
-    with open("../build/config.yaml", 'r') as stream:
+    yaml_path = os.path.join(os.getenv("NIMS_HOME"), "config.yaml")
+    with open(yaml_path, 'r') as stream:
        globalYAML = yaml.load(stream)
 
     

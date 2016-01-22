@@ -268,12 +268,18 @@ void FrameBufferWriter::CleanUp()
      }
     
     // close reader message queues
-    for (int k=0; k<mq_readers_.size(); ++k) mq_close(mq_readers_[k]);
-    NIMS_LOG_DEBUG << __func__ << " cleaned up reader message queues";
+    for (int k=0; k<mq_readers_.size(); ++k) {
+        mq_close(mq_readers_[k]);
+        NIMS_LOG_DEBUG << __func__ << " cleaned up reader queue " << mq_readers_[k];
+    }
     
     // clean up shared memory
-    for (int k=0; k<kMaxFramesInBuffer; ++k) shm_unlink(shm_names_[k].c_str());
-    NIMS_LOG_DEBUG << __func__ << " cleaned up shared memory";
+    for (int k=0; k<kMaxFramesInBuffer; ++k) {
+        shm_unlink(shm_names_[k].c_str());
+        // ??? could this be a std::vector
+        if (shm_names_[k].size())
+            NIMS_LOG_DEBUG << __func__ << " cleaned up " << shm_names_[k];
+    }
     
     pthread_mutex_destroy(&mqr_lock_);
     
@@ -303,6 +309,7 @@ void FrameBufferWriter::HandleMessages()
         // Open reader message queue.
         NIMS_LOG_DEBUG << "opening message queue " << msg;
         mqr = mq_open(msg,O_WRONLY);
+        //mq_unlink(msg);
         
         (void) pthread_mutex_lock(&mqr_lock_);
         mq_readers_.push_back(mqr); // Add it to the list.
@@ -330,8 +337,9 @@ FrameBufferReader::FrameBufferReader(const std::string &fb_name)
 // FrameBufferReader Destructor
 FrameBufferReader::~FrameBufferReader()
 {
-        mq_close(mqr_);
-        mq_unlink(mqr_name_.c_str());
+    mq_close(mqr_);
+    mq_unlink(mqr_name_.c_str());
+    NIMS_LOG_DEBUG << __func__ << " cleaned up message queue " << mqr_name_;
 
 } // FrameBufferReader Destructor
 

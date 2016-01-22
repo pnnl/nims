@@ -46,6 +46,8 @@ static vector<nims::Task *> *child_tasks_ = NULL;
     } while (__eintr_result__ == -1 && errno == EINTR); \
     __eintr_result__;\
 })
+    
+#define NIMS_HOME_VAR "NIMS_HOME"
 
 // treat SIGINT and SIGTERM as identical
 static void sigint_handler(int sig)
@@ -76,6 +78,21 @@ static void InterruptChildProcesses()
         return;
     }
     
+    /* 
+        Ignore SIGCHLD while interrupting the child processes.
+        This avoids incrementing our SIGCHLD counter while doing
+        a warm restart in response to SIGHUP (and thus rate-limiting the
+        number of times we can do a SIGHUP).
+    */
+    struct sigaction new_action, old_action;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+
+    new_action.sa_handler = SIG_DFL;
+    sigaction(SIGCHLD, NULL, &old_action);
+    if (SIG_DFL != old_action.sa_handler)
+      sigaction(SIGCHLD, &new_action, NULL);
+
     vector<nims::Task *>::iterator it;
     for (it = child_tasks_->begin(); it != child_tasks_->end(); ++it) {
         nims::Task *t = *it;
@@ -91,8 +108,10 @@ static void InterruptChildProcesses()
     
     // just in case we screw up and call InterruptChildProcesses twice...
     delete child_tasks_;
-    child_tasks_ = NULL;
+    child_tasks_ = NULL;    
     
+    // restore SIGCHLD handler
+    sigaction(SIGCHLD, &old_action, NULL);
 }
 
 /*
@@ -148,7 +167,7 @@ static int WaitForTaskLaunch(nims::Task *task, const mqd_t mq)
 // exit() on failure
 static void LaunchProcessesFromConfig(const YAML::Node &config)
 {
-    fs::path bin_dir(config["BINARY_DIR"].as<string>());
+    fs::path bin_dir = fs::path(getenv(NIMS_HOME_VAR));
     
     YAML::Node applications = config["APPLICATIONS"];
     
@@ -196,14 +215,16 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
 
 // exit() on failure
 static void WarmRestart(std::string &cfgpath)
-{
+{   
+    // will ignore SIGCHLD
     InterruptChildProcesses();
     
     // reload config file; mainly for HUP, but ok for CHLD
+    // don't ignore SIGCHLD here, as we want to count crashes/exits
     YAML::Node config = YAML::LoadFile(cfgpath);
     LaunchProcessesFromConfig(config);
-    
-    // ignore SIGCHLD while restarting nims.py
+        
+    // Ignore SIGCHLD while launching nims.py
     struct sigaction new_action, old_action;
     sigemptyset(&new_action.sa_mask);
     new_action.sa_flags = 0;
@@ -211,12 +232,12 @@ static void WarmRestart(std::string &cfgpath)
     new_action.sa_handler = SIG_DFL;
     sigaction(SIGCHLD, NULL, &old_action);
     if (SIG_DFL != old_action.sa_handler)
-        sigaction(SIGCHLD, &new_action, NULL);
+      sigaction(SIGCHLD, &new_action, NULL);
     
     const char * stop_args[] = {"--stop", "--oknodo", "--name", "nims.py"};
     vector<string> args(stop_args, stop_args + sizeof(stop_args) / sizeof(char *));
     nims::Task task = nims::Task("/sbin/start-stop-daemon", args);
-    
+           
     int ret, status;
     if (task.launch()) {
         ret = HANDLE_EINTR(waitpid(task.get_pid(), &status, 0));
@@ -231,8 +252,11 @@ static void WarmRestart(std::string &cfgpath)
         exit(errno);
     }
     
+    fs::path webapp_dir = fs::path(getenv(NIMS_HOME_VAR)) / "webapp";
+    fs::path webapp_path = webapp_dir / "nims.py";
+    NIMS_LOG_WARNING << "using webapp at " << webapp_path.string();
     const char *start_args[] = {"--start", "--background",
-        "--chdir", "../webapp", "--exec", "../webapp/nims.py"};
+        "--chdir", webapp_dir.c_str(), "--exec", webapp_path.c_str()};
     args = std::vector<string>(start_args, start_args + sizeof(start_args) / sizeof(char *));
     task = nims::Task("/sbin/start-stop-daemon", args);
     ret, status;
@@ -286,6 +310,13 @@ int main (int argc, char * argv[]) {
     std::string cfgpath = options["cfg"].as<string>();
     setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
     
+    const char *nims_home = getenv(NIMS_HOME_VAR);
+    if (NULL == nims_home) {
+        NIMS_LOG_ERROR << "*** ERROR *** environment variable " << NIMS_HOME_VAR << " not set";
+        return -2;
+    }
+    NIMS_LOG_WARNING << "NIMS_HOME=" << nims_home;
+    
     if (options.count("daemon"))
     {
         NIMS_LOG_WARNING << "daemonizing nims";
@@ -329,8 +360,6 @@ int main (int argc, char * argv[]) {
 	try 
 	{    
         config = YAML::LoadFile(cfgpath);
-        // launch all default processes listed in the config file
-        LaunchProcessesFromConfig(config);
     }
     catch( const std::exception& e )
     {
@@ -339,6 +368,9 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_ERROR << desc << endl;
         return -1;
     }
+
+    // launch all default processes listed in the config file
+    LaunchProcessesFromConfig(config);
        
     int epollfd = epoll_create(1);
     if (-1 == epollfd) {
@@ -385,6 +417,8 @@ int main (int argc, char * argv[]) {
             }
             
             assert(EINTR == errno);
+            NIMS_LOG_DEBUG << "SIGINT:  " << sigint_received_;
+            NIMS_LOG_DEBUG << "SIGCHLD: " << sigchld_received_;
                         
             // atexit will call InterruptChildProcesses
             if (sigint_received_) {
