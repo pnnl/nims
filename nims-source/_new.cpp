@@ -9,7 +9,7 @@
  */
 #include <iostream> // cout, cin, cerr
 #include <string>   // for strings
-#include <signal.h>
+
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -17,7 +17,8 @@
 
 #include "yaml-cpp/yaml.h"
 
-#include "queues.h" // SubprocessCheckin()
+#include "nims_ipc.h" // NIMS signal handling, queues, shared mem
+#include "log.h"      // NIMS logging
 
 using namespace std;
 using namespace boost;
@@ -25,13 +26,6 @@ namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 //using namespace cv;
 
-static volatile sig_atomic_t sigint_received_ = 0;
-
-static void sigint_handler(int sig)
-{
-    if (SIGINT == sig)
-        sigint_received_ = 1;
-}
 
 int main (int argc, char * const argv[]) {
 	//--------------------------------------------------------------------------
@@ -62,7 +56,11 @@ int main (int argc, char * const argv[]) {
         return 0;
     }
 	
-    // READ CONFIG FILE
+    string cfgpath = options["cfg"].as<string>();
+    setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
+    setup_signal_handling();
+
+  // READ CONFIG FILE
     fs::path cfgfilepath( options["cfg"].as<string>() );
     if ( ! (fs::exists(cfgfilepath) && fs::is_regular_file(cfgfilepath)) )
     {
@@ -71,14 +69,6 @@ int main (int argc, char * const argv[]) {
     }
     YAML::Node config = YAML::LoadFile(cfgfilepath.string()); // throws exception if bad path
     
-    // some default registrations for cleanup
-    struct sigaction new_action, old_action;
-    new_action.sa_handler = sigint_handler;
-    sigemptyset(&new_action.sa_mask);
-    new_action.sa_flags = 0;
-    sigaction(SIGINT, NULL, &old_action);
-    if (SIG_IGN != old_action.sa_handler)
-        sigaction(SIGINT, &new_action, NULL);
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
@@ -88,7 +78,7 @@ int main (int argc, char * const argv[]) {
     while (1) {
         
         if (sigint_received) {
-            cout << "received SIGINT; exiting event loop" << endl;
+            cout << "received SIGINT; exiting main loop" << endl;
             break;
         }
         sleep(10);
