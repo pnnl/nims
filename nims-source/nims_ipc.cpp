@@ -8,9 +8,10 @@
  *
  */
 // for POSIX shared memory
-#include <fcntl.h>    // O_* constants
+#include <fcntl.h>    // O_* constants file permissions
 #include <unistd.h>   // sysconf
 #include <assert.h>   // assert
+#include <sys/stat.h>
 #include <sys/mman.h> // mmap, shm_open
 
 #include <cstring> // memcpy
@@ -20,10 +21,69 @@
 
 using namespace std;
 
+void setup_signal_handling()
+{
+ struct sigaction new_action, old_action;
+    new_action.sa_handler = sig_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGINT, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGINT, &new_action, NULL);
+    
+    // ignore SIGPIPE
+    new_action.sa_handler = SIG_IGN;
+    sigaction(SIGPIPE, NULL, &old_action);
+    if (SIG_IGN != old_action.sa_handler)
+        sigaction(SIGPIPE, &new_action, NULL); 
+         
+} // setup_signal_handling
+
+mqd_t CreateMessageQueue(size_t message_size, const string &name)
+{
+    struct mq_attr attr;
+    memset(&attr, 0, sizeof(struct mq_attr));
+    
+    attr.mq_maxmsg = 10;
+    attr.mq_msgsize = message_size;
+    attr.mq_flags = 0;
+    
+    /*
+     If we have a race condition where two processes need the same
+     queue, they either need to create with the same permissions,
+     or synchronize access to it. It's easier just to create and
+     open RW at both ends than worry about opening RO.
+    */
+    const int opts = O_CREAT | O_RDWR;
+    const int mode = S_IRUSR | S_IWUSR;
+    
+    mqd_t ret = mq_open(name.c_str(), opts, mode, &attr);
+    if (-1 == ret)
+        perror("mq_open in queues::InitializeIngestMessageQueue");
+    
+    return ret;
+}
+
+void SubprocessCheckin(pid_t pid)
+{
+    mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
+        
+    if (-1 == mq) {
+        exit(1);
+    }
+
+    // why is the message a const char *?
+    if (mq_send(mq, (const char *)&pid, sizeof(pid_t), 0) == -1) {
+        perror("SubprocessCheckin mq_send()");
+    }
+
+    mq_close(mq);
+    //mq_unlink(MQ_SUBPROCESS_CHECKIN_QUEUE);
+}
+
 /*
  Mmap doesn't technically require rounding up to a page boundary
- for the length you pass in, but we'll do that anyway. If other
- components start sharing memory, we can make this external.
+ for the length you pass in, but we'll do that anyway. 
 */
 const size_t kPageSize = sysconf(_SC_PAGE_SIZE);
 static size_t SizeForSharedData(size_t size_data_to_share)

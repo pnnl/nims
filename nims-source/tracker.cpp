@@ -12,7 +12,7 @@
 #include <string>   // for strings
 #include <cmath>    // for trigonometric functions
 #include <ctime>    // date and time functions
-#include <signal.h> // signal handler
+//#include <signal.h> // signal handler
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -22,7 +22,7 @@
 #include "yaml-cpp/yaml.h"
 
 #include "log.h"            // NIMS_LOG_* macros
-#include "queues.h"         // SubprocessCheckin()
+//#include "queues.h"         // SubprocessCheckin()
 #include "nims_ipc.h"       // shared mem
 #include "frame_buffer.h"   // sensor data
 #include "tracked_object.h" // tracking
@@ -37,6 +37,8 @@ using namespace cv;
 
 #define PI 3.14159265
 
+// moved to nims_ipc.h
+/*
 static volatile int sigint_received = 0;
 
 static void sig_handler(int sig)
@@ -44,7 +46,7 @@ static void sig_handler(int sig)
     if (SIGINT == sig)
         sigint_received++;
 }
-
+*/
 // Generate the mapping from beam-range to x-y for display
 int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
 {
@@ -184,6 +186,7 @@ int main (int argc, char * argv[]) {
     
     string cfgpath = options["cfg"].as<string>();
     setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
+    setup_signal_handling();
     
     // For testing
     bool VIEW = true; // display new ping images
@@ -285,6 +288,8 @@ int main (int argc, char * argv[]) {
     mqd_t mq_ui = CreateTrackerMessageQueue(sizeof(DetectionMessage), mq_ui_name);
     mqd_t mq_socket = CreateTrackerMessageQueue(sizeof(DetectionMessage), mq_socket_name);
     
+    // moved to nims_ipc::setup_signal_handling()
+    /*
     struct sigaction new_action, old_action;
     new_action.sa_handler = sig_handler;
     sigemptyset(&new_action.sa_mask);
@@ -298,7 +303,8 @@ int main (int argc, char * argv[]) {
     sigaction(SIGPIPE, NULL, &old_action);
     if (SIG_IGN != old_action.sa_handler)
         sigaction(SIGPIPE, &new_action, NULL);  
-    
+    */
+
     // check in before calling GetNextFrame, to avoid timeout in the
     // NIMS parent process (and subsequent termination).
     SubprocessCheckin(getpid());

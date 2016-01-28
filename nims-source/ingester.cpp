@@ -20,6 +20,8 @@
 #include "yaml-cpp/yaml.h"
 
 #include "data_source_m3.h"
+#include "data_source_blueview.h"
+#include "data_source_ek60.h"
 #include "frame_buffer.h"
 #include "queues.h" // SubprocessCheckin
 #include "log.h"
@@ -34,6 +36,8 @@ namespace fs = boost::filesystem;
 //       be accessible to users for the config file,
 //       maybe for user interface
 #define NIMS_SONAR_M3 1
+#define NIMS_SONAR_BLUEVIEW 2
+#define NIMS_SONAR_EK60 3
 
 
 static volatile int sigint_received = 0;
@@ -136,8 +140,16 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_DEBUG << "opening M3 sonar as datasource";
             input = new DataSourceM3(sonar_host_addr);
             break;
-        default :
-             NIMS_LOG_ERROR << "Ingester:  unknown sonar type: " << sonar_type;
+ 	    case NIMS_SONAR_BLUEVIEW :
+            NIMS_LOG_DEBUG << "opening BlueView sonar as datasource";
+            input = new DataSourceBlueView(sonar_host_addr);
+            break;
+	    case NIMS_SONAR_EK60 :
+            NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
+            input = new DataSourceEK60();
+            break;
+       default :
+             NIMS_LOG_ERROR << "unknown sonar type: " << sonar_type;
              return -1;
              break;
      } // switch SONAR_TYPE    
@@ -149,7 +161,7 @@ int main (int argc, char * argv[]) {
         
         // may get SIGINT at any time to reload config
         if (sigint_received) {
-            NIMS_LOG_WARNING << "ingester: exiting due to SIGINT";
+            NIMS_LOG_WARNING << "exiting due to SIGINT";
             break;
         }
         
@@ -181,7 +193,7 @@ int main (int argc, char * argv[]) {
     
            // if we get INT during a recv(), GetPing returns -1 
            if (sigint_received) {
-               NIMS_LOG_WARNING << "ingester: exiting due to SIGINT";
+               NIMS_LOG_WARNING << "exiting due to SIGINT";
                break;
            }
     
