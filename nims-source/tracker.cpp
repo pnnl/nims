@@ -171,8 +171,8 @@ int main (int argc, char * argv[]) {
     }
     catch( const std::exception& e )
     {
-        NIMS_LOG_ERROR << "Sorry, couldn't parse that: " << e.what();
-        NIMS_LOG_ERROR << desc;
+        cerr << "Sorry, couldn't parse that: " << e.what();
+        cerr << desc;
         return -1;
     }
 	
@@ -180,7 +180,7 @@ int main (int argc, char * argv[]) {
 	
     if( options.count( "help" ) > 0 )
     {
-        NIMS_LOG_ERROR << desc;
+        cerr << desc;
         return 0;
     }
     
