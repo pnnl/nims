@@ -34,7 +34,9 @@ int main (int argc, char * const argv[]) {
 	po::options_description desc;
 	desc.add_options()
 	("help",                                                    "print help message")
-	("cfg,c", po::value<string>()->default_value( "./nims-config.yaml" ), "path to config file; default is ./nims-config.yaml")
+    ("cfg,c", po::value<string>()->default_value( "./config.yaml" ),
+     "path to config file; default is ./config.yaml")
+    ("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
 	;
 	po::variables_map options;
     try
