@@ -12,6 +12,7 @@ import os
 import socket
 import ruamel.yaml
 
+from types import *
 import frame_thread
 from echowebsocket import EchoWebSocket
 from configwebsocket import ConfigWebSocket
@@ -70,16 +71,14 @@ def registerConfigClient(config_client, torf):
 
 def editGlobalConfig(yaml=None, who=None):
     print yaml
-    print "type:", type(yaml)
     global globalYAML
     if yaml == None:
         return globalYAML
     else:
-        globalYAML = ast.literal_eval(yaml)
+
         for client in config_clients:
             if client != who:
                 client.send_data(globalYAML)
-
         writeYAMLConfig()
         # tell nims/ingester/tracker to reload config
         os.system("/usr/bin/killall -HUP nims")
@@ -99,10 +98,10 @@ def readYAMLConfig():
     global globalYAML
     yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
     globalYAML = ruamel.yaml.load(open(yaml_path, "r"), ruamel.yaml.RoundTripLoader)
-    globalYAML = ast.literal_eval(globalYAML)
+    if type(globalYAML) == StringType:
+        globalYAML = ast.literal_eval(globalYAML)
     print "YAML Path: ", yaml_path
     print "YAML:", globalYAML
-    print "type:", type(globalYAML)
 
     
 def main():

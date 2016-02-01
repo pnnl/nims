@@ -195,6 +195,8 @@ function process_config(data)
     length = track_config.length;
     for (var key in track_config) {
         console.log("key="+key)
+        if (key == "")
+            continue
         if (track_config.hasOwnProperty(key)) {
             //console.log(key + " -> " + track_config[key]);
             var row = tracker_table.insertRow()
