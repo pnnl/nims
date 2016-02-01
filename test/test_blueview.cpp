@@ -13,7 +13,7 @@
 #include <signal.h>
 #include <limits>
 
-//#include <opencv2/opencv.hpp>
+#include <opencv2/opencv.hpp>
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -25,7 +25,7 @@
 #include "log.h"
 
 using namespace std;
-//using namespace cv;
+using namespace cv;
 using namespace boost;
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
@@ -160,17 +160,13 @@ int main (int argc, char * argv[]) {
         
    } while ( !input->is_good() );
     
-   // Sprinkling the checks for sigint_received everywhere is kind
-   // of gross, but we have multiple loops on blocking calls that
-   // can be interrupted by a signal, so there's not much choice.
-   // If the IP is wrong and you edit the config file and send HUP
-   // to nims to reload, it'll send ingester an INT; if we only break
-   // out of the first loop, we could then enter the one below.
-   // Calling exit() is an option, but may prevent destructors from
-   // running. Could just return and avoid any final cleanup?
    if (0 == sigint_received) 
    {
        NIMS_LOG_DEBUG << "connected to source!";
+
+      // the framedata_t (frame_buffer.h) is either float or double
+      int cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1;
+
        size_t frame_count=0;
        while ( input->more_data() )
        {
@@ -188,7 +184,17 @@ int main (int argc, char * argv[]) {
     
            NIMS_LOG_DEBUG << "got frame!";
            NIMS_LOG_DEBUG << frame.header << endl;
-           //fb.PutNewFrame(frame);
+           // Create a cv::Mat wrapper for the ping data
+          
+            Mat ping_data(frame.header.num_samples, frame.header.num_beams,cv_type,frame.data_ptr());
+           double min_val,max_val;
+           minMaxIdx(ping_data, &min_val, &max_val);
+           NIMS_LOG_DEBUG << "frame values from " << min_val << " to " << max_val;
+           Mat im;
+           ping_data.convertTo(im,CV_16U);
+          imwrite("PingData.png", im);
+
+        
            ++frame_count;
         }
     }
