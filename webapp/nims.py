@@ -7,9 +7,10 @@ import tornado.web
 import tornado.websocket
 from tornado.options import define, options
 
+import ast
 import os
 import socket
-
+import ruamel.yaml
 
 import frame_thread
 from echowebsocket import EchoWebSocket
@@ -69,11 +70,12 @@ def registerConfigClient(config_client, torf):
 
 def editGlobalConfig(yaml=None, who=None):
     print yaml
+    print "type:", type(yaml)
     global globalYAML
     if yaml == None:
         return globalYAML
     else:
-        globalYAML = yaml
+        globalYAML = ast.literal_eval(yaml)
         for client in config_clients:
             if client != who:
                 client.send_data(globalYAML)
@@ -83,13 +85,9 @@ def editGlobalConfig(yaml=None, who=None):
         os.system("/usr/bin/killall -HUP nims")
 
 def writeYAMLConfig():
-    print "in write YAML ..."
-    globalYAML
-    import yaml
-    yaml_path = os.path.join(os.getenv("NIMS_HOME"), "config.yaml")
-    yaml_file = open(yaml_path, 'w')
-    yaml.dump(globalYAML, yaml_file, encoding=('utf-8'))
-    yaml_file.close()
+    global globalYAML
+    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
+    open(yaml_path, "w").write(ruamel.yaml.dump(globalYAML, Dumper=ruamel.yaml.RoundTripDumper))
 
 
 
@@ -99,10 +97,12 @@ def readYAMLConfig():
     :return:
     """
     global globalYAML
-    import yaml
-    yaml_path = os.path.join(os.getenv("NIMS_HOME"), "config.yaml")
-    with open(yaml_path, 'r') as stream:
-       globalYAML = yaml.load(stream)
+    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
+    globalYAML = ruamel.yaml.load(open(yaml_path, "r"), ruamel.yaml.RoundTripLoader)
+    globalYAML = ast.literal_eval(globalYAML)
+    print "YAML Path: ", yaml_path
+    print "YAML:", globalYAML
+    print "type:", type(globalYAML)
 
     
 def main():

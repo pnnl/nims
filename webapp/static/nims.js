@@ -194,8 +194,9 @@ function process_config(data)
 
     length = track_config.length;
     for (var key in track_config) {
+        console.log("key="+key)
         if (track_config.hasOwnProperty(key)) {
-            console.log(key + " -> " + track_config[key]);
+            //console.log(key + " -> " + track_config[key]);
             var row = tracker_table.insertRow()
             var cell1 = row.insertCell(0);
             cell1.bgColor="CadetBlue"
@@ -218,7 +219,7 @@ function process_config(data)
         if (!app_config.hasOwnProperty(key)){
             continue;
         }
-
+        console.log("key="+key)
         if (key == "APPLICATIONS")
         {
             var apps = app_config['APPLICATIONS']; // apps is an array for some reason ...
@@ -248,9 +249,24 @@ function process_config(data)
             continue;
 
         }
+        console.log("table length:" + tracker_table.rows.length)
         if (rowNum >= tracker_table.rows.length)
-            tracker_table.insertRow();
-        var row = tracker_table.rows[rowNum];
+        {
+            row = tracker_table.insertRow();
+            var cell = row.insertCell(0)
+            cell.bgColor = "CadetBlue"
+            cell = row.insertCell(1)
+            cell.bgColor = "CadetBlue"
+
+
+        }
+        else
+        {
+            var row = tracker_table.rows[rowNum];
+        }
+        console.log("rownum:"+ rowNum)
+
+
         var cell3 = row.insertCell(2);
         cell3.bgColor = "CadetBlue";
         cell3.innerHTML =  "<pre>" +  key
