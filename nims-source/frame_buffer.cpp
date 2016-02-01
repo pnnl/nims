@@ -224,7 +224,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     (void) pthread_mutex_lock(&mqr_lock_);
     NIMS_LOG_DEBUG << "sending frame messages to " << mq_readers_.size() << " readers";
     //FrameMsg msg(frame_count_, map_length, shared_name);
-    FrameMsg msg(new_frame.header.ping_num, map_length, shared_name);
+    FrameMsg msg(frame_count_, map_length, shared_name);
     struct timespec tm;
     clock_gettime(CLOCK_REALTIME, &tm); // get the current time
     for (int k=0; k<mq_readers_.size(); ++k)
