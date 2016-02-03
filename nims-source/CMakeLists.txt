@@ -17,7 +17,8 @@ endif()
 #       cmake comes with many Find<package>.cmake files; others can sometimes
 #       be found online.  They are pretty simple to write and should set the
 #       variables <package>_LIBRARIES and <package>_INCLUDE_DIRS.
-#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
+#       NIMS needs one for yaml and one for BlueView SDK.
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 # link statically
 # These need to be set before calling find_package because the
@@ -25,12 +26,7 @@ endif()
 # library path and confirm the library exists.
 set(Boost_USE_STATIC_LIBS   ON)
 set(OpenCV_STATIC ON)
-#set(YAMLCPP_STATIC_LIBRARY ON)
-
-# find yaml
-# http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
-#set(YAMLCPP_DIR ${CMAKE_SOURCE_DIR}/../vendorsrc/yaml-cpp-release-0.5.2)
-set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/yaml)
+set(YAMLCPP_STATIC_LIBRARY ON)
 
 # BlueView SDK
 set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
@@ -38,14 +34,13 @@ find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
 
 # note, video component is needed for Kalman filter
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
-# order of these matters for log_setup/log/thread
-find_package(Boost REQUIRED COMPONENTS filesystem system program_options log_setup log thread filesystem)
+# order of these matters for log_setup/log/thread, filesystem needs to be at the end
+find_package(Boost REQUIRED COMPONENTS system program_options log_setup log thread filesystem )
 find_package(Yaml-cpp REQUIRED)
-MESSAGE(STATUS "YAML_CPP_LIBRARIES: ${YAML_CPP_LIBRARIES}")
 find_package(Threads REQUIRED)
 
 
-include_directories(${YAML_CPP_INCLUDE_DIR})
+include_directories(${YAMLCPP_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${Bvtsdk_DIR}/include)
 
@@ -56,10 +51,10 @@ add_executable(detector detector.cpp frame_buffer.cpp pixelgroup.cpp log.cpp nim
 add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp log.cpp nims_ipc.cpp)
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
 
-target_link_libraries(ingester ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} ${Bvtsdk_LIB} rt)
-target_link_libraries(detector ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} rt ${YAML_CPP_LIBRARIES})
-target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
-target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
+target_link_libraries(ingester ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAMLCPP_LIBRARY} ${Bvtsdk_LIB} rt)
+target_link_libraries(detector ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} rt ${YAMLCPP_LIBRARY})
+target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAMLCPP_LIBRARY} rt)
+target_link_libraries(nims ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
 
 
 ADD_CUSTOM_COMMAND(TARGET nims
