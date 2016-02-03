@@ -56,7 +56,7 @@ set(Common_SOURCES log.cpp queues.cpp nims_ipc.cpp)
 
 add_executable(ingester ingester.cpp data_source_m3.cpp data_source_ek60.cpp data_source_blueview.cpp frame_buffer.cpp ${Common_SOURCES})
 add_executable(detector detector.cpp frame_buffer.cpp pixelgroup.cpp log.cpp nims_ipc.cpp)
-add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp log.cpp nims_ipc.cpp)
+add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp pixelgroup.cpp log.cpp nims_ipc.cpp)
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
 
 target_link_libraries(ingester ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAMLCPP_LIBRARY} ${Bvtsdk_LIB} rt)
