@@ -93,7 +93,6 @@ int DataSourceEK60::connect()
 //-----------------------------------------------------------------------------
 int DataSourceEK60::GetPing(Frame* pframe)
 {
-    return 0;
     
     if ( input_ == -1 ) {
         NIMS_LOG_ERROR << ("DataSourceEK60::GetPing() Not connected to source.");
