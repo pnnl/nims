@@ -23,7 +23,7 @@ set(OpenCV_STATIC ON)
 # find yaml
 # http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
 #set(YAMLCPP_DIR ${CMAKE_SOURCE_DIR}/../vendorsrc/yaml-cpp-release-0.5.2)
-set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/yaml)
+set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
 # BlueView SDK
 set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
