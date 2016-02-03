@@ -15,9 +15,9 @@ endif()
 # Find external packages in our vendorsrc
 # NOTE: the cmake module path is where Find<package>.cmake files are found.
 #       cmake comes with many Find<package>.cmake files; others can sometimes
-#       be found online.  They are pretty simple to write and should set the
-#       variables <package>_LIBRARIES and <package>_INCLUDE_DIRS.
-#       NIMS needs one for yaml and one for BlueView SDK.
+#       be found online.  They set the variables <package>_LIBRARIES and 
+#       <package>_INCLUDE_DIRS.
+#       We need to supply one for yaml because CMake does not come with one.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 # link statically
@@ -32,11 +32,19 @@ set(YAMLCPP_STATIC_LIBRARY ON)
 set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
 find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
 
-# note, video component is needed for Kalman filter
+# NOTE: video component is needed for Kalman filter
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
-# order of these matters for log_setup/log/thread, filesystem needs to be at the end
+
+# NOTE: order of these matters for log_setup/log/thread, filesystem needs to be at the end
 find_package(Boost REQUIRED COMPONENTS system program_options log_setup log thread filesystem )
+
+# NOTE: If your yaml is in a non-standard place (see nims-source/cmake/Modules/FindYaml-cpp.cmake 
+#       for the standard places), then uncomment the following line and
+#       edit accordingly.  The file libyaml-cpp.a must be in ${YAMLCPP_DIR}/lib and the 
+#       include files must be in ${YAMLCPP_DIR}/include.
+#set (YAMLCPP_DIR ${CMAKE_SOURCE_DIR}/../vendorsrc/yaml-cpp-release-0.5.2)
 find_package(Yaml-cpp REQUIRED)
+
 find_package(Threads REQUIRED)
 
 
