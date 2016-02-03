@@ -13,9 +13,16 @@ else()
 endif()
 
 # Find external packages in our vendorsrc
+# NOTE: the cmake module path is where Find<package>.cmake files are found.
+#       cmake comes with many Find<package>.cmake files; others can sometimes
+#       be found online.  They are pretty simple to write and should set the
+#       variables <package>_LIBRARIES and <package>_INCLUDE_DIRS.
 #set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 # link statically
+# These need to be set before calling find_package because the
+# Find<package>.cmake files will check this var to set the right
+# library path and confirm the library exists.
 set(Boost_USE_STATIC_LIBS   ON)
 set(OpenCV_STATIC ON)
 #set(YAMLCPP_STATIC_LIBRARY ON)
@@ -23,7 +30,7 @@ set(OpenCV_STATIC ON)
 # find yaml
 # http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
 #set(YAMLCPP_DIR ${CMAKE_SOURCE_DIR}/../vendorsrc/yaml-cpp-release-0.5.2)
-set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/Modules)
+set(Yaml-cpp_DIR ${CMAKE_SOURCE_DIR}/cmake/yaml)
 
 # BlueView SDK
 set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
@@ -45,11 +52,11 @@ include_directories(${Bvtsdk_DIR}/include)
 set(Common_SOURCES log.cpp queues.cpp nims_ipc.cpp)
 
 add_executable(ingester ingester.cpp data_source_m3.cpp data_source_ek60.cpp data_source_blueview.cpp frame_buffer.cpp ${Common_SOURCES})
-add_executable(detector detector.cpp frame_buffer.cpp ${Common_SOURCES})
-add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp pixelgroup.cpp log.cpp nims_ipc.cpp)
+add_executable(detector detector.cpp frame_buffer.cpp pixelgroup.cpp log.cpp nims_ipc.cpp)
+add_executable(tracker tracker.cpp frame_buffer.cpp tracked_object.cpp log.cpp nims_ipc.cpp)
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
 
-target_link_libraries(ingester ${Boost_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} ${Bvtsdk_LIB} rt)
+target_link_libraries(ingester ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} ${Bvtsdk_LIB} rt)
 target_link_libraries(detector ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} rt ${YAML_CPP_LIBRARIES})
 target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAML_CPP_LIBRARIES} rt)
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
