@@ -13,13 +13,17 @@
 
 
 #include "data_source.h"
+
+#include <string>
+#include <netinet/in.h> // struct sockaddr_in
+
 /*-----------------------------------------------------------------------------
 Class for Simrad EK60 Echosounder.
 */
 
 class DataSourceEK60 : public DataSource {
  public:
-    DataSourceEK60();  // Constructor
+    DataSourceEK60(std::string const &host_addr, uint16_t in_port);  // Constructor
     ~DataSourceEK60(); // Destructor
   
   int connect();   // connect to data source
@@ -27,6 +31,11 @@ class DataSourceEK60 : public DataSource {
     bool more_data() { return true; };  // TODO: check for not "end of file" condition
   int GetPing(Frame* pdata);     // get the next ping from the source
   //virtual size_t ReadPings(Frame* pdata, const size_t& num_pings) =0; // read consecutive pings
+    
+private:
+    struct sockaddr_in host_;
+    long cmd_port_;
+    
     
 }; // DataSourceEK60
    

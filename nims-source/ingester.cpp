@@ -90,12 +90,14 @@ int main (int argc, char * argv[]) {
 	
 	int sonar_type;
 	string sonar_host_addr;
+    uint16_t sonar_port;
 	string fb_name;
     try 
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
         sonar_type = config["SONAR_TYPE"].as<int>();
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
+        sonar_port = config["SONAR_PORT"].as<int>();
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
      }
      catch( const std::exception& e )
@@ -146,7 +148,7 @@ int main (int argc, char * argv[]) {
             break;
 	    case NIMS_SONAR_EK60 :
             NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
-            input = new DataSourceEK60();
+            input = new DataSourceEK60(sonar_host_addr, sonar_port);
             break;
        default :
              NIMS_LOG_ERROR << "unknown sonar type: " << sonar_type;

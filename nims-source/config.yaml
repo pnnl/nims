@@ -35,9 +35,11 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 SONAR_TYPE: 1
 
 # Used for M3, BlueView and EK60
-SONAR_HOST_ADDR: 130.20.41.194
+SONAR_HOST_ADDR: 192.168.1.45 # BlueView
+#SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
 #SONAR_HOST_ADDR: 130.20.85.189 # arm
-
+# Used by EK60, no idea what this should be
+SONAR_PORT: 20000
 # Used by nims.py
 WEB_SERVER_PORT: 8080
 
