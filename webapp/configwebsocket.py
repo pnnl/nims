@@ -1,11 +1,9 @@
-import tornado.websocket
 import sys
 
-class ConfigWebSocket(tornado.websocket.WebSocketHandler):       
+import tornado.websocket
 
-    def open(self):
-        print "ConfigWebSocket::open()"
-        
+
+class ConfigWebSocket(tornado.websocket.WebSocketHandler):
     def initialize(self, register_socket, global_config):
         print "ConfigWebSocket::__init__()"     
         self.register_socket = register_socket

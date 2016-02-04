@@ -1,13 +1,10 @@
 #!/usr/bin/python
 
 # Python modules
-import sys
-import time
 from struct import *
-import mmap
+
 
 # 3rd party modules
-import posix_ipc
 
 
 class frame_buffer:
@@ -23,7 +20,6 @@ class frame_buffer:
         try:
             #print "buffer len:", len(buff)
             self.device, buff = self.unpacker('c' * 64, buff)
-
             self.device = "".join(self.device)
             self.version, buff = self.unpacker('I', buff)
             self.ping_num, buff = self.unpacker('I', buff)
@@ -38,13 +34,10 @@ class frame_buffer:
             self.num_beams, buff = self.unpacker('I', buff)
             self.beam_angles_deg, buff = self.unpacker('f' * 512, buff)
             self.freq_hz, buff = self.unpacker('I', buff)
-            
-
             self.pulselen_microsec, buff = self.unpacker('I', buff)
             self.pulserep_hz, buff = self.unpacker('f', buff)
             #print self.pulserep_hz
             self.data_len, buff = self.unpacker('Q', buff)
-
             tot_samples = self.num_samples[0] * self.num_beams[0]
             self.image, buff = self.unpacker('f' * tot_samples, buff)
 

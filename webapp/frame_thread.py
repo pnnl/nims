@@ -1,295 +1,169 @@
 #!/usr/bin/python
 
-import threading
-import logging
-# 3rd party modules
-import posix_ipc
-import time
-import frames
-from struct import *
-import mmap
-from PIL import Image
-import numpy as np
+# system
 import copy
-import echometrics as em
-import sys
+import logging
 import os
+import signal
+import sys
+import threading
+import time
+import traceback
+from mmap import mmap
+
+# 3rd party
+from posix_ipc import MessageQueue, SharedMemory, O_CREAT, O_RDONLY, unlink_message_queue
+from posix_ipc import ExistentialError
+import numpy as np
+import echometrics
+# user
+import frames
 
 logging.basicConfig(level=logging.DEBUG,
-                    format='(%(threadName)-10s) %(message)s',
+                    format='%(asctime)-15s : %(levelname)s : line %(lineno)-4d in %(module)s.%(funcName)s   > %(message)s'
                     )
-
-import math
-
-
-def generate_heat_map():
-    cmap = {}
-    for i in range(0, 256):
-        color = (i, int(.4 * i), int(.2 * i))
-        for j in range(0, 4):
-            cmap[(i * 4) + j] = color
-
-    return cmap
-
-    # heat map
-    for i in range(255, -1, -1):
-        color = (0, 255 - i, i)
-        v = (256.0 - i) / 512.0
-        v = int(math.ceil(v * 1000))
-        cmap[v] = color
-        #   print "v:", v
-
-    for i in range(255, -1, -1):
-        color = (255 - i, i, 0)
-        v = (512.0 - i) / 512.0
-        v = int(math.ceil(v * 1000))
-        cmap[v] = color
-    # print "v:", v
-
-    cmap[0] = (0, 0, 0)
-
-    for i in range(0, 1001):
-        if not cmap.has_key(i):
-            cmap[i] = cmap[i - 1]
-
-            # print "NumColors:", len(cmap)
-
-    return cmap
+logger = logging.getLogger('frame_thread')
 
 
-class frameThread(threading.Thread):
+class FrameThread(threading.Thread):
     def __init__(self, clients, target=None, group=None):
-        self.clients = clients
+        """
+        Instances a thread to communicate with the transducer translation and tracking modules.
+
+        Parameters
+        ----------
+        clients: list of class:trunk.webapp.echowebsocket.EchoWebSocket
+        target: 'daemon'
+        group: none
+        """
         threading.Thread.__init__(self, name="mqThread", target=target, group=group)
-        logging.info('Created')
-        self.cmap = generate_heat_map()
+        self.display_q_name = "/nim_display_" + repr(os.getpid())
+        self.display_q = None
+        logger.info('Instantiated')
+        self.clients = clients
         self.once = 0
         self.frames = {}
         self.tracks = {}
+        signal.signal(signal.SIGINT, self.signal_handler)
 
-    def calculate_echometrics(self, framebuf):
-        data = framebuf.image
-        # maxVal = max(data)
-        numX = framebuf.num_beams[0]
-        numY = framebuf.num_samples[0]
-        rangeMax = framebuf.range_max_m[0]
+    def signal_handler(self, signal, frame):
+        """
+        SignalHandler to unlink the MessageQueue created by this thread.
 
-        xindex = range(1, numX + 1)
-        rangeStep = float(rangeMax) / numY
-        yrange = []
-        currentRange = 0
-        i = 0
-        while i < numY:
-            yrange.append(currentRange)
-            currentRange += rangeStep
-            i += 1
+        Parameters
+        ----------
+        signal: currently will always be signal.SIGINT
+        frame: stackframe
+        """
+        try:
+            logger.info('Unlinking MessageQueue::' + self.display_q_name)
+            unlink_message_queue(self.display_q_name)
+        except ExistentialError as e:
+            pass
+        finally:
+            sys.exit(0)
 
-        ar = np.array(data)
-        # ar = em.to_dB(ar)
-        ar = ar.reshape(numY, numX, )
-        echo = em.Echogram(ar, np.array(yrange), index=np.array(xindex))
-        metrics = {}
+    def run(self):  # overrides threading.Thread.run()
+        """
+        Overrides threading.Thread.run()
+        Creates initial connection to expected message queues, receives frames, calculates echometrics and
+        disperses the data to the web server for hand off.
 
-        metrics['depth_integral'] = np.average(em.depth_integral(echo))
+        Returns
+        -------
+        None
+        """
 
-        sv = em.sv_avg(echo)
-        sv = np.average(sv)
-        # sv = 20 * math.log10(sv)
-        metrics['avg_sv'] = sv
+        logger.info('Creating message_queue: ' + self.display_q_name)
+        display_q = MessageQueue(self.display_q_name, O_CREAT)
 
-        metrics['center_of_mass'] = np.average(em.center_of_mass(echo))
-        metrics['inertia'] = np.average(em.inertia(echo))
-        metrics['proportion_occupied'] = np.average(em.proportion_occupied(echo))
-        metrics['aggregation_index'] = np.average(em.aggregation_index(echo))
-        metrics['equivalent_area'] = np.average(em.equivalent_area(echo))
-        # from pprint import pprint as pp
-        #   pp(metrics)
-        return metrics
+        # TODO:  READ THE NIMS FRAMEBUFFER NAME FROM THE YAML
+        try:
+            logger.info('Connecting to /nims_framebuffer')
+            framebuffer_q = MessageQueue("/nims_framebuffer", O_RDONLY)
+            framebuffer_q.send(self.display_q_name)
+            logger.info(" - sent queue: " + self.display_q_name)
+        except ExistentialError as e:
+            logger.info(' - Could not connect to /nims_framebuffer::' + e.__repr__())
+        # mqTracker = posix_ipc.MessageQueue("/nims_tracker", posix_ipc.O_RDONLY)
+        # logger.info("Connected to /nims_tracker")
 
-    def build_ppi_image(self, framebuf):
-        if self.once == 1:
-            return
-
-        data = framebuf.image
-        numX = framebuf.num_beams[0]
-        numY = framebuf.num_samples[0]
-        # print "num_beams:", numX
-        # print "num_samples:", numY
-
-
-        min_angle = framebuf.beam_angles_deg[0]
-        max_angle = framebuf.beam_angles_deg[numX - 1]
-        sector_size = math.fabs(max_angle - min_angle)
-        angle_offset = (180 - sector_size) / 2
-        beam_width = sector_size / numX
-
-        max_reach = numY * math.cos(math.radians(angle_offset))
-        row = [(0, 0, 0)] * int(((max_reach / 2) + 10))
-
-        rows = []
-        for y in range(0, (numY / 2) + 10):
-            rows.append(copy.copy(row))
-
-        beam_angles = {}
-        for x in range(0, numX):
-            beam_angles[x] = 180 - angle_offset - (x * beam_width)
-
-        for y in range(0, numY, 2):
-            for x in range(0, numX, 2):
-                xx = (numX - 1) - x
-                target = data[y + (xx * numY)]
-                key = int(target * 350)
-                if target > 0:
-                    target = 10 * math.log10(target)
-
-                if key > 1000:
-                    key = 1000
-                if key < 0:
-                    key = 0
-
-                beam_angle = beam_angles[x]
-                xcoord = y * math.cos(math.radians(beam_angle)) + (numY / 2.0)
-                ycoord = y * math.sin(math.radians(beam_angle))
-                xcoord = xcoord / 4
-                ycoord = ycoord / 2
-                #   print "---"
-                #   print "r:", y, " t:", beam_angle
-                #   print "(", int(xcoord), ",", int(ycoord), ")"
-                rows[int(ycoord)][int(xcoord)] = self.cmap[key]
-
-        return rows
-
-    def sparsify_image(self, frame, sparse_rate):
-        data = frame.image
-        numX = frame.num_beams[0]
-        numY = frame.num_samples[0]
-
-        new_data = []
-        for y in range(0, numY, sparse_rate):
-            for x in range(0, numX):
-                xx = (numX - 1) - x
-                target = data[y + (xx * numY)]
-                target = int(target * 1000)
-                new_data.append(target)
-
-        print "Original Image Length: ", len(data)
-        print "New Image Length: ", len(new_data)
-        return new_data
-
-    def build_image(self, framebuf):
-        if self.once == 1:
-            return
-
-        # timeStart = time.time()
-        data = framebuf.image
-
-        # maxVal = max(data)
-        numX = framebuf.num_beams[0]
-        numY = framebuf.num_samples[0]
-        rangeMax = framebuf.range_max_m[0]
-        rows = []
-
-        for y in range(0, numY, 2):
-            row = []
-            for x in range(0, numX, 2):
-                xx = (numX - 1) - x
-
-                target = data[y + (xx * numY)]
-
-                key = int(target * 350)
-                if target > 0:
-                    target = 10 * math.log10(target)
-                # target = target / 4
-
-                # key = int(target *1000)
-                if key > 1000:
-                    key = 1000
-
-                if key < 0:
-                    key = 0
-
-                # pixels[x, y] = self.cmap[key]
-                row.append(self.cmap[key])
-            rows.append(row)
-
-        # timeEnd = time.time()
-        # print "image construct time:", timeEnd - timeStart
-        return rows
-
-    def generate_echometrics(self, framebuf):
-        data = framebuf.image
-        numX = framebuf.num_beams[0]
-        numY = framebuf.num_samples[0]
-
-        emdata = np.array(data)
-        emdata.reshape(num_beams, num_samples)
-
-    def run(self):
-        logging.info('Running')
-        generate_heat_map()
-
-        mqr_name = "/nim_display_" + repr(os.getpid())
-        print "mqr_name = ", mqr_name
-        mqr = posix_ipc.MessageQueue(mqr_name, posix_ipc.O_CREAT)
-        mqCheckin = posix_ipc.MessageQueue("/nims_framebuffer", posix_ipc.O_RDONLY)
-        mqCheckin.send(mqr_name)
-        logging.info("Connected to /nims_display_mq")
-
-        #mqTracker = posix_ipc.MessageQueue("/nims_tracker", posix_ipc.O_RDONLY)
-        #logging.info("Connected to /nims_tracker")
-
-        time.sleep(1)
-
+        time.sleep(1)  # apparently necessary to create this latency for the frame_buffer app?
 
         while True:
-            mqr_recv = mqr.receive()
-            mqr_recv = mqr_recv[0]
-
-            buff = frames.frame_message(mqr_recv)
-            if buff.valid is False:
-                logging.info("invalid message: ignoring")
+            frame = frames.frame_message(display_q.receive()[0])
+            if frame.valid is False:
+                logger.info('Received invalid message: ignoring')
                 continue
-
             try:
-                memory = posix_ipc.SharedMemory(buff.shm_location, posix_ipc.O_RDONLY,
-                                                size=buff.frame_length)
-            except:
-                logging.info("Error connecting to shared memory.")
+                logger.info(' -- Connecting to', frame.shm_location)
+                shm_frame = SharedMemory(frame.shm_location, O_RDONLY, size=frame.frame_length)
+            except StandardError as e:
+                logger.info(' -- Error connecting to', frame.shm_location, '::', e.__repr__())
                 continue
 
-            mapfile = mmap.mmap(memory.fd, memory.size)
-            memory.close_fd()
-            frame_header = mapfile.read(buff.frame_length)
-            mapfile.close()
-
-            #print "Creating frame"
-            framebuf = frames.frame_buffer(frame_header)
-            if framebuf.valid is False:
+            logger.info('Connecting to memory map')
+            mapped = mmap(shm_frame.fd, shm_frame.size)
+            shm_frame.close_fd()
+            frame_buffer = frames.frame_buffer(mapped.read(frame.frame_length))
+            mapped.close()
+            if frame_buffer.valid is False:
+                logger.info(' -- Error Parsing Frame')
                 continue
 
-            self.frames[framebuf.ping_num[0]] = framebuf
-
-
-            # image = self.build_image(framebuf)
-            metrics = self.calculate_echometrics(framebuf)
-            # framebuf.image = self.sparsify_image(framebuf)
-            # framebuf.num_samples = (framebuf.num_samples[0] / 2, 0 )
+            # self.frames[frame_buffer.ping_num[0]] = frame_buffer
+            logger.info('Calculating EchoMetrics')
+            echo_metrics = calculate_echometrics(frame_buffer)
 
             clients = copy.copy(self.clients)
+            logger.info('Sending frame to clients')
             for client in clients:
                 try:
-                    # print "trying to send data"
-                    # if self.tracks.has_key(framebuf.ping_num[0]):
-                    #	track_frame = self.tracks[framebuf.ping_num[0]]
-                    # else:
-                    #	track_frame = None
-                    #	print "missing track frame for:", framebuf.ping_num[0]
-                    client.send_data(framebuf, metrics, None)
-                except:
-                    logging.info("Error sending image to client")
+                    client.send_data(frame_buffer, echo_metrics, None)
+                except StandardError as e:
+                    logger.info("Error sending image to client")
                     print sys.exc_info()
                     continue
 
-                    # logging.info("Num Clients: %d" % len(self.clients) )
-
         return
+
+
+def calculate_echometrics(frame_buffer):
+    """
+    Parameters
+    ----------
+    frame_buffer:class:frames.frame_buffer
+
+    Returns
+    -------
+    metrics:dict
+    """
+
+    try:
+        image_data = frame_buffer.image
+        num_beams = frame_buffer.num_beams[0]
+        num_samples = frame_buffer.num_samples[0]
+        range_max = frame_buffer.range_max_m[0]
+    except AttributeError as e:
+        print calculate_echometrics.__name__, "failed to parse frame_buffer:", e
+        import traceback
+        line_no = traceback.extract_stack()[-1][1]
+        print 'line:', line_no
+        return None
+
+    x_index = range(1, num_beams + 1)
+    range_step = float(range_max) / num_samples
+    y_range = [i * range_step for i in range(0, num_samples)]
+    array = np.array(image_data).reshape(num_samples, num_beams, )
+
+    echo = echometrics.Echogram(array, np.array(y_range), index=np.array(x_index))
+    sv = np.average(echometrics.sv_avg(echo))
+    metrics = dict(depth_integral=np.average(echometrics.depth_integral(echo)),
+                   avg_sv=sv,
+                   center_of_mass=np.average(echometrics.center_of_mass(echo)),
+                   inertia=np.average(echometrics.inertia(echo)),
+                   proportion_occupied=np.average(echometrics.proportion_occupied(echo)),
+                   aggregation_index=np.average(echometrics.aggregation_index(echo)),
+                   equivalent_area=np.average(echometrics.equivalent_area(echo)))
+
+    return metrics

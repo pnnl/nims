@@ -10,7 +10,7 @@
     <script>
 
     var ws = new WebSocket("ws://{{host}}/echosocket");
-
+    console.log('Connecting to {{host}}');
     ws.onmessage = function (evt) {
         console.log("recvd message");
         process_ping(evt.data)
