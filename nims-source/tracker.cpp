@@ -16,7 +16,6 @@
 #include <boost/filesystem.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-
 #include "yaml-cpp/yaml.h"
 
 #include "log.h"            // NIMS_LOG_* macros
@@ -24,13 +23,12 @@
 #include "tracked_object.h" // tracking
 //#include "pixelgroup.h"     // connected components
 #include "detections.h"     // detection message for UI
+ #include "tracks_message.h"
 
 using namespace std;
 using namespace boost;
-//namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 using namespace cv;
-
 
 
 
@@ -123,8 +121,8 @@ int main (int argc, char * argv[]) {
 	outtxtfile << endl;
     
     
-    mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(DetectionMessage), false);
-    mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(DetectionMessage), false);
+    mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(TracksMessage), false);
+    mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(TracksMessage), false);
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
     
     
@@ -239,13 +237,13 @@ int main (int argc, char * argv[]) {
             }
             
             // send UI and socket messages
-            /*
-            mq_send(mq_ui, (const char *)&msg_ui, sizeof(msg_ui), 0); // non-blocking
-            mq_send(mq_socket, (const char *)&msg_ui, sizeof(msg_ui), 0);
-            NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_ui)
-            << " bytes); ping_num = " << msg_ui.ping_num << "; num_detect = "
-            << msg_ui.num_detections;
-             */
+            TracksMessage msg_trks(msg_det.ping_num, active_tracks.size());
+            mq_send(mq_ui, (const char *)&msg_trks, sizeof(msg_trks), 0); // non-blocking
+            mq_send(mq_socket, (const char *)&msg_trks, sizeof(msg_trks), 0);
+            NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_trks)
+            << " bytes); ping_num = " << msg_trks.ping_num << "; num_tracks = "
+            << msg_trks.num_tracks;
+             
         } // if detections
         
         // de-activate tracks
