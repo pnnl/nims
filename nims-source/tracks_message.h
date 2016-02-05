@@ -43,7 +43,7 @@ struct __attribute__ ((__packed__)) TracksMessage
     uint32_t  num_tracks; // number of tracks
     Track     tracks[MAX_ACTIVE_TRACKS]; // track data
 
-    DetectionMessage(uint32_t pnum = 0, uint32_t numtracks = 0 )
+    TracksMessage(uint32_t pnum = 0, uint32_t numtracks = 0 )
     {
         ping_num = pnum;
         num_tracks = numtracks;
