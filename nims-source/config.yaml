@@ -6,12 +6,12 @@ LOG_DIR: /var/tmp
 
 # "name" is a path relative to the NIMS_HOME environment variable
 APPLICATIONS:
-    #- name: detector
-      #args:
-          #- -c
-          #- config.yaml
-          #- -l
-          #- debug
+    - name: detector
+      args:
+          - -c
+          - config.yaml
+          - -l
+          - debug
     - name: ingester
       args:
           - -c
@@ -45,8 +45,8 @@ WEB_SERVER_PORT: 8080
 
 ### TRACKER ###
 TRACKER:
-    num_pings_for_moving_avg : 60
-    max_ping_gap_in_track    : 3
+    num_pings_for_moving_avg : 50
+    max_ping_gap_in_track    : 2
     min_pings_for_track      : 7
     threshold_in_stdevs      : 2.0
     min_target_size          : 4

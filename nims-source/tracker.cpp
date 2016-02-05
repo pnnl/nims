@@ -63,17 +63,19 @@ int main (int argc, char * argv[]) {
     try
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
-        //fb_name = config["FRAMEBUFFER_NAME"].as<string>();
         mq_ui_name = "/" + config["TRACKER_NAME"].as<string>();
         mq_socket_name = "/" + config["TRACKER_SOCKET_NAME"].as<string>();
-        YAML::Node params = config["TRACKER"];
-        
+        YAML::Node params = config["TRACKER"];        
         maxgap            = params["max_ping_gap_in_track"].as<int>();
+        NIMS_LOG_DEBUG << "max_ping_gap_in_track: " << maxgap;
         mintrack          = params["min_pings_for_track"].as<int>();
-        
+        NIMS_LOG_DEBUG << "min_pings_for_track: " << mintrack;
         process_noise     = params["process_noise"].as<float>();
+        NIMS_LOG_DEBUG << "process_noise: " << process_noise;
         measurement_noise = params["measurement_noise"].as<float>();
+        NIMS_LOG_DEBUG << "measurement_noise: " << measurement_noise;
         pred_err_max      = params["max_prediction_error"].as<int>();
+        NIMS_LOG_DEBUG << "max_prediction_error: " << pred_err_max;
     }
     catch( const std::exception& e )
     {
@@ -82,11 +84,6 @@ int main (int argc, char * argv[]) {
         return -1;
     }
     
-    NIMS_LOG_DEBUG << "max_ping_gap_in_track = " << maxgap;
-    NIMS_LOG_DEBUG << "min_pings_for_track = " << mintrack;
-    NIMS_LOG_DEBUG << "process_noise = " << process_noise;
-    NIMS_LOG_DEBUG << "measurement_noise = " << measurement_noise;
-    NIMS_LOG_DEBUG << "max_prediction_error = " << pred_err_max;
     
     // check in before calling GetNextFrame, to avoid timeout in the
     // NIMS parent process (and subsequent termination).
@@ -124,8 +121,13 @@ int main (int argc, char * argv[]) {
     mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(TracksMessage), false);
     mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(TracksMessage), false);
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
-    
-    
+    if (mq_det < 0) 
+    {
+        NIMS_LOG_ERROR << "Error creating MQ_DETECTOR_TRACKER_QUEUE";
+        return -1;
+    }
+    NIMS_LOG_DEBUG << "message queues created";
+
     //-------------------------------------------------------------------------
     // MAIN LOOP
     while (true)
@@ -137,6 +139,8 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_ERROR << "error recieving message from detector";
             nims_perror("Tracker");
         }
+        NIMS_LOG_DEBUG << "received detections message with " 
+                       << msg_det.num_detections << " detections";
         if (ret > 0 & msg_det.num_detections > 0)
         {
             int n_obj = msg_det.num_detections;

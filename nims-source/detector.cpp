@@ -13,7 +13,6 @@
 
 #include <boost/filesystem.hpp>
 #include <opencv2/opencv.hpp>
-
 #include "yaml-cpp/yaml.h"
 
 #include "nims_ipc.h" // NIMS signal handling, queues, shared mem
@@ -22,15 +21,15 @@
 #include "detections.h"  // detection message
 #include "pixelgroup.h"     // connected components
 
-using namespace std;
-using namespace boost;
-namespace fs = boost::filesystem;
-using namespace cv;
+ using namespace std;
+ using namespace boost;
+ namespace fs = boost::filesystem;
+ using namespace cv;
 
 // Generate the mapping from beam-range to x-y for display
 #define PI 3.14159265
-int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
-{
+ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
+ {
     // range bin resolution in meters per pixel
     float rng_step = (hdr.range_max_m - hdr.range_min_m)/(hdr.num_samples - 1);
     NIMS_LOG_DEBUG << "PingImagePolarToCart: range resolution is " << rng_step;
@@ -91,7 +90,7 @@ int main (int argc, char * argv[]) {
     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
     setup_logging(string(basename(argv[0])), cfgpath, log_level);
-   setup_signal_handling();
+    setup_signal_handling();
     
     // READ CONFIG FILE
     string fb_name; // frame buffer
@@ -130,9 +129,9 @@ int main (int argc, char * argv[]) {
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
-	NIMS_LOG_DEBUG << endl << "Starting " << argv[0] << endl;
+    NIMS_LOG_DEBUG << endl << "Starting " << argv[0] << endl;
     SubprocessCheckin(getpid()); // Synchronize with main NIMS process.
-	
+
     //-------------------------------------------------------------------------
     // INITIALIZE MOVING AVG, STDEV
     FrameBufferReader fb(fb_name);
@@ -154,94 +153,94 @@ int main (int argc, char * argv[]) {
     // NOTE:  data is stored transposed
     int dim_sizes[] = {(int)next_ping.header.num_beams,
         (int)next_ping.header.num_samples};
-    
+
     // the framedata_t (frame_buffer.h) is either float or double
-    int cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1;
-    size_t total_samples = next_ping.header.num_samples*next_ping.header.num_beams;
-    
-    NIMS_LOG_DEBUG << "   num samples = " << dim_sizes[0]
-    << ", num beams = " << dim_sizes[1];
-    NIMS_LOG_DEBUG << "   bytes per sample = " << sizeof(framedata_t);
-    NIMS_LOG_DEBUG << "   total samples = " << total_samples;
-    
-    Mat map_x;
-    Mat map_y;
-    if (VIEW)
-    {
-        PingImagePolarToCart(next_ping.header, map_x, map_y);
-        double min_beam, min_rng, max_beam, max_rng;
-        minMaxIdx(map_x.reshape(0,1), &min_beam, &max_beam);
-        minMaxIdx(map_y.reshape(0,1), &min_rng, &max_rng);
-        
-        NIMS_LOG_DEBUG << "image mapping:  beam index is from "
-        << min_beam << " to " << max_beam;
-        NIMS_LOG_DEBUG << "image mapping:  range index is from "
-        << min_rng << " to " << max_rng;
-    }
-    
-    NIMS_LOG_DEBUG << "initializing moving average and std dev";
-    // TODO:  would be good to free this when done intitializing
-    Mat_<framedata_t> pings(N, total_samples);
-    
-    // Initialize the moving average.
-    Mat ping_mean = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type);
-    double temp, ping_max_mean = 0.0;
-    for (int k=0; k<N; ++k)
-    {
-        if ( fb.GetNextFrame(&next_ping)==-1 )
+        int cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1;
+        size_t total_samples = next_ping.header.num_samples*next_ping.header.num_beams;
+
+        NIMS_LOG_DEBUG << "   num samples = " << dim_sizes[0]
+        << ", num beams = " << dim_sizes[1];
+        NIMS_LOG_DEBUG << "   bytes per sample = " << sizeof(framedata_t);
+        NIMS_LOG_DEBUG << "   total samples = " << total_samples;
+
+        Mat map_x;
+        Mat map_y;
+        if (VIEW)
         {
-            NIMS_LOG_ERROR << argv[0]
-            << " Error getting ping for initial moving average.";
-            return -1;
+            PingImagePolarToCart(next_ping.header, map_x, map_y);
+            double min_beam, min_rng, max_beam, max_rng;
+            minMaxIdx(map_x.reshape(0,1), &min_beam, &max_beam);
+            minMaxIdx(map_y.reshape(0,1), &min_rng, &max_rng);
+
+            NIMS_LOG_DEBUG << "image mapping:  beam index is from "
+            << min_beam << " to " << max_beam;
+            NIMS_LOG_DEBUG << "image mapping:  range index is from "
+            << min_rng << " to " << max_rng;
         }
+
+        NIMS_LOG_DEBUG << "initializing moving average and std dev";
+    // TODO:  would be good to free this when done intitializing
+        Mat_<framedata_t> pings(N, total_samples);
+
+    // Initialize the moving average.
+        Mat ping_mean = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type);
+        double temp, ping_max_mean = 0.0;
+        for (int k=0; k<N; ++k)
+        {
+            if ( fb.GetNextFrame(&next_ping)==-1 )
+            {
+                NIMS_LOG_ERROR << argv[0]
+                << " Error getting ping for initial moving average.";
+                return -1;
+            }
         // Create a cv::Mat wrapper for the ping data
-        Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
-        ping_data.reshape(0,1).copyTo(pings.row(k));
-        ping_mean += ping_data;
-        minMaxIdx(ping_data, nullptr, &temp);
-        ping_max_mean += temp;
-    }
-    ping_mean = ping_mean/N;
-    ping_max_mean = ping_max_mean/N;
-    
-    double min_val,max_val, min_val1,max_val1, min_val2,max_val2;
-    minMaxIdx(pings.row(N-1), &min_val, &max_val);
-    NIMS_LOG_DEBUG << "ping data values from " << min_val
-    << " to " << max_val;
+            Mat ping_data(2,dim_sizes,cv_type,next_ping.data_ptr());
+            ping_data.reshape(0,1).copyTo(pings.row(k));
+            ping_mean += ping_data;
+            minMaxIdx(ping_data, nullptr, &temp);
+            ping_max_mean += temp;
+        }
+        ping_mean = ping_mean/N;
+        ping_max_mean = ping_max_mean/N;
+
+        double min_val,max_val, min_val1,max_val1, min_val2,max_val2;
+        minMaxIdx(pings.row(N-1), &min_val, &max_val);
+        NIMS_LOG_DEBUG << "ping data values from " << min_val
+        << " to " << max_val;
     // NOTE:  Values in Dolphin(0) are from 0 to 13.0686
-    minMaxIdx(ping_mean.reshape(0,1), &min_val1, &max_val1);
-    NIMS_LOG_DEBUG << "mean background values from " << min_val1
-    << " to " << max_val1;
+        minMaxIdx(ping_mean.reshape(0,1), &min_val1, &max_val1);
+        NIMS_LOG_DEBUG << "mean background values from " << min_val1
+        << " to " << max_val1;
     // Initialize the moving std dev.
     // v = sum( (x(k) - u)^2 ) / (N-1)
     // s = sqrt( v )
-    Mat ping_var = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type);
-    for (int k=0; k<N; ++k)
-    {
-        Mat sqrDiff;
-        pow(ping_mean - pings.row(k).reshape(0,dim_sizes[0]),2.0f,sqrDiff);
-        ping_var += sqrDiff;
-    }
-    ping_var = ping_var/(N-1);
-    Mat ping_stdv;
-    sqrt(ping_var, ping_stdv);
-    
-    minMaxIdx(ping_stdv.reshape(0,1), &min_val2, &max_val2);
-    NIMS_LOG_DEBUG << "background std. dev. values from " << min_val2
-    << " to " << max_val2;
-    
-    NIMS_LOG_DEBUG << "moving average and std dev initialized";
-    
+        Mat ping_var = Mat::zeros(dim_sizes[0],dim_sizes[1],cv_type);
+        for (int k=0; k<N; ++k)
+        {
+            Mat sqrDiff;
+            pow(ping_mean - pings.row(k).reshape(0,dim_sizes[0]),2.0f,sqrDiff);
+            ping_var += sqrDiff;
+        }
+        ping_var = ping_var/(N-1);
+        Mat ping_stdv;
+        sqrt(ping_var, ping_stdv);
+
+        minMaxIdx(ping_stdv.reshape(0,1), &min_val2, &max_val2);
+        NIMS_LOG_DEBUG << "background std. dev. values from " << min_val2
+        << " to " << max_val2;
+
+        NIMS_LOG_DEBUG << "moving average and std dev initialized";
+
     // NOTE:  Assumes that these do not change.  If sonar mode/config is
     //        changed, then tracker should be restarted because any
     //        active tracks will be messed up.
-    float start_range = next_ping.header.range_min_m;
-    float range_step = (next_ping.header.range_max_m - next_ping.header.range_min_m)
-    / (next_ping.header.num_samples - 1);
-    float start_bearing = next_ping.header.beam_angles_deg[0];
-    float bearing_step = next_ping.header.beam_angles_deg[1] -
-    next_ping.header.beam_angles_deg[0];
-    float ping_rate = next_ping.header.pulserep_hz;
+        float start_range = next_ping.header.range_min_m;
+        float range_step = (next_ping.header.range_max_m - next_ping.header.range_min_m)
+        / (next_ping.header.num_samples - 1);
+        float start_bearing = next_ping.header.beam_angles_deg[0];
+        float bearing_step = next_ping.header.beam_angles_deg[1] -
+        next_ping.header.beam_angles_deg[0];
+        float ping_rate = next_ping.header.pulserep_hz;
     Mat imc(ping_mean.size(), CV_8UC3); // used for VIEW
     
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
@@ -303,7 +302,7 @@ int main (int argc, char * argv[]) {
         Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > thresh_stdevs;
         int nz = countNonZero(foregroundMask);
         NIMS_LOG_DEBUG << "number of samples above threshold: "<< nz << " ("
-        << ceil((float)nz/total_samples * 100.0) << "%)";
+            << ceil((float)nz/total_samples * 100.0) << "%)";
         if (nz > 0)
         {
             PixelGrouping objects;
@@ -323,7 +322,7 @@ int main (int argc, char * argv[]) {
             // guard against tracking a lot of noise
             if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
             {
-                NIMS_LOG_WARNING << "Too many false positives, not tracking";
+                NIMS_LOG_WARNING << "Too many false positives, not detecting";
             }
             else if (n_obj > 0)
             {
@@ -342,21 +341,22 @@ int main (int argc, char * argv[]) {
                     msg_det.detections[f].center_x = bb.x;
                 }
             }
-            } // if (nz>0)
+           mq_send(mq_det, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
+        } // if (nz>0)
         
         if (VIEW)
         {
             Mat im_out;
             remap(imc.t(), im_out, map_x, map_y,
-                  INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+              INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
             stringstream pngfilepath;
             pngfilepath <<  "ping-" << frame_index % 20 << ".png";
             //imwrite(pngfilepath.str(), im_out);
             imwrite(pngfilepath.str(), imc);
         }
 
-        } // while getting frames
+    } // while getting frames
         
-        cout << endl << "Ending " << argv[0] << endl << endl;
-        return 0;
-    }
+    cout << endl << "Ending " << argv[0] << endl << endl;
+    return 0;
+}

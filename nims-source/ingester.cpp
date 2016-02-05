@@ -52,15 +52,20 @@ int main (int argc, char * argv[]) {
 	
 	int sonar_type;
 	string sonar_host_addr;
-    uint16_t sonar_port;
+  int sonar_port;
 	string fb_name;
     try 
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
+        NIMS_LOG_DEBUG << "opened config file " << cfgpath;
         sonar_type = config["SONAR_TYPE"].as<int>();
+        NIMS_LOG_DEBUG << "SONAR_TYPE: " << sonar_type;
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
+        NIMS_LOG_DEBUG << "SONAR_HOST_ADDR: " << sonar_host_addr;
         sonar_port = config["SONAR_PORT"].as<int>();
+        NIMS_LOG_DEBUG << "SONAR_PORT: " << sonar_port;
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
+        NIMS_LOG_DEBUG << "FRAMEBUFFER_NAME: " << fb_name;
      }
      catch( const std::exception& e )
     {

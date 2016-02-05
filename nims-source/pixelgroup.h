@@ -24,7 +24,7 @@ struct PixelGrouping
 	
 	bool empty() const { return (pixel_idx.empty()); };
 	int size() const { return (pixel_idx.size()); };
-	int size(int grp) const { return ( grp<pixel_idx.size() ? pixel_idx[grp].size() : -1); };
+	int size(int grp) const { return ( grp < pixel_idx.size() ? pixel_idx[grp].size() : -1); };
 	cv::Rect bounding_box(int idx_grp) const 
 	{
 		std::vector<int> x;
