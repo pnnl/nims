@@ -16,11 +16,18 @@
 
 #include <cstring> // memcpy
 
+#include <boost/program_options.hpp>
+
 #include "nims_ipc.h"
 #include "log.h"
 
 using namespace std;
+using namespace boost;
+namespace po = boost::program_options;
 
+
+//************************************************************************
+// Signal Handling
 void setup_signal_handling()
 {
  struct sigaction new_action, old_action;
@@ -39,7 +46,10 @@ void setup_signal_handling()
          
 } // setup_signal_handling
 
-mqd_t CreateMessageQueue(size_t message_size, const string &name)
+
+//************************************************************************
+// Message Queues
+mqd_t CreateMessageQueue(const string &name, size_t message_size, bool blocking)
 {
     struct mq_attr attr;
     memset(&attr, 0, sizeof(struct mq_attr));
@@ -48,39 +58,36 @@ mqd_t CreateMessageQueue(size_t message_size, const string &name)
     attr.mq_msgsize = message_size;
     attr.mq_flags = 0;
     
-    /*
-     If we have a race condition where two processes need the same
-     queue, they either need to create with the same permissions,
-     or synchronize access to it. It's easier just to create and
-     open RW at both ends than worry about opening RO.
-    */
-    const int opts = O_CREAT | O_RDWR;
-    const int mode = S_IRUSR | S_IWUSR;
+    int opts = O_CREAT | O_RDWR;
+    int mode = S_IRUSR | S_IWUSR;
+    
+    if (!blocking) opts |= O_NONBLOCK;
     
     mqd_t ret = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == ret)
-        perror("mq_open in queues::InitializeIngestMessageQueue");
+        perror("CreateMessageQueue");
     
     return ret;
 }
 
 void SubprocessCheckin(pid_t pid)
 {
-    mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
+    mqd_t mq = CreateMessageQueue(MQ_SUBPROCESS_CHECKIN_QUEUE, sizeof(pid_t));
         
     if (-1 == mq) {
         exit(1);
     }
 
-    // why is the message a const char *?
     if (mq_send(mq, (const char *)&pid, sizeof(pid_t), 0) == -1) {
         perror("SubprocessCheckin mq_send()");
     }
 
     mq_close(mq);
-    //mq_unlink(MQ_SUBPROCESS_CHECKIN_QUEUE);
 }
 
+
+//************************************************************************
+// Shared Memory
 /*
  Mmap doesn't technically require rounding up to a page boundary
  for the length you pass in, but we'll do that anyway. 
@@ -151,3 +158,37 @@ int share_data(const string& shared_name, size_t hdr_size, char* phdr, size_t da
     munmap(pshared, map_length);
 
 }; // share_data()
+
+int parse_command_line(int argc, char * argv[], std::string& cfgpath, std::string& log_level)
+{
+    po::options_description desc;
+    desc.add_options()
+    ("help",                                                "print help message")
+    ("cfg,c", po::value<string>()->default_value( "./config.yaml" ),
+                                                           "path to config file")
+    ("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
+    ;
+    po::variables_map options;
+    try
+    {
+        po::store( po::parse_command_line( argc, argv, desc ), options );
+    }
+    catch( const std::exception& e )
+    {
+        cerr << "Sorry, couldn't parse that: " << e.what() << endl;
+        cerr << desc;
+        return -1;
+    }
+    
+    po::notify( options );
+    
+    if( options.count( "help" ) > 0 )
+    {
+        cerr << desc;
+        return -1;
+    }
+    cfgpath =  options["cfg"].as<string>();
+   log_level =  options["log"].as<string>();
+   return 0;
+
+}

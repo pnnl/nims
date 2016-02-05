@@ -2,7 +2,7 @@
  *  Nekton Interaction Monitoring System (NIMS)
  *
  *  filename.cpp
- *  
+ *
  *  Created by Firstname Lastname on mm/dd/yyyy.
  *  Copyright 2015 Pacific Northwest National Laboratory. All rights reserved.
  *
@@ -12,7 +12,6 @@
 
 
 #include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
 #include <opencv2/opencv.hpp>
 
 #include "yaml-cpp/yaml.h"
@@ -20,10 +19,11 @@
 #include "nims_ipc.h" // NIMS signal handling, queues, shared mem
 #include "log.h"      // NIMS logging
 #include "frame_buffer.h"   // sensor data
+#include "detections.h"  // detection message
+#include "pixelgroup.h"     // connected components
 
 using namespace std;
 using namespace boost;
-namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 using namespace cv;
 
@@ -86,63 +86,38 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
 }
 
 
-int main (int argc, char * const argv[]) {
-	//--------------------------------------------------------------------------
-    // PARSE COMMAND LINE
-	//
-	po::options_description desc;
-	desc.add_options()
-	("help",                                                    "print help message")
-	("cfg,c", po::value<string>()->default_value( "./config.yaml" ), "path to config file; default is ./config.yaml")
-	("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
-    ;
-	po::variables_map options;
-    try
-    {
-        po::store( po::parse_command_line( argc, argv, desc ), options );
-    }
-    catch( const std::exception& e )
-    {
-        cerr << "Sorry, couldn't parse that: " << e.what() << endl;
-        cerr << desc << endl;
-        return -1;
-    }
-	
-	po::notify( options );
-	
-    if( options.count( "help" ) > 0 )
-    {
-        cerr << desc << endl;
-        return 0;
-    }
-	
-    string cfgpath = options["cfg"].as<string>();
-    setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
-    setup_signal_handling();
+int main (int argc, char * argv[]) {
 
-  // READ CONFIG FILE
+    string cfgpath, log_level;
+    if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
+    setup_logging(string(basename(argv[0])), cfgpath, log_level);
+   setup_signal_handling();
+    
+    // READ CONFIG FILE
     string fb_name; // frame buffer
     int N;  // number of pings for moving average
     float thresh_stdevs = 3.0;
-     try
+    int min_size = 1;
+    
+    try
     {
         YAML::Node config = YAML::LoadFile(cfgpath); // throws exception if bad path
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
         YAML::Node params = config["TRACKER"];
         N             = params["num_pings_for_moving_avg"].as<int>();
         thresh_stdevs = params["threshold_in_stdevs"].as<float>();
-     }
+        min_size      = params["min_target_size"].as<int>();
+    }
     catch( const std::exception& e )
     {
         NIMS_LOG_ERROR << "Error reading config file: " << cfgpath << endl;
         NIMS_LOG_ERROR << e.what() << endl;
-        NIMS_LOG_ERROR << desc << endl;
         return -1;
     }
     
     NIMS_LOG_DEBUG << "num_pings_for_moving_avg = " << N;
-
-       // For testing
+    
+    // For testing
     bool VIEW = true; // display new ping images
     const char *WIN_PING="Ping Image";
     const char *WIN_MEAN="Mean Intensity Image";
@@ -152,21 +127,21 @@ int main (int argc, char * const argv[]) {
         //namedWindow(WIN_MEAN, CV_WINDOW_NORMAL );
     }
     //int disp_ms = 100; // time duration of window display
-
+    
 	//--------------------------------------------------------------------------
 	// DO STUFF
-	cout << endl << "Starting " << argv[0] << endl;
+	NIMS_LOG_DEBUG << endl << "Starting " << argv[0] << endl;
     SubprocessCheckin(getpid()); // Synchronize with main NIMS process.
 	
-     //-------------------------------------------------------------------------
+    //-------------------------------------------------------------------------
     // INITIALIZE MOVING AVG, STDEV
-     FrameBufferReader fb(fb_name);
+    FrameBufferReader fb(fb_name);
     if ( -1 == fb.Connect() )
     {
         NIMS_LOG_ERROR << "Error connecting to framebuffer.";
         return -1;
     }
-
+    
     // Get one ping to get the dimensions of the ping data.
     Frame next_ping;
     
@@ -185,7 +160,7 @@ int main (int argc, char * const argv[]) {
     size_t total_samples = next_ping.header.num_samples*next_ping.header.num_beams;
     
     NIMS_LOG_DEBUG << "   num samples = " << dim_sizes[0]
-                   << ", num beams = " << dim_sizes[1];
+    << ", num beams = " << dim_sizes[1];
     NIMS_LOG_DEBUG << "   bytes per sample = " << sizeof(framedata_t);
     NIMS_LOG_DEBUG << "   total samples = " << total_samples;
     
@@ -268,8 +243,10 @@ int main (int argc, char * const argv[]) {
     next_ping.header.beam_angles_deg[0];
     float ping_rate = next_ping.header.pulserep_hz;
     Mat imc(ping_mean.size(), CV_8UC3); // used for VIEW
-
-        //-------------------------------------------------------------------------
+    
+    mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
+    
+    //-------------------------------------------------------------------------
     // MAIN LOOP
     
     int frame_index = -1;
@@ -285,7 +262,7 @@ int main (int argc, char * const argv[]) {
         minMaxIdx(ping_data, &min_val, &max_val);
         NIMS_LOG_DEBUG << "frame values from " << min_val << " to " << max_val;
         
-         // update background
+        // update background
         // http://www.johndcook.com/blog/standard_deviation/
         NIMS_LOG_DEBUG << "updating mean background";
         // u(k) = u(k-1) + (x - u(k-1))/N
@@ -303,9 +280,9 @@ int main (int argc, char * const argv[]) {
         minMaxIdx(ping_mean, &min_val1, &max_val1);
         minMaxIdx(ping_stdv, &min_val2, &max_val2);
         NIMS_LOG_DEBUG << "background mean from " << min_val1 << " to " << max_val1
-                       << ", std. dev. from " << min_val2 << " to " << max_val2;
+        << ", std. dev. from " << min_val2 << " to " << max_val2;
         
-       if (VIEW)
+        if (VIEW)
         {
             // create 3-channel color image for viewing/saving
             // ping data values are float from 0 to whatever
@@ -313,42 +290,73 @@ int main (int argc, char * const argv[]) {
             Mat imgray;
             Mat(ping_data/50.0).convertTo(imgray, CV_8U, 255, 0);
             // convert grayscale to color image
-            
             cvtColor(imgray, imc, CV_GRAY2RGB);
-            /*
-            double min_valc, max_valc;
-            minMaxIdx(imc.reshape(1), &min_valc, &max_valc);
-            NIMS_LOG_DEBUG << "imc values from " << min_valc << " to " << max_valc;
-            */
-           
-            
-         }
+        }
         // construct detection message for UI
         // TODO:  Make max shared mem objects a constant at beginning of code.
         // TODO:  This could mess up the consumer, overwriting old shared mem.
         
-        //DetectionMessage msg_ui(next_ping.header.ping_num, 0);
-       // TODO:  Debug this.  As is, causes tracker to hang.
-        /*
-        string shared_name = "mean_bg-" + to_string(next_ping.header.ping_num%10);
-        size_t data_size = ping_mean.step[0] * ping_mean.rows;
-        int ret = share_data(shared_name, 0, nullptr, data_size, (char*)ping_mean.ptr(0) );
-        if (ret != -1)
-        {
-            msg_ui.background_data_size = data_size;
-            strcpy(msg_ui.background_shm_name, shared_name.c_str());
-        }
-        */
+        DetectionMessage msg_det(next_ping.header.ping_num, 0);
+        
         // detect targets
         NIMS_LOG_DEBUG << "detecting targets";
         Mat foregroundMask = ((ping_data - ping_mean) / ping_stdv) > thresh_stdevs;
         int nz = countNonZero(foregroundMask);
-        NIMS_LOG_DEBUG << "number of samples above threshold: "
-        << nz << " ("
+        NIMS_LOG_DEBUG << "number of samples above threshold: "<< nz << " ("
         << ceil((float)nz/total_samples * 100.0) << "%)";
+        if (nz > 0)
+        {
+            PixelGrouping objects;
+            group_pixels(foregroundMask, min_size, objects);
+            int n_obj = objects.size();
+            NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
+            /*
+             if (VIEW)
+             {
+             vector< vector<Point> > contours;
+             findContours(foregroundMask, contours, noArray(),
+             CV_RETR_CCOMP, CV_CHAIN_APPROX_NONE);
+             // draw all contours in red
+             drawContours(imc, contours, -1, Scalar(0,0,255));
+             }
+             */
+            // guard against tracking a lot of noise
+            if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
+            {
+                NIMS_LOG_WARNING << "Too many false positives, not tracking";
+            }
+            else if (n_obj > 0)
+            {
+                msg_det.num_detections = n_obj;
+                // update tracks
+                Mat_<float> detected_positions_x(1,n_obj,0.0);
+                Mat_<float> detected_positions_y(1,n_obj,0.0);
+                for (int f=0; f<n_obj; ++f)
+                {
+                    Rect bb = objects.bounding_box(f);
+                    NIMS_LOG_DEBUG << "   detected target at "
+                    << bb.x << ", " << bb.y
+                    << " with " << objects.size(f)
+                    << " pixels" << endl;
+                    msg_det.detections[f].center_y = bb.y;
+                    msg_det.detections[f].center_x = bb.x;
+                }
+            }
+            } // if (nz>0)
         
+        if (VIEW)
+        {
+            Mat im_out;
+            remap(imc.t(), im_out, map_x, map_y,
+                  INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+            stringstream pngfilepath;
+            pngfilepath <<  "ping-" << frame_index % 20 << ".png";
+            //imwrite(pngfilepath.str(), im_out);
+            imwrite(pngfilepath.str(), imc);
+        }
+
+        } // while getting frames
+        
+        cout << endl << "Ending " << argv[0] << endl << endl;
+        return 0;
     }
-	   
-	cout << endl << "Ending " << argv[0] << endl << endl;
-    return 0;
-}

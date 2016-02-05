@@ -16,20 +16,18 @@
 //#include <opencv2/opencv.hpp>
 
 #include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
 #include "yaml-cpp/yaml.h"
 
 #include "data_source_m3.h"
 #include "data_source_blueview.h"
 #include "data_source_ek60.h"
 #include "frame_buffer.h"
-#include "queues.h" // SubprocessCheckin
+#include "nims_ipc.h" 
 #include "log.h"
 
 using namespace std;
 //using namespace cv;
 using namespace boost;
-namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
 // TODO: Somehow the defined sonar types need to 
@@ -40,49 +38,13 @@ namespace fs = boost::filesystem;
 #define NIMS_SONAR_EK60 3
 
 
-static volatile int sigint_received = 0;
-
-static void sig_handler(int sig)
-{
-    if (SIGINT == sig)
-        sigint_received++;
-}
-
 int main (int argc, char * argv[]) {
-	//--------------------------------------------------------------------------
-    // PARSE COMMAND LINE
-	//
-	// TODO:  Make one input arg, the path of the config file.  Then get other
-	//        params from config file.
-    // TODO:  boost options is overkill if we just have one arg (see above).
-	po::options_description desc;
-	desc.add_options()
-	("help",                                                     "print help message")
-    ("cfg,c", po::value<string>()->default_value("config.yaml"), "path to config file")
-    ("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
-	;
-	po::variables_map options;
-    try
-    {
-        po::store( po::parse_command_line( argc, argv, desc ), options );
-    }
-    catch( const std::exception& e )
-    {
-        cerr << "Sorry, couldn't parse that: " << e.what() << endl;
-        cerr << desc << endl;
-        return -1;
-    }
-	
-	po::notify( options );
-	
-    if( options.count( "help" ) > 0 )
-    {
-        cerr << desc << endl;
-        return 0;
-    }
+
+    string cfgpath, log_level;
+    if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
+    setup_logging(string(basename(argv[0])), cfgpath, log_level);
+   setup_signal_handling();
     
-    std::string cfgpath = options["cfg"].as<string>();
-    setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
 	
 	//--------------------------------------------------------------------------
 	// DO STUFF
@@ -103,25 +65,10 @@ int main (int argc, char * argv[]) {
      catch( const std::exception& e )
     {
         NIMS_LOG_ERROR << "Error reading config file." << e.what();
-        NIMS_LOG_ERROR << desc;
         return -1;
     }
     
-    struct sigaction new_action, old_action;
-    new_action.sa_handler = sig_handler;
-    sigemptyset(&new_action.sa_mask);
-    new_action.sa_flags = 0;
-    sigaction(SIGINT, NULL, &old_action);
-    if (SIG_IGN != old_action.sa_handler)
-        sigaction(SIGINT, &new_action, NULL);
-    
-    // ignore SIGPIPE
-    new_action.sa_handler = SIG_IGN;
-    sigaction(SIGPIPE, NULL, &old_action);
-    if (SIG_IGN != old_action.sa_handler)
-        sigaction(SIGPIPE, &new_action, NULL);  
-   
-    // check in before blocking while creating the DataSource
+       // check in before blocking while creating the DataSource
     SubprocessCheckin(getpid()); // sync with main NIMS process
     
     // create fb before datasource, so tracker doesn't bail out

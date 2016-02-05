@@ -12,7 +12,6 @@
 
 
 #include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
 //#include <opencv2/opencv.hpp>
 
 #include "yaml-cpp/yaml.h"
@@ -22,55 +21,31 @@
 
 using namespace std;
 using namespace boost;
-namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 //using namespace cv;
 
 
 int main (int argc, char * const argv[]) {
-	//--------------------------------------------------------------------------
-    // PARSE COMMAND LINE
-	//
-	po::options_description desc;
-	desc.add_options()
-	("help",                                                    "print help message")
-    ("cfg,c", po::value<string>()->default_value( "./config.yaml" ),
-     "path to config file; default is ./config.yaml")
-    ("log,l", po::value<string>()->default_value("debug"), "debug|warning|error")
-	;
-	po::variables_map options;
-    try
-    {
-        po::store( po::parse_command_line( argc, argv, desc ), options );
-    }
-    catch( const std::exception& e )
-    {
-        cerr << "Sorry, couldn't parse that: " << e.what() << endl;
-        cerr << desc << endl;
-        return -1;
-    }
-	
-	po::notify( options );
-	
-    if( options.count( "help" ) > 0 )
-    {
-        cerr << desc << endl;
-        return 0;
-    }
-	
-    string cfgpath = options["cfg"].as<string>();
-    setup_logging(string(basename(argv[0])), cfgpath, options["log"].as<string>());
-    setup_signal_handling();
 
+    string cfgpath, log_level;
+    if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
+    setup_logging(string(basename(argv[0])), cfgpath, log_level);
+   setup_signal_handling();
+    
+    
   // READ CONFIG FILE
-    fs::path cfgfilepath( options["cfg"].as<string>() );
-    if ( ! (fs::exists(cfgfilepath) && fs::is_regular_file(cfgfilepath)) )
+   int my_var;
+   try 
     {
-        cerr << "Can't find config file " << cfgfilepath.string() << endl;
+        YAML::Node config = YAML::LoadFile(cfgpath);
+        my_var = config["CONFIG_VAR"].as<int>;
+      }
+     catch( const std::exception& e )
+    {
+        NIMS_LOG_ERROR << "Error reading config file." << e.what();
         return -1;
     }
-    YAML::Node config = YAML::LoadFile(cfgfilepath.string()); // throws exception if bad path
-    
+     
     
 	//--------------------------------------------------------------------------
 	// DO STUFF
