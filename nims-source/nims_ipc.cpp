@@ -30,7 +30,7 @@ namespace po = boost::program_options;
 // Signal Handling
 void setup_signal_handling()
 {
- struct sigaction new_action, old_action;
+    struct sigaction new_action, old_action;
     new_action.sa_handler = sig_handler;
     sigemptyset(&new_action.sa_mask);
     new_action.sa_flags = 0;
@@ -65,7 +65,7 @@ mqd_t CreateMessageQueue(const string &name, size_t message_size, bool non_block
     
     mqd_t ret = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == ret)
-        perror("CreateMessageQueue");
+        nims_perror("CreateMessageQueue mq_open");
     
     return ret;
 }
@@ -79,7 +79,7 @@ void SubprocessCheckin(pid_t pid)
     }
 
     if (mq_send(mq, (const char *)&pid, sizeof(pid_t), 0) == -1) {
-        perror("SubprocessCheckin mq_send()");
+        nims_perror("SubprocessCheckin mq_send()");
     }
 
     mq_close(mq);

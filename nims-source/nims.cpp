@@ -25,7 +25,7 @@
 
 #include "yaml-cpp/yaml.h"
 
-#include "queues.h"
+#include "nims_ipc.h"
 #include "task.h"
 #include "log.h"
 
@@ -177,7 +177,7 @@ static void LaunchProcessesFromConfig(const YAML::Node &config)
     
     child_tasks_ = new vector<nims::Task *>;
     
-    mqd_t mq = CreateMessageQueue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
+    mqd_t mq = CreateMessageQueue(MQ_SUBPROCESS_CHECKIN_QUEUE, sizeof(pid_t), false);
     if (-1 == mq) {
         NIMS_LOG_ERROR << "failed to create checkin message queue";
         exit(1);
