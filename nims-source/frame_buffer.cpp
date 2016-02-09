@@ -7,6 +7,9 @@
  *  Copyright 2015 Pacific Northwest National Laboratory. All rights reserved.
  *
  */
+
+ #include "frame_buffer.h"
+
 // for POSIX shared memory
 #include <fcntl.h>    // O_* constants
 #include <unistd.h>   // sysconf, getpid
@@ -19,7 +22,7 @@
 #include <boost/log/trivial.hpp>
 
 #include "log.h"
-#include "frame_buffer.h"
+#include "nims_ipc.h"
 
 using namespace std;
 
@@ -132,14 +135,17 @@ int FrameBufferWriter::Initialize()
     CleanUp();
     
      // Create the message queue for receiving reader connections.
-    struct mq_attr attr;
+   NIMS_LOG_DEBUG << "creating frame buffer connection msg queue " << mqw_name_;
+   /*
+     struct mq_attr attr;
     attr.mq_flags = 0; // block on mq_send and mq_receive
     attr.mq_maxmsg = 8;
     attr.mq_msgsize = NAME_MAX;
     
-    NIMS_LOG_DEBUG << "creating frame buffer connection msg queue " << mqw_name_;
     // NOTE:  writer queue needs to be read/write so parent can send exit message to thread
     mqw_ = mq_open(mqw_name_.c_str(),O_RDWR | O_CREAT, S_IRUSR | S_IWUSR, &attr);
+    */
+    mqw_ = CreateMessageQueue(mqw_name_, NAME_MAX);
     if (mqw_ == -1) 
     {
         nims_perror("FrameBufferWriter");
@@ -347,12 +353,8 @@ int FrameBufferReader::Connect()
 {
          // create the message queue for reading new data messages
         mqr_name_ = "/" + fb_name_ + "-mq-" + boost::lexical_cast<std::string>(getpid());
-        struct mq_attr attr;
-        attr.mq_flags = 0;
-        attr.mq_maxmsg = kMaxMessage; // system limit in /proc/sys/fs/mqueue/msg_max
-        attr.mq_msgsize = kMaxMessageSize;
-        NIMS_LOG_DEBUG << "creating reader message queue " << mqr_name_;
-        mqr_ = mq_open(mqr_name_.c_str(),O_RDONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, &attr);
+       NIMS_LOG_DEBUG << "creating reader message queue " << mqr_name_;
+        mqr_ = CreateMessageQueue(mqr_name_, kMaxMessageSize);
         if (mqr_ == -1) 
         {
             nims_perror("FrameBufferReader::Connect mq_open reader");
@@ -360,9 +362,24 @@ int FrameBufferReader::Connect()
         }
 
        // connect to the writer and send reader queue name
-       NIMS_LOG_DEBUG << "opening writer queue: " << mqw_name_;
-       mqw_ = mq_open(mqw_name_.c_str(), O_WRONLY);
-       // TODO:  Should probably wait and try again and eventually time out.
+       // we want to wait for the writer, because we can't
+       // really do anything until the data is flowing
+       NIMS_LOG_DEBUG << "opening writer connection queue: " << mqw_name_;
+       
+   while ( (mqw_ = mq_open(mqw_name_.c_str(), O_WRONLY)) == -1 )
+    {
+        
+        // may get SIGINT at any time to reload config
+        if (sigint_received) {
+            NIMS_LOG_WARNING << "exiting due to SIGINT";
+            break;
+        }
+        
+        NIMS_LOG_DEBUG << "waiting to connect to writer...";
+        sleep(5);
+        
+   } // while mqw_ == -1
+
        if (mqw_ == -1) 
        {
            nims_perror("FrameBufferReader::Connect mq_open writer");
@@ -371,6 +388,7 @@ int FrameBufferReader::Connect()
            mq_unlink(mqr_name_.c_str());
            return -1;
        }
+
        NIMS_LOG_DEBUG << "sending connection message";
        if (-1 == mq_send(mqw_, mqr_name_.c_str(), mqr_name_.size(), 0))
        {

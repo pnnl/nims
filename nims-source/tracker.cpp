@@ -117,9 +117,9 @@ int main (int argc, char * argv[]) {
 	print_attribute_labels(outtxtfile);
 	outtxtfile << endl;
     
-    
-    mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(TracksMessage), false);
-    mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(TracksMessage), false);
+    // Create message queues
+    mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(TracksMessage), true); // non-blocking
+    mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(TracksMessage), true);
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
     if (mq_det < 0) 
     {

@@ -32,8 +32,11 @@ void setup_signal_handling();
 #define MQ_SUBPROCESS_CHECKIN_QUEUE "/nims_subprocess_checkin_queue"
 #define MQ_DETECTOR_TRACKER_QUEUE "/nims_detector_tracker_queue"
 
- // create a POSIX message queue 
-mqd_t CreateMessageQueue(const std::string &name, size_t message_size, bool blocking=true);
+// create/open a POSIX message queue with read/write permissions
+// the default mode is blocking
+// the queue is created, if it doesn't already exist
+// return value is the return from mq_open() call
+mqd_t CreateMessageQueue(const std::string &name, size_t message_size, bool non_block=false);
 
 // Called by NIMS processes started by the main nims process
 void SubprocessCheckin(pid_t pid);

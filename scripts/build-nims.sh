@@ -42,5 +42,6 @@ fi
 
 # boost and cmake is FUBAR on RHEL6
 # passing -DBoost_NO_BOOST_CMAKE=ON works around this
+# TODO:  Make the build type a command line arg, so can make a Release build
 cmake $SOURCE_DIR -DBoost_NO_BOOST_CMAKE=ON -DCMAKE_BUILD_TYPE=Debug && make
 popd

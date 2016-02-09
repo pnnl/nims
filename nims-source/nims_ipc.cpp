@@ -49,7 +49,7 @@ void setup_signal_handling()
 
 //************************************************************************
 // Message Queues
-mqd_t CreateMessageQueue(const string &name, size_t message_size, bool blocking)
+mqd_t CreateMessageQueue(const string &name, size_t message_size, bool non_block)
 {
     struct mq_attr attr;
     memset(&attr, 0, sizeof(struct mq_attr));
@@ -61,7 +61,7 @@ mqd_t CreateMessageQueue(const string &name, size_t message_size, bool blocking)
     int opts = O_CREAT | O_RDWR;
     int mode = S_IRUSR | S_IWUSR;
     
-    if (!blocking) opts |= O_NONBLOCK;
+    if (non_block) opts |= O_NONBLOCK;
     
     mqd_t ret = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == ret)

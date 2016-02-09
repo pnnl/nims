@@ -73,11 +73,10 @@ int main (int argc, char * argv[]) {
         return -1;
     }
     
-       // check in before blocking while creating the DataSource
+       // check in before connecting to the DataSource, which may take some time
     SubprocessCheckin(getpid()); // sync with main NIMS process
     
-    // create fb before datasource, so tracker doesn't bail out
-    // when it tries to open a nonexistent writer queue
+    // create fb before datasource
     FrameBufferWriter fb(fb_name);
     if ( -1 == fb.Initialize() )
     {
