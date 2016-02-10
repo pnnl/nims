@@ -251,6 +251,8 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     // unlink oldest shared frame and save the name of new frame
     int ind = frame_count_ % kMaxFramesInBuffer;
     shm_unlink(shm_names_[ind].c_str());
+    NIMS_LOG_DEBUG << "Replacing framebuffer slot " << ind << " (" << shm_names_[ind]
+       << ") with (" << shared_name << ")";
     shm_names_[ind] = shared_name;
 
     return frame_count_;
