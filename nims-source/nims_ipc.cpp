@@ -28,6 +28,15 @@ namespace po = boost::program_options;
 
 //************************************************************************
 // Signal Handling
+
+volatile int sigint_received = 0;
+
+static void sig_handler(int sig)
+{
+    if (SIGINT == sig)
+        sigint_received++;
+};
+
 void setup_signal_handling()
 {
     struct sigaction new_action, old_action;

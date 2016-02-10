@@ -17,14 +17,7 @@
 
 //************************************************************************
 // Signal Handling
-static volatile int sigint_received = 0;
-
-static void sig_handler(int sig)
-{
-    if (SIGINT == sig)
-        sigint_received++;
-};
-
+extern volatile int sigint_received;
 void setup_signal_handling();
 
 //************************************************************************

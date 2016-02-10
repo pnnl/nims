@@ -23,7 +23,7 @@
 #include "tracked_object.h" // tracking
 //#include "pixelgroup.h"     // connected components
 #include "detections.h"     // detection message for UI
- #include "tracks_message.h"
+#include "tracks_message.h"
 
 using namespace std;
 using namespace boost;
@@ -37,8 +37,7 @@ int main (int argc, char * argv[]) {
     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
     setup_logging(string(basename(argv[0])), cfgpath, log_level);
-   setup_signal_handling();
-    
+    setup_signal_handling();
     	//--------------------------------------------------------------------------
 	// DO STUFF
     NIMS_LOG_DEBUG << "Starting " << argv[0];
@@ -136,8 +135,9 @@ int main (int argc, char * argv[]) {
         int ret =  mq_receive(mq_det, (char *)&msg_det, sizeof(DetectionMessage), nullptr);
         if (ret < 0)
         {
-            NIMS_LOG_ERROR << "error recieving message from detector";
-            nims_perror("Tracker");
+            nims_perror("Tracker mq_receive");
+            NIMS_LOG_ERROR << "error receiving message from detector";
+            NIMS_LOG_WARNING << "sigint_received is " << sigint_received;
         }
         NIMS_LOG_DEBUG << "received detections message with " 
                        << msg_det.num_detections << " detections";
