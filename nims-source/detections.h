@@ -28,6 +28,7 @@ struct __attribute__ ((__packed__)) Detection
     float width;
     float height;
     float rot_deg; // rotation clockwise in degrees
+    float mean_intensity;
     
     Detection()
     {
@@ -36,16 +37,18 @@ struct __attribute__ ((__packed__)) Detection
         width = 0.0;
         height = 0.0;
         rot_deg = 0.0;
+        mean_intensity = 0.0;
        
     };
     
-    Detection(float x, float y, float w, float h, float r)
+    Detection(float x, float y, float w, float h, float r, float i)
     {
         center_x = x;
         center_y = y;
         width = w;
         height = h;
         rot_deg = r;
+        mean_intensity = i;
     };
     
 };
