@@ -16,9 +16,10 @@
 #include <opencv2/opencv.hpp>
 
 #include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 #include "yaml-cpp/yaml.h"
 
-#include "data_source_blueview.h"
+#include "data_source_ek60.h"
 #include "frame_buffer.h"
 #include "nims_ipc.h"
 #include "log.h"
@@ -26,18 +27,18 @@
 using namespace std;
 using namespace cv;
 using namespace boost;
+namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
 // TODO: Somehow the defined sonar types need to 
 //       be accessible to users for the config file,
 //       maybe for user interface
-#define NIMS_SONAR_BLUEVIEW 2
+#define NIMS_SONAR_EK60 3
 
 
 
 int main (int argc, char * argv[]) {
-	    
-    string cfgpath, log_level;
+     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
     setup_logging(string(basename(argv[0])), cfgpath, log_level);
    setup_signal_handling();
@@ -49,21 +50,26 @@ int main (int argc, char * argv[]) {
 	int sonar_type;
 	string sonar_host_addr;
 	string fb_name;
+  uint16_t sonar_port;
     try 
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
         sonar_type = config["SONAR_TYPE"].as<int>();
+        NIMS_LOG_DEBUG << "SONAR_TYPE = " << sonar_type;
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
+        NIMS_LOG_DEBUG << "SONAR_HOST_ADDR = " << sonar_host_addr;
+        sonar_port = config["SONAR_PORT"].as<int>();
+        NIMS_LOG_DEBUG << "SONAR_PORT = " << sonar_port;
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
      }
      catch( const std::exception& e )
     {
         NIMS_LOG_ERROR << "Error reading config file." << e.what();
-        NIMS_LOG_ERROR << desc;
         return -1;
     }
     
-      
+    
+    
     // create fb before datasource, so tracker doesn't bail out
     // when it tries to open a nonexistent writer queue
     FrameBufferWriter fb(fb_name);
@@ -78,9 +84,9 @@ int main (int argc, char * argv[]) {
 	// TODO: Define an enum or ?  Need to match config file definition.
 	switch ( sonar_type )
 	{
-	    case NIMS_SONAR_BLUEVIEW :
-            NIMS_LOG_DEBUG << "opening BlueView sonar as datasource";
-            input = new DataSourceBlueView(sonar_host_addr);
+	    case NIMS_SONAR_EK60 :
+            NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
+            input = new DataSourceEK60(sonar_host_addr, sonar_port);
             break;
         default :
              NIMS_LOG_ERROR << "invalid sonar type: " << sonar_type;
@@ -118,7 +124,7 @@ int main (int argc, char * argv[]) {
        size_t frame_count=0;
        while ( input->more_data() )
        {
-           cout << "Press any ENTER to get a ping..." << std::flush;
+           cout << "Press ENTER to get a ping..." << std::flush;
            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
            
            Frame frame;

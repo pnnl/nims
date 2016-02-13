@@ -18,17 +18,14 @@ endif()
 set(NIMS_SOURCE_DIR ${CMAKE_SOURCE_DIR}/../nims-source)
 
 # Find external packages in our vendorsrc
-#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${NIMS_SOURCE_DIR}/cmake/Modules")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${NIMS_SOURCE_DIR}/cmake/Modules")
 
 # link statically
 set(Boost_USE_STATIC_LIBS   ON)
 set(OpenCV_STATIC ON)
-#set(YAMLCPP_STATIC_LIBRARY ON)
+set(YAMLCPP_STATIC_LIBRARY ON)
 
-# http://stackoverflow.com/questions/20746936/cmake-of-what-use-is-find-package-if-you-need-to-specify-cmake-module-path-an
-# find yaml 
-# http://www.cmake.org/Wiki/CMake:How_To_Find_Libraries
-set(Yaml-cpp_DIR ${NIMS_SOURCE_DIR}/cmake/yaml)
+#set (YAMLCPP_DIR ${CMAKE_SOURCE_DIR}/../vendorsrc/yaml-cpp-release-0.5.2)
 
 set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
 find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
@@ -39,25 +36,25 @@ find_package(Boost REQUIRED COMPONENTS filesystem system program_options log_set
 find_package(Yaml-cpp REQUIRED)
 find_package(Threads REQUIRED)
 
+include_directories(${YAMLCPP_INCLUDE_DIR})
 include_directories(${Bvtsdk_DIR}/include)
 include_directories(${NIMS_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
 
-set(COMMON_SOURCES ${NIMS_SOURCE_DIR}/frame_buffer.cpp ${NIMS_SOURCE_DIR}/log.cpp)
+set(COMMON_SOURCES ${NIMS_SOURCE_DIR}/frame_buffer.cpp ${NIMS_SOURCE_DIR}/nims_ipc.cpp ${NIMS_SOURCE_DIR}/log.cpp)
 
 add_executable(test_frame_buffer_put test_frame_buffer_put.cpp ${COMMON_SOURCES})
 add_executable(test_frame_buffer_get test_frame_buffer_get.cpp ${COMMON_SOURCES})
 add_executable(test_frame_buffer test_frame_buffer.cpp ${NIMS_SOURCE_DIR}/log.cpp)
 add_executable(test_blueview test_blueview.cpp ${NIMS_SOURCE_DIR}/data_source_blueview.cpp ${COMMON_SOURCES})
+add_executable(test_ek60 test_ek60.cpp ${NIMS_SOURCE_DIR}/data_source_ek60.cpp ${COMMON_SOURCES})
 
 
-target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-target_link_libraries(test_frame_buffer ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} rt)
-
-
-
-target_link_libraries(test_blueview ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES} ${OpenCV_LIBRARIES} ${Bvtsdk_LIB} rt)
+target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
+target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
+target_link_libraries(test_frame_buffer ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
+target_link_libraries(test_blueview ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} ${OpenCV_LIBRARIES} ${Bvtsdk_LIB} rt)
+target_link_libraries(test_ek60 ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} ${OpenCV_LIBRARIES} ${Bvtsdk_LIB} rt)
 
 
 ADD_CUSTOM_COMMAND(TARGET nims
