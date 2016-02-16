@@ -170,6 +170,7 @@ int update_background(Background& bg, const Frame& new_ping)
 int detect_objects(const Background& bg, const Frame& ping, 
     float thresh_stdevs, int min_size, vector<Detection>& detections)
 {
+    detections.clear();
     Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
     Mat foregroundMask = ((ping_data - bg.ping_mean) / bg.ping_stdv) > thresh_stdevs;
     int nz = countNonZero(foregroundMask);
@@ -179,9 +180,16 @@ int detect_objects(const Background& bg, const Frame& ping,
     {
         PixelGrouping objects;
         group_pixels(foregroundMask, min_size, objects);
-        NIMS_LOG_DEBUG << "number of detected objects: " << objects.size();
+        int n_obj = objects.size();
+        NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
+        for (int k=0; k<n_obj; ++k)
+        {
+            // convert pixel grouping to detections
+            detections.push_back(Detection(objects[k]));
+        }
+
     }
-    return 0;
+    return detections.size();
 } // detect_objects
 
 
@@ -273,7 +281,8 @@ int main (int argc, char * argv[]) {
     }
     //Mat imc(ping_mean.size(), CV_8UC3); // used for VIEW
     
-    mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
+    mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, 
+        sizeof(DetectionMessage), true); // non-blocking
     
     //-------------------------------------------------------------------------
     // MAIN LOOP
@@ -312,7 +321,7 @@ int main (int argc, char * argv[]) {
         // Detect objects
         NIMS_LOG_DEBUG << "Detecting objects";
 
-        DetectionMessage msg_det(next_ping.header.ping_num, 0);
+        DetectionMessage msg_det(frame_index, next_ping.header.ping_num, 0);
 
         vector<Detection> detections;
         int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, detections);  

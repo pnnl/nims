@@ -96,21 +96,16 @@ void getNeighbors(int idx, int mrows, int mcols, vector<unsigned>& outidx) {
 
 std::ostream& operator<<(std::ostream& strm, const PixelGrouping& pg)
 {
-	strm << "connectivity: " << pg.connectivity << endl;
-	strm << "image_width:  " << pg.image_width << endl;
-	strm << "image_height: " << pg.image_height << endl;
-	
 	int n = pg.size();
 	strm << "number of groups: " << n << endl;
 	for (int j=0;j<n;++j)
 	{
-		int nj = pg.pixel_idx[j].size();
+		int nj = pg[j].size();
 		cout << "group " << j << ": " << nj << " pixels" << endl;
 		strm << "     ";
 		for (int k=0;k<nj;++k)
 		{
-			Point2i pnt = idx2pnt(pg.pixel_idx[j][k], pg.image_width);
-			strm << "(" << pnt.y << ", " << pnt.x << ") "; 
+			strm << "(" << pg[j][k].x << ", " << pg[j][k].y << ") "; 
 		} // for each pixel in group
 		strm << endl;
 	} // for each group
@@ -119,17 +114,13 @@ std::ostream& operator<<(std::ostream& strm, const PixelGrouping& pg)
 }
 
 // Get a list of the connected pixels in the binary image.
-void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& groups)
+void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& blobs)
 {
 
 	Mat matimb = imb.getMat();
     CV_Assert( matimb.type() == CV_8UC1 ); // input must be binary image
-	
-	groups.connectivity = 8;
-	groups.image_width = matimb.cols;
-	groups.image_height = matimb.rows;
-	groups.pixel_idx.clear();
-	
+
+	blobs.clear();
 	vector<unsigned>   pixListIdx; // index of nonzero pixels
 	long Npix = find(matimb, pixListIdx);
 	
@@ -146,7 +137,7 @@ void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& groups
 		//cout << "ungrouped pixels: " << ungroupedIdx.size() << endl;
 		
 		stack<unsigned>   pixReady;  // set of candidate pixels
-		vector<int>  groupPix;  // pixels in group
+		vector<Point2i>  groupPix;  // pixels in group
 		
 		// Pick an initial pixel, mark it as found and put it in the Ready list.
 		pixReady.push(*ungroupedIdx.begin());
@@ -160,7 +151,7 @@ void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& groups
 			//cout << "grouping pixel " << ipix << endl;
 			
 			// add it to the current group
-			groupPix.push_back(ipix);
+			groupPix.push_back(idx2pnt(ipix, matimb.cols));
 			
 			// find all its neighbors
 			getNeighbors(ipix,matimb.rows,matimb.cols,ineighbors);
@@ -181,7 +172,7 @@ void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& groups
 		} // pixels ready
 		// save group
 		if (groupPix.size() >= min_size)
-		    groups.pixel_idx.push_back(groupPix);
+		    blobs.push_back(groupPix);
 		
 	} // ungrouped pixels
 	

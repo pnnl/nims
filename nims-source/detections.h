@@ -23,44 +23,46 @@
 struct __attribute__ ((__packed__)) Detection
 {
     // spatial shape information
-    float center_x;
-    float center_y;
-    float width;
-    float height;
-    float rot_deg; // rotation clockwise in degrees
+    float center[3]; // x,y,z
+    float size[3];   // width, height, length
+    float rot_deg[2]; // rotation clockwise in degrees
     float mean_intensity;
+    float max_intensity;
     
     Detection()
     {
-        center_x = 0.0;
-        center_y = 0.0;
-        width = 0.0;
-        height = 0.0;
-        rot_deg = 0.0;
+         center[0] = 0.0; center[1] = 0.0; center[2] = 0.0;
+        size[0] = 0.0; size[1] = 0.0; size[2] = 0.0;
+        rot_deg[0] = 0.0; rot_deg[1] = 0.0;
         mean_intensity = 0.0;
+        max_intensity = 0.0;
        
     };
     
-    Detection(float x, float y, float w, float h, float r, float i)
+    // create a detection from a set of connected points
+    Detection(std::vector<cv::Point2i>& points)
     {
-        center_x = x;
-        center_y = y;
-        width = w;
-        height = h;
-        rot_deg = r;
-        mean_intensity = i;
+        cv::RotatedRect rr = fitEllipse(points);
+        center[0] = rr.center.x; center[1] = rr.center.y; center[2] = 0.0;
+        size[0] = rr.size.width; size[1] = rr.size.height; size[2] = 0.0;
+        rot_deg[0] = rr.angle; rot_deg[1] = 0.0;
+        // TODO: figure out how to set these.
+        mean_intensity =0.0;
+        max_intensity = 0.0;
     };
     
 };
 
 struct __attribute__ ((__packed__)) DetectionMessage
 {
-    uint32_t  ping_num; // same ping number as in FrameHeader
+    uint32_t  frame_num; // frame number from FrameBuffer
+    uint32_t  ping_num; // sonar ping number 
     uint32_t  num_detections; // number of detections
     Detection detections[MAX_DETECTIONS_PER_FRAME];
 
-    DetectionMessage(uint32_t pnum = 0, uint32_t numdetects = 0 )
+    DetectionMessage(uint32_t fnum, uint32_t pnum = 0, uint32_t numdetects = 0 )
     {
+        frame_num = fnum;
         ping_num = pnum;
         num_detections = numdetects;
         memset(detections, 0, sizeof(detections));
