@@ -11,7 +11,48 @@
 using namespace cv;
 using namespace std;
 
+void TrackedObject::init_tracking(int Nstate, int Nmeasure, float q, float r)
+{
+    kf_.init(Nstate, Nmeasure);
+    // for extended Kalman filter
+    //kf_.transitionMatrix = *(Mat_<float>(Nstate, Nstate) << 1, 1, 0, 1);
+    Mat F = Mat::eye(Nstate, Nstate, CV_32FC1);
+    F.at<float>(0,1) = 1;
+    F.at<float>(2,3) = 1;
+    F.copyTo(kf_.transitionMatrix);
+    
+    //cout << "kf_.transitionMatrix is " << kf_.transitionMatrix.rows << " x " << kf_.transitionMatrix.cols << endl;
+    //cout << kf_.transitionMatrix << endl;
+    
+    kf_.measurementMatrix.at<float>(0,0) = 1.0;
+    kf_.measurementMatrix.at<float>(1,2) = 1.0;
 
+    //cout << "kf_.measurementMatrix is " << kf_.measurementMatrix.rows << " x " << kf_.measurementMatrix.cols << endl;
+    //cout << kf_.measurementMatrix << endl;
+    
+    setIdentity(kf_.processNoiseCov, Scalar::all(q)); // values from example
+    kf_.processNoiseCov.at<float>(0,1) = q;
+    kf_.processNoiseCov.at<float>(1,0) = q;
+    kf_.processNoiseCov.at<float>(2,3) = q;
+    kf_.processNoiseCov.at<float>(3,2) = q;
+    
+    //cout << "kf_.processNoiseCov is " << kf_.processNoiseCov.rows << " x " << kf_.processNoiseCov.cols << endl;
+    //cout << kf_.processNoiseCov << endl;  
+    
+    setIdentity(kf_.measurementNoiseCov, Scalar::all(r));
+    
+    //cout << "kf_.measurementNoiseCov is " << kf_.measurementNoiseCov.rows << " x " << kf_.measurementNoiseCov.cols << endl;
+    //cout << kf_.measurementNoiseCov << endl;
+    
+    setIdentity(kf_.errorCovPost, Scalar::all(1));
+    //randn(kf_.statePost, Scalar::all(0), Scalar::all(0.1));
+    kf_.statePost = Scalar::all(0);
+    // TODO:  Set initial position.
+    //kf_.statePost.at<float>(0,0) = initial_pos.x;
+    //kf_.statePost.at<float>(2,0) = initial_pos.y;
+}
+
+/*
 TrackedObject::TrackedObject(const Point2f& initial_pos, InputArray initial_image, int initial_epoch, float process_noise, float measurement_noise)
 {
     Mat initial_image_ = initial_image.getMat();
@@ -23,50 +64,27 @@ TrackedObject::TrackedObject(const Point2f& initial_pos, InputArray initial_imag
 
     int Nstate = 4; // x, vx, y, vy
     int Nmeasure = 2; // x, y
-	float q = process_noise; 
-	float r = measurement_noise;
     
-    
-    kf_.init(Nstate, Nmeasure);
-    // for extended Kalman filter
-    //kf_.transitionMatrix = *(Mat_<float>(Nstate, Nstate) << 1, 1, 0, 1);
-    Mat F = Mat::eye(Nstate, Nstate, CV_32FC1);
-    F.at<float>(0,1) = 1;
-    F.at<float>(2,3) = 1;
-    F.copyTo(kf_.transitionMatrix);
-	
-    //cout << "kf_.transitionMatrix is " << kf_.transitionMatrix.rows << " x " << kf_.transitionMatrix.cols << endl;
-	//cout << kf_.transitionMatrix << endl;
-	
-	kf_.measurementMatrix.at<float>(0,0) = 1.0;
-	kf_.measurementMatrix.at<float>(1,2) = 1.0;
-
-    //cout << "kf_.measurementMatrix is " << kf_.measurementMatrix.rows << " x " << kf_.measurementMatrix.cols << endl;
-	//cout << kf_.measurementMatrix << endl;
-	
-    setIdentity(kf_.processNoiseCov, Scalar::all(q)); // values from example
-	kf_.processNoiseCov.at<float>(0,1) = q;
-	kf_.processNoiseCov.at<float>(1,0) = q;
-	kf_.processNoiseCov.at<float>(2,3) = q;
-	kf_.processNoiseCov.at<float>(3,2) = q;
-	
-    //cout << "kf_.processNoiseCov is " << kf_.processNoiseCov.rows << " x " << kf_.processNoiseCov.cols << endl;
-	//cout << kf_.processNoiseCov << endl;	
-	
-    setIdentity(kf_.measurementNoiseCov, Scalar::all(r));
-	
-    //cout << "kf_.measurementNoiseCov is " << kf_.measurementNoiseCov.rows << " x " << kf_.measurementNoiseCov.cols << endl;
-	//cout << kf_.measurementNoiseCov << endl;
-	
-    setIdentity(kf_.errorCovPost, Scalar::all(1));
-    //randn(kf_.statePost, Scalar::all(0), Scalar::all(0.1));
-    kf_.statePost = Scalar::all(0);
-	kf_.statePost.at<float>(0,0) = initial_pos.x;
-	kf_.statePost.at<float>(2,0) = initial_pos.y;
+    init_tracking(Nstate, Nmeasure, process_noise, measurement_noise);
 	
 }
+*/
+TrackedObject::TrackedObject(long id, long epoch, Detection initial_det, float process_noise, float measurement_noise)
+{
+    id_ = id;
+    epoch_.push_back(epoch);
+    
+    int Nstate = 4; // x, vx, y, vy
+    int Nmeasure = 2; // x, y
+    
+    init_tracking(Nstate, Nmeasure, process_noise, measurement_noise);
+    kf_.statePost.at<float>(0,0) = initial_det.center[0];
+    kf_.statePost.at<float>(2,0) = initial_det.center[1];
 
+    detections_.push_back(initial_det);
 
+}
+/*
 void TrackedObject::update( long epoch, const cv::Point2f& new_pos, InputArray new_image)
 {
     Mat new_image_ = new_image.getMat();
@@ -82,8 +100,20 @@ void TrackedObject::update( long epoch, const cv::Point2f& new_pos, InputArray n
 	measurement(1) = new_pos.y;
     kf_.correct(measurement);
 }
+*/
+void TrackedObject::update(long epoch, Detection new_det)
+{
+    epoch_.push_back(epoch);
+    detections_.push_back(new_det);
 
+    Mat_<float> measurement(2,1);
+    measurement(0) = new_det.center[0];
+    measurement(1) = new_det.center[1];
+    kf_.correct(measurement);
 
+}
+
+/*
 Point2f TrackedObject::predict( long epoch)
 {
     Mat prediction = kf_.predict();
@@ -93,7 +123,24 @@ Point2f TrackedObject::predict( long epoch)
     kf_.transitionMatrix.at<float>(2,3) = dt;
     return Point2f(prediction.at<float>(0),prediction.at<float>(2));
 }
+*/
 
+Detection TrackedObject::predict(long epoch)
+{
+    Mat prediction = kf_.predict();
+    // elapsed time
+    float dt = epoch - epoch_.back();
+    kf_.transitionMatrix.at<float>(0,1) = dt;
+    kf_.transitionMatrix.at<float>(2,3) = dt;
+
+    Detection predicted_det;
+    predicted_det.center[0] = prediction.at<float>(0);
+    predicted_det.center[1] = prediction.at<float>(2);
+
+    return predicted_det;
+}
+
+/*
 void  TrackedObject::get_track(vector<long>& epoch, vector<Point2f>& position, std::vector<cv::Mat>* img) const
 {
         epoch.assign(epoch_.begin(), epoch_.end());
@@ -134,16 +181,7 @@ void  TrackedObject::get_track_smoothed(vector<long>& epoch, vector<Point2f>& po
 	for (int k=0;k<half_win;++k)
 	{
 		position[k] = position_[k];
-		/*
-		position[k] = (half_win - k)*position_[0];
-		cout << "k = " << k << ", position[k] = " << position[k].x << "," << position[k].y;
-		for (int j=k;j<k+half_win+1;++j)
-			position[k]+=position_[j];
-		cout << "  " << position[k].x << "," << position[k].y;
-		position[k] = position[k]*one_over_winsize;
-		cout << "  " << position[k].x << "," << position[k].y << endl;
-		 */
-	}
+		}
 	for (int k=half_win;k<N-half_win;++k)
 	{
 		for (int j=k-half_win;j<k+half_win+1;++j)
@@ -154,15 +192,10 @@ void  TrackedObject::get_track_smoothed(vector<long>& epoch, vector<Point2f>& po
 	for (int k=N-half_win;k<N;++k)
 	{
 		position[k] = position_[k];
-		/*
-		for (int j=k-half_win;j<N;++j)
-			position[k]+=position_[j];
-		position[k] += (half_win - (N-k)+1)*position_.back();
-		position[k] = position[k]*one_over_winsize;
-		 */
-	}
+		}
 }
-
+*/
+/*
 void   TrackedObject::get_last_image(OutputArray lastimg) const
 {
 	if (image_.empty()) return;
@@ -229,7 +262,7 @@ void TrackedObject::get_track_attributes(
     attr.std_speed = stdval[0];
 }
 
-
+*/
 std::ostream& operator<<(std::ostream& strm, const TrackAttributes& attr)
 {
     strm << attr.track_id << ", "

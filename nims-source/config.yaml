@@ -35,6 +35,7 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 SONAR_TYPE: 1
 
 # Used for M3, BlueView and EK60
+#SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
 SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
 #SONAR_HOST_ADDR: 192.168.1.45 # shari's BlueView
 #SONAR_HOST_ADDR: 130.20.85.189 # arm
@@ -52,7 +53,7 @@ TRACKER:
     max_ping_gap_in_track    : 2
     min_pings_for_track      : 7
     threshold_in_stdevs      : 2.0
-    min_target_size          : 4
+    min_target_size          : 6
     process_noise            : 0.1
     measurement_noise        : 0.001
     max_prediction_error     : 15

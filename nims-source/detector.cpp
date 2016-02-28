@@ -168,24 +168,35 @@ int update_background(Background& bg, const Frame& new_ping)
 
 
 int detect_objects(const Background& bg, const Frame& ping, 
-    float thresh_stdevs, int min_size, vector<Detection>& detections)
+    float thresh_stdevs, int min_size, const PixelToWorld& ptw, 
+    vector<Detection>& detections)
 {
     detections.clear();
     Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
     Mat foregroundMask = ((ping_data - bg.ping_mean) / bg.ping_stdv) > thresh_stdevs;
+    //NIMS_LOG_DEBUG << "foregroundMask: " << foregroundMask.rows << " rows x " << foregroundMask.cols << " cols";
     int nz = countNonZero(foregroundMask);
     NIMS_LOG_DEBUG << "number of samples above threshold: "<< nz << " ("
                    << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
     if (nz > 0)
     {
+        float timestamp = ping.header.ping_sec + (float)ping.header.ping_millisec/1000.0;
         PixelGrouping objects;
-        group_pixels(foregroundMask, min_size, objects);
+        group_pixels(foregroundMask.reshape(0,(int)ping.header.num_beams), min_size, objects);
         int n_obj = objects.size();
         NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
-        for (int k=0; k<n_obj; ++k)
+            // guard against tracking a lot of noise            
+        if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
         {
+            NIMS_LOG_WARNING << "Too many false positives, not detecting";
+        }
+        else 
+        {
+            for (int k=0; k<n_obj; ++k)
+            {
             // convert pixel grouping to detections
-            detections.push_back(Detection(objects[k]));
+                detections.push_back(Detection(timestamp, objects[k], ptw));
+            }
         }
 
     }
@@ -266,13 +277,22 @@ int main (int argc, char * argv[]) {
     // Get one ping to get header info.
     Frame next_ping;
     fb.GetNextFrame(&next_ping);
+    FrameHeader *fh = &next_ping.header; // for notational convenience
+    float beam_max = fh->beam_angles_deg[(fh->num_beams-1)];
+    float beam_min = fh->beam_angles_deg[0];
+    PixelToWorld ptw(fh->range_min_m,
+                     beam_min,
+                     0.0,
+                     (fh->range_max_m - fh->range_min_m)/(fh->num_samples-1),
+                     (beam_max - beam_min)/(fh->num_beams-1),
+                     0.0);
     Mat map_x, map_y;
     if (VIEW)
     {
         PingImagePolarToCart(next_ping.header, map_x, map_y);
         double min_beam, min_rng, max_beam, max_rng;
-        minMaxIdx(map_x.reshape(0,1), &min_beam, &max_beam);
-        minMaxIdx(map_y.reshape(0,1), &min_rng, &max_rng);
+        minMaxIdx(map_x, &min_beam, &max_beam);
+        minMaxIdx(map_y, &min_rng, &max_rng);
 
         NIMS_LOG_DEBUG << "image mapping:  beam index is from "
         << min_beam << " to " << max_beam;
@@ -321,22 +341,9 @@ int main (int argc, char * argv[]) {
         // Detect objects
         NIMS_LOG_DEBUG << "Detecting objects";
 
-        DetectionMessage msg_det(frame_index, next_ping.header.ping_num, 0);
-
         vector<Detection> detections;
-        int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, detections);  
-        NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
-
-        // guard against tracking a lot of noise            
-        if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
-        {
-            NIMS_LOG_WARNING << "Too many false positives, not detecting";
-        }
-        else if (n_obj > 0)
-        {
-            msg_det.num_detections = n_obj;
-            std::copy(detections.begin(), detections.end(), msg_det.detections);     
-       }
+        int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, ptw, detections);  
+        DetectionMessage msg_det(frame_index, next_ping.header.ping_num, detections);
         mq_send(mq_det, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
        
        

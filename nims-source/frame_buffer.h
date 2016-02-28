@@ -40,6 +40,7 @@ struct __attribute__ ((__packed__)) FrameHeader
     float     winstart_sec;    // start of sampling window (sec)
     float     winlen_sec;      // length of sampling window (sec)
     uint32_t  num_beams;       // number of beams
+    // TODO: replace the array with angle_min and angle_max, like range
     float     beam_angles_deg[kMaxBeams] { }; // beam angles (deg)
     uint32_t  freq_hz;         // sonar frequency (Hz)
     uint32_t  pulselen_microsec;     // pulse length (microsec)
