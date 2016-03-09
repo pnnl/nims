@@ -3,24 +3,37 @@
 # Create absolute paths, using the trunk/scripts directory
 # as the base. This will put build products alongside the
 # source checkout directories.
-BUILD_DIR=$(pwd)/../build
-SOURCE_DIR=$(pwd)/../nims-source
-YAML_SRC=$(pwd)/../vendorsrc/yaml-cpp-release-0.5.2
+
+function abspath {
+    if [[ -d "$1" ]]
+    then
+        pushd "$1" >/dev/null
+        pwd
+        popd >/dev/null
+    elif [[ -e $1 ]]
+    then
+        pushd "$(dirname "$1")" >/dev/null
+        echo "$(pwd)/$(basename "$1")"
+        popd >/dev/null
+    else
+        echo "$1" does not exist! >&2
+        return 127
+    fi
+}
+
+# this will be an absolute path, so now we can run the
+# build script from any directory
+SCRIPTS_DIR=$(abspath $(dirname $0))
+BUILD_DIR=$SCRIPTS_DIR/../build
+SOURCE_DIR=$SCRIPTS_DIR/../nims-source
+YAML_SRC=$SCRIPTS_DIR/../vendorsrc/yaml-cpp-release-0.5.2
 
 # TODO:  need to check version of yaml lib
 if ! [ -f "/usr/local/lib/libyaml-cpp.a" ]; then
     echo "*** building libyaml-cpp.a ***"
-    if ! [ -d "$YAML_SRC" ]; then
-        echo "*** checking out and configuring yaml ***"
-        pushd .
-        cd ..
-        svn co https://subversion.pnnl.gov/svn/NIMS/vendorsrc/yaml-cpp-release-0.5.2
-        popd
-    fi
 
     if ! [ -d "$YAML_SRC/build" ]; then
         echo "*** configuring yaml-cpp ***"
-        pushd .
         cd "$YAML_SRC"
         mkdir build
         cd build
