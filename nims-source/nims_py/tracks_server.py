@@ -15,7 +15,17 @@ from threading import Thread, current_thread
 import signal
 import os, sys
 import json
-import nims_py
+
+if os.getenv("NIMS_HOME"):
+    sys.path.append(os.path.join(os.getenv("NIMS_HOME"), "lib", "python"))
+
+try:
+    import nims_py
+except Exception, e:
+    sys.stderr.write("*** %s\n" % (e))
+    sys.stderr.write("*** Make sure NIMS_HOME is set in your environment\n")
+    exit(1)
+    
 import ruamel.yaml
 
 _mq_thread = None

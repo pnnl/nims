@@ -11,11 +11,11 @@ if (PYTHON)
     configure_file(${SETUP_PY_IN} ${SETUP_PY})
 
     add_custom_command(OUTPUT ${OUTPUT}
-                       COMMAND ${PYTHON} ${SETUP_PY} build
+                       COMMAND ${PYTHON} ${SETUP_PY} install --home=$<TARGET_FILE_DIR:nims> --install-scripts=$<TARGET_FILE_DIR:nims>
                        COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
                        DEPENDS ${DEPS})
 
-    add_custom_target(target ALL DEPENDS ${OUTPUT})
+    add_custom_target(nims_py ALL DEPENDS ${OUTPUT})
 
-    #install(CODE "execute_process(COMMAND ${PYTHON} ${SETUP_PY} install)")
+    #install(CODE "execute_process(COMMAND ${PYTHON} ${SETUP_PY} install --prefix=$<TARGET_FILE_DIR:nims>)")
 endif()
