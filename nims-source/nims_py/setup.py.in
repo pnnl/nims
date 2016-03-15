@@ -1,0 +1,39 @@
+from distutils.core import setup
+from distutils.extension import Extension
+from Cython.Build import cythonize
+
+# python setup.py build_ext --inplace
+
+# https://docs.python.org/2/distutils/apiref.html
+
+setup(ext_modules=cythonize(Extension(
+    "nims_py",
+    sources=["${CMAKE_CURRENT_SOURCE_DIR}/nims_py.pyx",
+             "${CMAKE_CURRENT_SOURCE_DIR}/nims_py_ext.cpp"],
+    language="c++",
+    libraries=["stdc++", "rt"],
+    define_macros=[("NIMS_CYTHON", None)],
+    extra_compile_args=["-std=c++11", "-Wno-unused-function"],
+)),
+    name="nims_py",
+    description=["python module for NIMS tracks data"],
+    #packages=["nims_py"],
+    package_dir={"" : "${CMAKE_CURRENT_SOURCE_DIR}"},
+    scripts=["${CMAKE_CURRENT_SOURCE_DIR}/tracks_server.py",
+             "${CMAKE_CURRENT_SOURCE_DIR}/tracks_client.py"],
+)
+
+# ext = Extension(
+#     "detections_py", # name of extension
+#     ["detections_py.pyx", "detections_py.cpp"], # Cython source
+#     language = "c++",
+#     include_dirs=[],
+#     libraries=["stdc++"],
+#     extra_link_args=[],
+#     cmdclass = { "build_ext" : build_ext }
+# )
+
+# setup(
+#     cmdclass = {'build_ext': build_ext},
+#     ext_modules = [Extension("detections_py", ["detections_py.pyx"])]
+# )

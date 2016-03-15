@@ -64,6 +64,7 @@ target_link_libraries(detector ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_
 target_link_libraries(tracker ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAMLCPP_LIBRARY} rt)
 target_link_libraries(nims ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
 
+add_subdirectory(nims_py)
 
 ADD_CUSTOM_COMMAND(TARGET nims
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
