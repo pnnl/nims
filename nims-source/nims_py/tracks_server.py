@@ -16,14 +16,20 @@ import signal
 import os, sys
 import json
 
+def log_error(s):
+    sys.stderr.write("tracks_server.py: %s\n" % (s))
+    sys.stderr.flush()
+    
 if os.getenv("NIMS_HOME"):
     sys.path.append(os.path.join(os.getenv("NIMS_HOME"), "lib", "python"))
 
+# should be in NIMS_HOME/lib/python, but may also be in working
+# directory if we're debugging a standalone copy
 try:
     import nims_py
 except Exception, e:
-    sys.stderr.write("*** %s\n" % (e))
-    sys.stderr.write("*** Make sure NIMS_HOME is set in your environment\n")
+    log_error("*** %s" % (e))
+    log_error("*** Make sure NIMS_HOME is set in your environment")
     exit(1)
     
 import ruamel.yaml
@@ -38,12 +44,8 @@ _servers = []
 # condition lock to protect _run and _servers, and signal changes in _run
 _run_cond = threading.Condition()
 
-def log_error(s):
-    sys.stderr.write("%s\n" % (s))
-    sys.stderr.flush()
-    
 def _tracker_queue_name():
-    
+    """Read from config file or use default /nims_tracker_socket"""
     nims_home = os.getenv("NIMS_HOME")
     if nims_home:
         yaml_path = os.path.join(nims_home, "config.yaml")
@@ -56,7 +58,7 @@ def _tracker_queue_name():
     return queue_name
 
 def _server_port():
-    
+    """Read from config file or return default 8001"""
     nims_home = os.getenv("NIMS_HOME")
     if nims_home:
         yaml_path = os.path.join(nims_home, "config.yaml")
@@ -67,7 +69,7 @@ def _server_port():
     return 8001
     
 class DetectionServer(object):
-    """docstring for DetectionServer"""
+    """DetectionServer maintains state for each connection to the server."""
     def __init__(self, client_socket, address):
         super(DetectionServer, self).__init__()
         self._client_socket = client_socket
@@ -80,12 +82,14 @@ class DetectionServer(object):
         self._thread.start()
     
     def enqueue_message(self, new_message):
+        """API: call this when you get a new message."""
         self._condition.acquire()
         self._messages.append(new_message)
         self._condition.notify()
         self._condition.release()
         
     def stop_server(self):
+        """API: call this to stop the server."""
         self._condition.acquire()
         self._run = False
         self._condition.notify()
@@ -94,7 +98,7 @@ class DetectionServer(object):
         log_error("stopped server %s" % (self))
             
     def run_server(self):
-    
+        """SPI: separate thread to send messages to a connected client."""
         data = ""
         try:
             # !!! ok not to use condition here?

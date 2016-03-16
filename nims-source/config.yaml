@@ -24,6 +24,9 @@ APPLICATIONS:
           - config.yaml
           - -l
           - debug
+    - name: tracks_server.py
+      args:
+        
  
 # Need this here for python code.
 FRAMEBUFFER_NAME: nims_framebuffer
@@ -39,6 +42,7 @@ SONAR_TYPE: 1
 SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
 #SONAR_HOST_ADDR: 192.168.1.45 # shari's BlueView
 #SONAR_HOST_ADDR: 130.20.85.189 # arm
+
 # Used by EK60, no idea what this should be
 SONAR_PORT: 20000
 # Used by nims.py
@@ -47,6 +51,8 @@ WEB_SERVER_PORT: 8080
 # track server for external clients
 TRACKSERVER_SOCKET_PORT: 8001
 
+# for extract_1.mmb, change min_target_size to 10
+#
 ### TRACKER ###
 TRACKER:
     num_pings_for_moving_avg : 50
