@@ -1,6 +1,26 @@
 #!/bin/bash
 
-BUILD_DIR=../build
+function abspath {
+    if [[ -d "$1" ]]
+    then
+        pushd "$1" >/dev/null
+        pwd
+        popd >/dev/null
+    elif [[ -e $1 ]]
+    then
+        pushd "$(dirname "$1")" >/dev/null
+        echo "$(pwd)/$(basename "$1")"
+        popd >/dev/null
+    else
+        echo "$1" does not exist! >&2
+        return 127
+    fi
+}
+
+# this will be an absolute path, so now we can run the
+# build script from any directory
+SCRIPTS_DIR=$(abspath $(dirname $0))
+BUILD_DIR=$SCRIPTS_DIR/../build
 
 # this is here for embedded systems work, where the
 # IP address is used for multiple hosts
@@ -49,7 +69,19 @@ copy_to_bin $BUILD_DIR/config.yaml
 copy_to_bin $BUILD_DIR/nims-init
 
 copy_to_bin $BUILD_DIR/nims
-#copy_to_bin $BUILD_DIR/detector
+copy_to_bin $BUILD_DIR/detector
 copy_to_bin $BUILD_DIR/ingester
 copy_to_bin $BUILD_DIR/tracker
 copy_to_bin $BUILD_DIR/../webapp
+copy_to_bin $BUILD_DIR/tracks_server.py
+copy_to_bin $BUILD_DIR/tracks_client.py
+
+$SSH 'mkdir -p ~/bin/lib/python'
+if ! [ $? = 0 ]; then
+    echo "failed to create ~/bin/lib/python on $HOST"
+    exit 1
+fi
+
+# should walk lib and copy it, but oh well
+$SCP $BUILD_DIR/lib/python/nims_py.so $USER@$HOST:~/bin/lib/python
+$SCP $BUILD_DIR/lib/python/nims_py-0.0.0.egg-info $USER@$HOST:~/bin/lib/python
