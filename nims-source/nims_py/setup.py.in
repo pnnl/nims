@@ -12,6 +12,7 @@ setup(ext_modules=cythonize(Extension(
              "${CMAKE_CURRENT_SOURCE_DIR}/nims_py_ext.cpp"],
     language="c++",
     libraries=["stdc++", "rt"],
+    include_dirs=["${CMAKE_CURRENT_SOURCE_DIR}/../"],
     define_macros=[("NIMS_CYTHON", None)],
     extra_compile_args=["-std=c++11", "-Wno-unused-function"],
 )),

@@ -13,9 +13,14 @@
 
 #include <cstdint>  // fixed width integer types
 #include <cstring>  // memset
- #include <algorithm> // max, min
+#include <algorithm> // max, min
 
+// Too many dependencies when dragging this header and code in
+// (logging, opencv, etc), so the cython module setup script
+// sets this flag.
+#if !(NIMS_CYTHON)
 #include "detections.h"
+#endif
 
 #define MAX_ACTIVE_TRACKS 50
 
@@ -81,7 +86,8 @@ struct __attribute__ ((__packed__)) Track
 		length = 0.0;           
 		height = 0.0;           
 	};
-
+  
+#if !(NIMS_CYTHON)
 	Track(uint16_t trknum, const std::vector<Detection>& detections)
 	{
 		id = trknum;           
@@ -128,7 +134,7 @@ struct __attribute__ ((__packed__)) Track
 		length = detections.back().size[RANGE];        
 		height = detections.back().size[ELEVATION];        
 	};
-
+#endif
 
 }; // Track
 
