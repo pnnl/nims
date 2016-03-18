@@ -25,14 +25,14 @@
 #include "detections.h"     // detection message for UI
 #include "tracks_message.h"
 
-using namespace std;
-using namespace boost;
-namespace fs = boost::filesystem;
-using namespace cv;
+ using namespace std;
+ using namespace boost;
+ namespace fs = boost::filesystem;
+ using namespace cv;
 
 
 
-int main (int argc, char * argv[]) {
+ int main (int argc, char * argv[]) {
 
     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
@@ -58,7 +58,7 @@ int main (int argc, char * argv[]) {
 	//        an animals's progress through the 3D space of moving water
 	//        is very noisy.  The measurement noise is the resolution
 	//        of the sample space (range bin, beam width).
-    
+
     try
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
@@ -101,21 +101,21 @@ int main (int argc, char * argv[]) {
     // TODO: Make the output a class, so can implement as csv
     //       file or database or whatever.
  	// output file for saving track data
- 	time_t rawtime;
-    time(&rawtime);
+  time_t rawtime;
+  time(&rawtime);
     char timestr[16]; // YYYYMMDD-hhmmss
- 	strftime(timestr, 16, "%Y%m%d-%H%M%S", gmtime(&rawtime));
+    strftime(timestr, 16, "%Y%m%d-%H%M%S", gmtime(&rawtime));
     fs::path outtxtfilepath("nims_tracks-" + string(timestr) + ".csv");
-	NIMS_LOG_DEBUG << "saving track data to " << outtxtfilepath;
-	ofstream outtxtfile(outtxtfilepath.string().c_str(),ios::out | ios::binary);
-	if (!outtxtfile.is_open())
-	{
-		NIMS_LOG_ERROR << "Error opening output file: " << outtxtfilepath;
-		return (-1);
-	}
-	print_attribute_labels(outtxtfile);
-	outtxtfile << endl;
-    
+    NIMS_LOG_DEBUG << "saving track data to " << outtxtfilepath;
+    ofstream outtxtfile(outtxtfilepath.string().c_str(),ios::out | ios::binary);
+    if (!outtxtfile.is_open())
+    {
+      NIMS_LOG_ERROR << "Error opening output file: " << outtxtfilepath;
+      return (-1);
+  }
+  print_attribute_labels(outtxtfile);
+  outtxtfile << endl;
+
     // Create message queues
     mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(TracksMessage), true); // non-blocking
     mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(TracksMessage), true);
@@ -140,14 +140,14 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_WARNING << "sigint_received is " << sigint_received;
         }
         NIMS_LOG_DEBUG << "received detections message with " 
-                       << msg_det.num_detections << " detections";
+        << msg_det.num_detections << " detections";
         if (ret > 0 & msg_det.num_detections > 0)
         {
             int n_obj = msg_det.num_detections;
             
             Mat_<float> detected_positions_x(1,n_obj,0.0);
             Mat_<float> detected_positions_y(1,n_obj,0.0);
-           for (int f=0; f<n_obj; ++f)
+            for (int f=0; f<n_obj; ++f)
             {
                 detected_positions_y(f) = msg_det.detections[f].center[1];
                 detected_positions_x(f) = msg_det.detections[f].center[0];
@@ -165,7 +165,7 @@ int main (int argc, char * argv[]) {
                 Mat_<float> distances(n_active, n_obj, 0.0);
                 for (int a=0; a<n_active; ++a)
                 {
-                    
+
                     //Point2f pnt = active_tracks[a].predict(msg_det.ping_num);
                     Detection pred = active_tracks[a].predict(msg_det.ping_num);
                     predicted_positions_x(a) = pred.center[0];
@@ -178,8 +178,8 @@ int main (int argc, char * argv[]) {
                     << active_tracks[a].last_epoch();
                     
                     magnitude(predicted_positions_x(a)-detected_positions_x,
-                              predicted_positions_y(a)-detected_positions_y,
-                              distances.row(a));
+                      predicted_positions_y(a)-detected_positions_y,
+                      distances.row(a));
                 }
                 
                 // match detections to active tracks
@@ -193,26 +193,24 @@ int main (int argc, char * argv[]) {
                     double min_dist;
                     int min_idx[2];
                     minMaxIdx(distances.col(f), &min_dist, NULL, min_idx,
-                              NULL,active_not_matched);
+                      NULL,active_not_matched);
                     // if detection is too far from all active tracks...
                     if (pred_err_max < min_dist) continue;
                     
                     // make sure one of the remaining detections is not
                     // closer to the found active track
                     if ( countNonZero(distances(Range(min_idx[0],min_idx[0]+1),
-                                                Range(f+1,n_obj)) < min_dist) ) continue;
-                    
-                    NIMS_LOG_DEBUG << "ID " << active_id[min_idx[0]]
+                        Range(f+1,n_obj)) < min_dist) ) continue;
+
+                        NIMS_LOG_DEBUG << "ID " << active_id[min_idx[0]]
                     << ": matched detection " << f;
                     //active_tracks[min_idx[0]].update(msg_det.ping_num,
                      //                                Point2f(detected_positions_x(f), detected_positions_y(f)));
-                     active_tracks[min_idx[0]].update(msg_det.ping_num, msg_det.detections[f]);
+                    active_tracks[min_idx[0]].update(msg_det.ping_num, msg_det.detections[f]);
                     // mark detection as matched
                     detected_not_matched.at<unsigned char>(f) = 0;
                     // mark track as matched
                     active_not_matched.at<unsigned char>(min_idx[0]) = 0;
-                    // update UI message
-                    
                     
                 } // for each detection
                 
@@ -235,10 +233,11 @@ int main (int argc, char * argv[]) {
                                           */
 
                     //active_tracks.push_back(newfish);
-                    active_tracks.push_back(TrackedObject(next_id, msg_det.ping_num, msg_det.detections[f], 
-                        process_noise, measurement_noise));
+                    active_tracks.push_back( TrackedObject(next_id, 
+                        msg_det.ping_num, msg_det.detections[f], 
+                        process_noise, measurement_noise) );
                     active_id.push_back(next_id);
-                    
+
                     // update UI message
                     /*
                      msg_ui.detections[f].center_range = detected_positions_y(f);
@@ -246,17 +245,17 @@ int main (int argc, char * argv[]) {
                      msg_ui.detections[f].track_id = next_id;
                      msg_ui.detections[f].new_track = true;
                      */
-                    ++next_id;
-                }
-            }
-            
+                     ++next_id;
+                 } // if not matched
+             } // for each detection
+
            } // if detections
-        
+
         // de-activate tracks and report still active ones 
            vector<Track> tracks; // tracks 
-        int idx = 0;
-        while (idx < active_tracks.size())
-        {
+           int idx = 0;
+           while (idx < active_tracks.size())
+           {
             if ( msg_det.ping_num - active_tracks[idx].last_epoch() > maxgap )
             {
                 NIMS_LOG_DEBUG << "ID " << active_id[idx]
@@ -285,30 +284,36 @@ int main (int argc, char * argv[]) {
             } // if deactivate 
             else
             {
-                NIMS_LOG_DEBUG <<  "adding track " << active_tracks[idx].get_id() 
-                               << " to tracks message";
-                tracks.push_back( Track(active_tracks[idx].get_id(), 
-                                        active_tracks[idx].get_track()) );
+                if (active_tracks[idx].track_length() > mintrack)
+                {
+                    NIMS_LOG_DEBUG <<  "adding track " << active_tracks[idx].get_id() 
+                    << " to tracks message";
+
+                    tracks.push_back( Track(active_tracks[idx].get_id(), 
+                        active_tracks[idx].get_track()) );
+                } // if add to tracks message
                 ++idx;
-            }
+            } // else
+
+         
         } // for each active
         
             // send UI and socket messages
-            TracksMessage msg_trks(msg_det.frame_num, msg_det.ping_num, tracks);
+        TracksMessage msg_trks(msg_det.frame_num, msg_det.ping_num, tracks);
             mq_send(mq_ui, (const char *)&msg_trks, sizeof(msg_trks), 0); // non-blocking
             mq_send(mq_socket, (const char *)&msg_trks, sizeof(msg_trks), 0);
             NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_trks)
-            << " bytes); ping_num = " << msg_trks.ping_num_sonar << "; num_tracks = "
-            << msg_trks.num_tracks;
-             
-     
-        
-        if (sigint_received) {
-            NIMS_LOG_WARNING << "tracker end of loop: exiting due to SIGINT";
-            break;
-        }
-        
-    } // main loop
+                << " bytes); ping_num = " << msg_trks.ping_num_sonar << "; num_tracks = "
+<< msg_trks.num_tracks;
+
+
+
+    if (sigint_received) {
+        NIMS_LOG_WARNING << "tracker end of loop: exiting due to SIGINT";
+        break;
+    }
+
+} // main loop
     
     //-------------------------------------------------------------------------
 	// CLEANUP
@@ -321,6 +326,6 @@ int main (int argc, char * argv[]) {
     // close output files
     outtxtfile.close();
     
-	cout << endl << "Ending " << argv[0] << endl;
+    cout << endl << "Ending " << argv[0] << endl;
     return 0;
 }
