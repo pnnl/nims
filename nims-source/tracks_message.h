@@ -115,11 +115,14 @@ struct __attribute__ ((__packed__)) Track
 		last_pos_bearing = detections.back().center[BEARING];
 		last_pos_elevation = detections.back().center[ELEVATION];
 
+		if (pings_visible > 1)
+		{
 		std::vector<int>::size_type next_to_last = detections.size() - 2; 
 		float dt = detections.back().timestamp - detections[next_to_last].timestamp;
 		last_vel_range = (last_pos_range - detections[next_to_last].center[1])/dt;   
 		last_vel_bearing = (last_pos_bearing - detections[next_to_last].center[0])/dt;
 		last_vel_elevation = (last_pos_elevation - detections[next_to_last].center[2])/dt;
+		}
 
 	    width = detections.back().size[BEARING];            
 		length = detections.back().size[RANGE];        
