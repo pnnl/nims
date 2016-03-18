@@ -212,6 +212,9 @@ if __name__ == '__main__':
     
     _mq_thread = Thread(target=run_data_server)
     _mq_thread.start()
+    
+    # need to checkin with nims if we're launched from the config file
+    nims_py.nims_checkin_py()
 
     while 1: 
         log_error("waiting for a connection")

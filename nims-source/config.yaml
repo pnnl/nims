@@ -11,13 +11,13 @@ APPLICATIONS:
           - -c
           - config.yaml
           - -l
-          - debug
+          - warning
     - name: detector
       args:
           - -c
           - config.yaml
           - -l
-          - debug
+          - warning
     - name: tracker
       args:
           - -c
@@ -42,6 +42,7 @@ SONAR_TYPE: 1
 SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
 #SONAR_HOST_ADDR: 192.168.1.45 # shari's BlueView
 #SONAR_HOST_ADDR: 130.20.85.189 # arm
+#SONAR_HOST_ADDR: 192.168.5.233 # AMP
 
 # Used by EK60, no idea what this should be
 SONAR_PORT: 20000

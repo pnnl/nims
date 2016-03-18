@@ -7,6 +7,9 @@ mqd_t create_message_queue(size_t message_size, const char *name);
 int get_next_message(mqd_t mq, void *msg, size_t msgsize);
 int get_next_message_timed(mqd_t mq, void *msg, size_t msgsize, int secs, int ns);
 
+// call this if the process will be launched by nims via config.yaml
+int nims_checkin();
+
 // expose structure sizes here for message queue usage
 size_t sizeof_detection_message();
 size_t sizeof_detection();

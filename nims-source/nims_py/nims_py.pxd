@@ -42,6 +42,7 @@ cdef extern from "nims_py_ext.h":
     int get_next_message(int mq, void *msg, size_t msgsize)
     int create_message_queue(size_t message_size, char *name)
     int get_next_message_timed(int mq, void *msg, size_t msgsize, int secs, int ns)
+    int nims_checkin()
     size_t sizeof_detection_message()
     size_t sizeof_detection()
     size_t sizeof_tracks_message()

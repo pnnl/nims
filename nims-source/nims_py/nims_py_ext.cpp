@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdio.h>
 #include "tracks_message.h"
+#include "nims_ipc.h"
+#include <unistd.h>
 #include <time.h>
 
 mqd_t create_message_queue(size_t message_size, const char *name)
@@ -55,6 +57,25 @@ int get_next_message_timed(mqd_t mq, void *msg, size_t msgsize, int secs, int ns
     if (ret >= 0) return ret;
     if (ETIMEDOUT == errno) return 0;
     return -1;
+}
+
+int nims_checkin()
+{
+   mqd_t mq = create_message_queue(sizeof(pid_t), MQ_SUBPROCESS_CHECKIN_QUEUE);
+       
+   if (-1 == mq) {
+       return 1;
+   }
+
+   int ret = 0;
+   pid_t pid = getpid();
+   if (mq_send(mq, (const char *)&pid, sizeof(pid_t), 0) == -1) {
+       perror("nims_checkin mq_send()");
+       ret = 2;
+   }
+
+   mq_close(mq);
+   return ret;
 }
 
 size_t sizeof_track()

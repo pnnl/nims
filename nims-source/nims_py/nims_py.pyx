@@ -179,6 +179,10 @@ cdef class PyTracksMessage:
         ret["tracks"] = [ptrk.dict_value() for ptrk in self.tracks()]
         return ret
 
+cpdef int nims_checkin_py():
+    ret = nims_checkin()
+    return ret
+
 cpdef int open_tracks_message_queue_py(char *queue_name):
 
     msg_size = sizeof_tracks_message()
