@@ -21,6 +21,11 @@
 Class for Simrad EK60 Echosounder.
 */
 
+// SampleDatagram size is 
+// header size + power samples + angle samples
+// = 88 + LONG_MAX * sizeof(SHORT) * 2
+const long DATA_BUFFER_SIZE  = 1024 * 1024; // call it 1 Mb
+
 class DataSourceEK60 : public DataSource {
  public:
     DataSourceEK60(std::string const &host_addr, uint16_t in_port);  // Constructor
@@ -35,6 +40,7 @@ class DataSourceEK60 : public DataSource {
 private:
     struct sockaddr_in host_;
     long cmd_port_;
+    char buf_[DATA_BUFFER_SIZE];
     
     
 }; // DataSourceEK60
