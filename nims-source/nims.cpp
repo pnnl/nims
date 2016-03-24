@@ -102,7 +102,8 @@ static void InterruptChildProcesses()
             t->signal(SIGINT);
             
             // make sure we reap all child processes
-            waitpid(t->get_pid(), NULL, 0);
+            if (-1 == waitpid(t->get_pid(), NULL, 0))
+               nims_perror("waitpid failed");
         }
     }
     

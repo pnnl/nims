@@ -20,6 +20,7 @@
 #include "frame_buffer.h"   // sensor data
 #include "detections.h"  // detection message
 #include "pixelgroup.h"     // connected components
+#include <math.h> // M_PI
 
  using namespace std;
  using namespace boost;
@@ -27,8 +28,7 @@
  using namespace cv;
 
 // Generate the mapping from beam-range to x-y for display
-#define PI 3.14159265
- int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
+int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
  {
     // range bin resolution in meters per pixel
     float rng_step = (hdr.range_max_m - hdr.range_min_m)/(hdr.num_samples - 1);
@@ -36,8 +36,8 @@
     float y2 = hdr.range_max_m; // y coordinate of first row of image pixels
     
     float beam_step = hdr.beam_angles_deg[1] - hdr.beam_angles_deg[0];
-    double theta1 = (double)hdr.beam_angles_deg[0] * PI/180.0;
-    double theta2 = (double)hdr.beam_angles_deg[hdr.num_beams-1] * PI/180.0;
+    double theta1 = (double)hdr.beam_angles_deg[0] * M_PI/180.0;
+    double theta2 = (double)hdr.beam_angles_deg[hdr.num_beams-1] * M_PI/180.0;
     float x1 = hdr.range_max_m*sin(theta1);
     float x2 = hdr.range_max_m*sin(theta2);
     NIMS_LOG_DEBUG << "PingImagePolarToCart: beam angles from " << hdr.beam_angles_deg[0]
@@ -70,7 +70,7 @@
             float y = y2 - m*rng_step;
             // convert x,y to beam-range
             float rng = sqrt(pow(x,2)+pow(y,2));
-            float beam_deg = 90 - (atan2(y,x)*(180/PI));
+            float beam_deg = 90 - (atan2(y,x)*(180/M_PI));
             // convert beam-range to indices
             float i_rng = (rng - hdr.range_min_m) / rng_step;
             float i_beam = (beam_deg - hdr.beam_angles_deg[0]) / beam_step;
@@ -270,7 +270,14 @@ int main (int argc, char * argv[]) {
         Background bg;
         if ( initialize_background(bg, N, fb)<0 )
         {
+           // ??? arm: is log and continue the correct behavior?
             NIMS_LOG_ERROR << "Error initializing background!";
+            
+            // need to exit if we got a SIGINT
+            if (sigint_received) {
+                NIMS_LOG_WARNING << "exiting due to SIGINT";
+                return 0;
+            }
         }
         NIMS_LOG_DEBUG << "Moving average and std dev initialized";
 
@@ -300,6 +307,12 @@ int main (int argc, char * argv[]) {
         << min_rng << " to " << max_rng;
     }
     //Mat imc(ping_mean.size(), CV_8UC3); // used for VIEW
+    
+    // check before entering loop; GetNextFrame may have been interrupted
+    if (sigint_received) {
+        NIMS_LOG_WARNING << "exiting due to SIGINT";
+        return 0;
+    }
     
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, 
         sizeof(DetectionMessage), true); // non-blocking
