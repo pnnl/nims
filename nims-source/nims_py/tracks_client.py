@@ -26,7 +26,7 @@ def _reconnect(receive_socket=None):
     # get a timeout
     receive_socket.setblocking(False)
 
-    options = { "frequency" : 10, "host" : _HOST }
+    options = { "frequency" : 10, "host" : _HOST, "heartbeat" : 60.0 }
     receive_socket.send("%s" % (json.dumps(options).encode("utf-8")))
     
     return receive_socket
@@ -43,7 +43,7 @@ if __name__ == '__main__':
         try:
             try:
                 
-                rtr, rtw, ie = select.select([receive_socket], [], [], 60.0)
+                rtr, rtw, ie = select.select([receive_socket], [], [], 120.0)
                 if len(rtr):
                     new_data = receive_socket.recv(4096, MSG_DONTWAIT)
                     
@@ -56,9 +56,10 @@ if __name__ == '__main__':
                     data += new_data
                     comps = data.split("\0")
                     if len(comps):
-                        for line in comps[0:-1]:
-                            print line
-                            msg = json.loads(line, encoding="utf-8")
+                        for raw_message in comps[0:-1]:
+                            if raw_message:
+                                print raw_message
+                                msg = json.loads(raw_message, encoding="utf-8")
                             #outfile.write("ping_num %d\n" % (msg["ping_num"]))
                         if len(comps[-1]) == 0:
                             # all components received

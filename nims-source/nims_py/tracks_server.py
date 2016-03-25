@@ -5,6 +5,61 @@ A multithreaded socket server, which has a main thread that listens for
 connections, and passes them off to a queue reader thread that reads data
 from a message queue. Data from the message queue is then sent to worker
 threads which write it to client sockets.
+
+Messages are sent as JSON, and separated by a NUL byte. A single
+message looks like this (tracks[] is a list):
+
+{
+    "frame_num": 1735,
+    "num_tracks": 50,
+    "ping_num_sonar": 29653,
+    "tracks": [
+        {
+            "first_detect": 1458329600.0,
+            "height": 0.0,
+            "id": 20508,
+            "last_pos_bearing": 1236.126708984375,
+            "last_pos_elevation": 0.0,
+            "last_pos_range": 5.508647918701172,
+            "last_vel_bearing": Infinity,
+            "last_vel_elevation": NaN,
+            "last_vel_range": -Infinity,
+            "length": 0.1428571492433548,
+            "max_bearing_deg": 1338.540771484375,
+            "max_elevation_deg": 0.0,
+            "max_range_m": 5.538654327392578,
+            "min_bearing_deg": 1000.0,
+            "min_elevation_deg": 0.0,
+            "min_range_m": 2.09869122505188,
+            "pings_visible": 10,
+            "size_sq_m": 0.8089292645454407,
+            "speed_mps": 0.0,
+            "target_strength": 0.0,
+            "width": 4.687503814697266
+        },
+    ]
+}
+
+In order to parse multiple messages, a client needs to tokenise the
+input stream with \0 as the message delimiter. The raw JSON probably
+doesn't have newlines in it, but I didn't want to use that as a
+delimiter. Messages are encoded as UTF-8.
+
+The server won't start sending messages until it receives a message
+from the client. Nominally this should be a JSON dictionary with
+options; planned keys are "frequency" and "host" though neither are
+implemented.
+
+{ "frequency" : 10, "host" : _HOST, "heartbeat" : 60.0 }
+
+Frequency is a rate limit in Hz, and host is an IP or FQDN of the
+server. I'm not sure what my plan was for sending the server
+address. Heartbeat requests a null byte every N seconds as proof-of-life.
+Failure to receive a heartbeat would indicate a network issue or other
+problem on the server side, so the client could try to reconnect.
+
+Other possible options include gzip compression if bandwidth
+turns out to be a problem.
  
 """ 
 
@@ -15,9 +70,11 @@ from threading import Thread, current_thread
 import signal
 import os, sys
 import json
+from datetime import datetime
 
 def log_error(s):
-    sys.stderr.write("tracks_server.py: %s\n" % (s))
+    """mimic format of boost log"""
+    sys.stderr.write("%s [error] tracks_server.py (%d)\t%s\n" % (datetime.now(), os.getpid(), s))
     sys.stderr.flush()
     
 if os.getenv("NIMS_HOME"):
@@ -96,6 +153,12 @@ class DetectionServer(object):
         self._condition.release()
         self._thread.join()
         log_error("stopped server %s" % (self))
+        
+    def get_option(self, key):
+        """value of key passed in from client or None"""
+        if key in self._options:
+            return self._options[key]
+        return None
             
     def run_server(self):
         """SPI: separate thread to send messages to a connected client."""
@@ -116,7 +179,8 @@ class DetectionServer(object):
             self._condition.acquire()
             while self._run:
                 # block until signaled and lock acquired
-                self._condition.wait()
+                timeout = self.get_option("heartbeat")
+                self._condition.wait(timeout)
                 messages_to_send = list(self._messages)
                 self._messages = list()
                 self._condition.release()
@@ -125,13 +189,19 @@ class DetectionServer(object):
                     #log_error("writing to socket: %s" % (jv))
                     self._client_socket.send(jv)
                     self._client_socket.send("\0")
+
+                # heartbeat so the client knows we're still alive and doesn't
+                # try to reconnect (which creates another thread)
+                if len(messages_to_send) == 0:
+                    log_error("sending heartbeat to %s" % (self.get_option("host")))
+                    self._client_socket.send("\0")
                     
                 # lock before entering top of loop and checking _run
                 self._condition.acquire()                
 
             self._condition.release()
         except Exception, e:
-            log_error("Failed to send data to %s. Exception %s" % (self._client_socket.getpeername(), e))
+            log_error("Failed to send data to server %s; assuming it disconnected. Exception %s" % (self._client_socket.getpeername(), e))
             # this server object is dead, so my as well remove it
             _run_cond.acquire()
             _servers.remove(self)
