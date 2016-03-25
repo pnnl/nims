@@ -6,6 +6,8 @@ connections, and passes them off to a queue reader thread that reads data
 from a message queue. Data from the message queue is then sent to worker
 threads which write it to client sockets.
 
+***
+
 Messages are sent as JSON, and separated by a NUL byte. A single
 message looks like this (tracks[] is a list):
 
@@ -45,16 +47,19 @@ input stream with \0 as the message delimiter. The raw JSON probably
 doesn't have newlines in it, but I didn't want to use that as a
 delimiter. Messages are encoded as UTF-8.
 
+***
+
 The server won't start sending messages until it receives a message
 from the client. Nominally this should be a JSON dictionary with
-options; planned keys are "frequency" and "host" though neither are
-implemented.
+options.
 
 { "frequency" : 10, "host" : _HOST, "heartbeat" : 60.0 }
 
-Frequency is a rate limit in Hz, and host is an IP or FQDN of the
-server. I'm not sure what my plan was for sending the server
-address. Heartbeat requests a null byte every N seconds as proof-of-life.
+Frequency is a rate limit in Hz (currently disregarded), 
+and host is an IP or FQDN of the server. I'm not sure what my 
+plan was in sending the server address. 
+
+Heartbeat requests a null byte every N seconds as proof-of-life.
 Failure to receive a heartbeat would indicate a network issue or other
 problem on the server side, so the client could try to reconnect.
 
