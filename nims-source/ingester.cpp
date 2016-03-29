@@ -43,7 +43,7 @@ int main (int argc, char * argv[]) {
     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
     setup_logging(string(basename(argv[0])), cfgpath, log_level);
-   setup_signal_handling();
+    setup_signal_handling();
     
 	
 	//--------------------------------------------------------------------------
@@ -52,7 +52,8 @@ int main (int argc, char * argv[]) {
 	
 	int sonar_type;
 	string sonar_host_addr;
-  int sonar_port;
+  // TODO: make this virtual, like source
+  EK60Params ek60_params;
 	string fb_name;
     try 
     {
@@ -62,8 +63,24 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "SONAR_TYPE: " << sonar_type;
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
         NIMS_LOG_DEBUG << "SONAR_HOST_ADDR: " << sonar_host_addr;
-        sonar_port = config["SONAR_PORT"].as<int>();
-        NIMS_LOG_DEBUG << "SONAR_PORT: " << sonar_port;
+        if (sonar_type == NIMS_SONAR_EK60)
+        {
+          YAML::Node params = config["SONAR_EK60"];
+          ek60_params.port = params["sonar_port"].as<int>();
+          NIMS_LOG_DEBUG << "sonar_port: " << ek60_params.port;
+          ek60_params.along_beamwidth = params["along_beamwidth"].as<float>();
+          NIMS_LOG_DEBUG << "along_beamwidth: " << ek60_params.along_beamwidth;
+          ek60_params.athwart_beamwidth = params["athwart_beamwidth"].as<float>();
+          NIMS_LOG_DEBUG << "athwart_beamwidth: " << ek60_params.athwart_beamwidth;
+          ek60_params.along_sensitivity = params["along_sensitivity"].as<float>();
+          NIMS_LOG_DEBUG << "along_sensitivity: " << ek60_params.along_sensitivity;
+          ek60_params.along_offset = params["along_offset"].as<float>();
+          NIMS_LOG_DEBUG << "along_offset: " << ek60_params.along_offset;
+          ek60_params.athwart_sensitivity = params["athwart_sensitivity"].as<float>();
+          NIMS_LOG_DEBUG << "athwart_sensitivity: " << ek60_params.athwart_sensitivity;
+          ek60_params.athwart_offset = params["athwart_offset"].as<float>();
+          NIMS_LOG_DEBUG << "athwart_offset: " << ek60_params.athwart_offset;
+        }
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
         NIMS_LOG_DEBUG << "FRAMEBUFFER_NAME: " << fb_name;
      }
@@ -99,7 +116,7 @@ int main (int argc, char * argv[]) {
             break;
 	    case NIMS_SONAR_EK60 :
             NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
-            input = new DataSourceEK60(sonar_host_addr, sonar_port);
+            input = new DataSourceEK60(sonar_host_addr, ek60_params);
             break;
        default :
              NIMS_LOG_ERROR << "unknown sonar type: " << sonar_type;

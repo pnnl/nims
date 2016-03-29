@@ -17,6 +17,7 @@
 #include <thread>   // for threads
 #include <iostream> // clog
 
+// TODO:  Change these to all caps, like old-school constants/macros
 const int kMaxBeams = 512;
 const int kMaxSamples = 20000;
 // TODO:  Need a rational determination based on memory, frame size/page size, 

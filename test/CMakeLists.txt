@@ -32,7 +32,7 @@ find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
 
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
 # order of these matters for log_setup/log/thread
-find_package(Boost REQUIRED COMPONENTS filesystem system program_options log_setup log thread filesystem)
+find_package(Boost REQUIRED COMPONENTS  system program_options log_setup log thread filesystem date_time)
 find_package(Yaml-cpp REQUIRED)
 find_package(Threads REQUIRED)
 

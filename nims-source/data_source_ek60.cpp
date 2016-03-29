@@ -10,7 +10,8 @@
 
 #include "data_source_ek60.h"
 
-#include <cstring>  // strncpy()
+#include <cstring>  // strncpy(), memcpy()
+#include <cstdlib> // malloc()
 #include <ostream>
 
 #include <stdint.h> // fixed width integer types
@@ -19,151 +20,24 @@
 #include <arpa/inet.h> // inet_addr()
 #include <unistd.h> // close()
 #include <assert.h> // assert()
-
+//#include <ctime> // time functions
+//#include <boost/date_time/posix_time/posix_time_io.hpp>
+ 
 #include "log.h"
 
- using namespace std;
+namespace dt = boost::date_time;
+namespace pt = boost::posix_time;
+namespace greg = boost::gregorian;
+using namespace std;
 
 // Data types from the Simrad EK60 Scientific Echo Sounder Reference Manual
 // File Formats, p. 194
 #define SHORT int16_t
 #define LONG int32_t
+#define BYTE int8_t
 
-/*
- "The DateTime structure contains a 64-bit integer value stating the number of
- 100 nanosecond intervals since January 1,1601. This is the internal ”filetime”
- used by the Windows NT operating system."
- */
- struct DateTime {
-    LONG lowWord;
-    LONG highWord;
-}; // DateTime
-
-struct DatagramHeader
-{
-    char dg_type[4];
-    DateTime date_time;
-}; // DatagramHeader
-
-/*
-   "The byte order of the length tags and all binary fields within a datagram is
-   always identical to the native byte order of the computer that writes the 
-   data file. It is the responsibility of the software that reads the file to 
-   perform byte swapping of all multibyte numbers within a datagram if required.
-   Byte swapping is required whenever there is an apparent mismatch between the 
-   head and the tail length tags. Hence, the two length tags may be used to 
-   identify the byte order of the complete datagram."
- */
-
-   struct Datagram {
-    LONG length1; // datagram length in bytes
-    DatagramHeader hdr;
-    LONG length2; // datagram length in bytes
-}; // Datagram
-
-// See p. 201, Data subscriptions overview
-enum ConnectionState {
-    NONE,
-    INFO_REQUESTED,
-    INFO_RECEIVED,
-    CONNECTING,
-    ALIVE,
-    FAILED
-}; // ConnectionState
-
-struct RequestServerInfo
-{
-    char header[4];
-    
-    RequestServerInfo()
-    {
-        static char const str[] = "RSI\0";
-        assert( strlen( str ) < sizeof( header ) );
-        strcpy( header, str );
-    };
-    
-};
-
-struct ServerInfo2
-{
-    char header[4];  //”SI2\0”
-    char applicationType[64];
-    char applicationName[64];
-    char applicationDescription[128];
-    long applicationID;    //ID of the current application
-    long commandPort;      //Port number to send commands to
-    long mode;             //local data source or a remote data source
-    char hostName[64]; //the computer the application is running on
-    
-    ServerInfo2()
-    {
-        memset(&header, '\0', sizeof(header));
-        memset(&applicationType, '\0', sizeof(applicationType));
-        memset(&applicationName, '\0', sizeof(applicationName));
-        memset(&applicationDescription, '\0', sizeof(applicationDescription));
-        applicationID = -1;
-        commandPort = -1;
-        mode = -1;
-        memset(&hostName, '\0', sizeof(hostName));
-    };
-};
-
-ostream& operator<<(ostream& os, const ServerInfo2& is2)
-{
-    os << "Application Type: " << string(is2.applicationType) << endl
-    << "Application Name: " << string(is2.applicationName) << endl
-    << "Application Desc: " << string(is2.applicationDescription) << endl
-    << "Application ID: " << is2.applicationID << endl
-    << "Command Port: " << is2.commandPort << endl
-    << "Mode: " << is2.mode << endl
-    << "Hostname: " << string(is2.hostName) << endl;
-    return os;
-}
-
-struct ConnectRequest
-{
-    char header[4]; //”CON\0”
-    char clientInfo[1024];
-    //e.g.”Name:Simrad;Password:\0”
-    
-    ConnectRequest()
-    {
-       static char const str1[] = "CON\0";
-       assert( strlen( str1 ) < sizeof( header ) );
-       strcpy( header, str1 );
-       static char const str2[] = "Name:NIMS;Password:\0";
-       assert( strlen( str2 ) < sizeof( clientInfo ) );
-       strcpy( clientInfo, str2 );
-   }
-};
-
-struct Response
-{
-    char header[4];      //”RES\0”
-    char request[4];     //”CON\0”
-    char msgControl[22]; //”\0”
-    char msgResponse[1400]; //Response to connection request
-    
-    Response()
-    {
-        memset(&header, '\0', sizeof(header));
-        memset(&request, '\0', sizeof(request));
-        memset(&msgControl, '\0', sizeof(msgControl));
-        memset(&msgResponse, '\0', sizeof(msgResponse));
-
-    };
-    
-};
-
-ostream& operator<<(ostream& os, const Response& r)
-{
-    os << "Request: " << string(r.request) << endl
-    << "Msg Control: " << string(r.msgControl) << endl
-    << "Msg Response: " << string(r.msgResponse) << endl;
-}
-
-
-
+// (10 log 2)/256
+#define POWER_SCALE 0.011758984205624
 /*
  Sample datagram
  The sample datagram contains sample data from just one transducer channel.
@@ -183,37 +57,9 @@ ostream& operator<<(ostream& os, const Response& r)
  Angle data is expressed in 2's complement format, and the resolution is given in steps of 180/128 electrical
  degrees per unit. Positive numbers denotes the fore and starboard directions.
   */
- struct SampleDatagram
- {
-
-	//DatagramHeader	DgHeader; // "RAW0"
-	SHORT channel; // Channel number
-	SHORT mode; // Datatype
-	float transducerDepth; // [m]
-	float frequency; // [Hz]
-	float transmitPower; // [W]
-	float pulseLength; // [s]
-	float bandWidth; // [Hz]
-	float sampleInterval; // [s]
-	float SoundVelocity; // [m/s]
-	float absorptionCoefficient; // [dB/m]
-	float heave; // [m]
-	float roll; // [deg]
-	float pitch; // [deg]
-	float temperature; // [C]
-	short trawlUpperDepthValid; // None=0, expired=1, valid=2
-	short trawlOpeningValid; // None=0, expired=1, valid=2
-	float trawlUpperDepth; // [m]
-	float trawlOpening; // [m]
-	LONG offset; // First sample
-	LONG count; // Number of samples
-	SHORT powAng[0];
-
-}; 
-
-
+ 
 //-----------------------------------------------------------------------------
-DataSourceEK60::DataSourceEK60(std::string const &host_addr, uint16_t in_port)
+DataSourceEK60::DataSourceEK60(std::string const &host_addr, EK60Params const &params)
 {
     // EK60 uses connectionless UDP so this is just used
     // to verify received datagrams are from the EK60 host
@@ -221,18 +67,29 @@ DataSourceEK60::DataSourceEK60(std::string const &host_addr, uint16_t in_port)
     host_.sin_family = AF_INET;
     //host_.sin_addr.s_addr = inet_addr(host_addr.c_str());
     host_.sin_addr.s_addr = htonl(INADDR_ANY);
-    host_.sin_port = htons(in_port);
+    host_.sin_port = htons(params.port);
 
-    //cmd_port_ = -1;
+    // initialize time base
+    t_epoch_ = pt::ptime(greg::date(1970,1,1),pt::time_duration(0,0,0));
+
+    // initialize angle scaling
+    // transducer-dependent, 
+    // for three examples I have, the sensitivity is the same for both directions
+    // sensitivity is a user-settable parameter, 0 to 100
+    // offset is user-settable, -10 to 10
+    A_along_ = (180.0/128.0)/params.along_sensitivity;
+    B_along_ = params.along_offset;
+    A_athwart_ = (180.0/128.0)/params.athwart_sensitivity;
+    B_athwart_ = params.athwart_offset;
+
+    params_ = params;
     
+    // 
 } // DataSourceEK60::DataSourceEK60
 
 //-----------------------------------------------------------------------------
 DataSourceEK60::~DataSourceEK60()
 {
-    // destroy data subscriptions
-    // stop "keep alive" thread
-    // disconnect from server
     close(input_);
 } // DataSourceEK60::~DataSourceEK60
 
@@ -247,89 +104,53 @@ int DataSourceEK60::connect()
         NIMS_LOG_ERROR << "socket() failed";
         return -1;
     }
+    // bind to the port to receive incoming messages
     if (bind(input_, (struct sockaddr *)&host_, sizeof(host_)) == -1)
     {
         NIMS_LOG_ERROR << "bind() failed";
         return -1;
     }
-    /*
-    // NOTE:  Have to indicate external connect with "::"
-    //        to distguish from member function connect()
-    // NOTE:  ::connect() will block for some time interval, waiting for connection
-    //        and eventually time out.  POSIX does not specify interval.
-    if ( ::connect(input_, (struct sockaddr *) &host_, sizeof(struct sockaddr)) < 0 )
-    {
-        nims_perror("EK60::connect() failed");
-        close (input_);
-        input_ = -1;
-        return -1;
-    }
-    // request server information
-    /* manual p. 202
-       Send the following RequestServerInfo message to the specific IP address of
-       the server, or broadcast the message to receive server information from all 
-       servers on the LAN.  The message should be send to the UDP port number found 
-       in the Local port field on the Server page in the Remoting dialog. in the server 
-       application.
-    */
-       /*
-    NIMS_LOG_DEBUG << "sending server request";
-    RequestServerInfo rsi;
-    if ( send(input_, (const void *)&rsi, sizeof(rsi), MSG_DONTWAIT) < 0 )
-    {
-        nims_perror("EK60 send request to server failed");
-        close (input_);
-        input_ = -1;
-        return -1;
-        
-    };
 
-    ssize_t bytes_read = 0;
+    // get parameter datagrams
+        sockaddr_in sender;
+        socklen_t socklen = sizeof(sender);
+        int n = recvfrom(input_, buf_, DATA_BUFFER_SIZE, 0, (struct sockaddr *)&sender, &socklen);
+        if (n < 0)
+        {
+            // TODO: maybe try again before returning.
+            NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error reading datagram.";
+            return -1;    
+        }
+        NIMS_LOG_DEBUG << "read " << n << " bytes from " << inet_ntoa(sender.sin_addr) << ": " << string(buf_, 12)<< endl;
 
-    ServerInfo2 si2;
-    bytes_read = recv(input_, (char *)&si2, sizeof(si2), MSG_WAITALL);
-    if ( bytes_read != sizeof(si2) ) {
-        nims_perror("incorrect number of bytes from recv()");
-        NIMS_LOG_ERROR << "bytes requested = " << sizeof(si2) << ", bytes_read =  " << bytes_read;
-        return -1;
-    }
-    NIMS_LOG_DEBUG << "received server response: " << string(si2.header) << endl << si2;
+    strncpy(header_.device, "Simrad EK60 echo sounder", sizeof(header_.device));
+    
+    header_.version  = 0;
+    header_.ping_num = 0;
 
-    // Hopefully this is the same port we used in the constructor.
-    if    ( host_.sin_port != htons(si2.commandPort) )
+    // PE,22114619,/UTILITY MENU/Sound Velocity=1489 m
+    header_.soundspeed_mps = 0.0;
+
+    // PE,22114619,/TRANSCEIVER MENU/Transceiver-1 Menu/Sample Interval=0.0953 m
+    header_.num_samples    = 0;
+    header_.range_min_m    = 0.0;
+    header_.range_max_m    = 1000.0;
+
+    header_.winstart_sec   = 0; // not used
+    header_.winlen_sec     = 0; // not used
+ 
+    // create virtual beams to represent angles within single beam
+    header_.num_beams      = 256; // 8-bit resolution
+   for (int m=0; m<header_.num_beams; ++m)
     {
-        NIMS_LOG_WARNING << "port mismatch, reconnecting";
+        header_.beam_angles_deg[m] = A_along_*(-128.0 + m) + params_.along_offset;;
     }
-    cmd_port_ = si2.commandPort;
-    
-    // connect to server
-    NIMS_LOG_DEBUG << "sending connect request";
-    ConnectRequest cr;
-    if ( send(input_, (const void *)&cr, sizeof(cr), MSG_DONTWAIT) < 0 )
-    {
-        nims_perror("EK60 request to connect failed");
-        close (input_);
-        input_ = -1;
-        return -1;
-        
-    };
-    
-    Response res;
-    bytes_read = recv(input_, (char *)&res, sizeof(res), MSG_WAITALL);
-    if ( bytes_read != sizeof(res) ) {
-        nims_perror("incorrect number of bytes from recv()");
-        NIMS_LOG_ERROR << "bytes requested = " << sizeof(res) << ", bytes_read =  " << bytes_read;
-        return -1;
-    }
-    NIMS_LOG_DEBUG << "received server response: " << string(res.header) << endl << res;
-    
-    // have to parse the msgResponse field (jeez)
-    // ResultCode:S_OK | E_ACCESSDENIED | E_FAIL
-    // Parameters:{ClientID:1,AccessLevel:1}\0
-    
-    // start "keep alive" thread
-    // issue data request command
-    */
+    header_.freq_hz           = 0;
+
+    // PE,22114619,/TRANSCEIVER MENU/Transceiver-1 Menu/Pulse Length=0.512 ms
+    header_.pulselen_microsec = 0 * 1e6;
+    header_.pulserep_hz       = 0;
+
     return 0;
     
 } // DataSourceEK60::connect
@@ -354,108 +175,161 @@ int DataSourceEK60::GetPing(Frame* pframe)
         NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Not connected to source.";
         return -1;
     }
+
+
 /*
-    // read from source to get datagram size
-    // TODO:  may have to do byte swapping if length values don't seem to match
-    // can assume EK60 host is Intel little-endian?
-    //struct sockaddr_in serveraddr;
-    //int serverlen = sizeof(serveraddr);
-    int n;
-    LONG datagram_size_in_bytes = 0;
-    cout << "attempting to read datagram size..." << endl;
-    //while ( serveraddr.sin_addr.s_addr != host_.sin_addr.s_addr )
-    //{
-        //n = recvfrom(input_, (char*)(&datagram_size_in_bytes), sizeof(datagram_size_in_bytes), 0, &serveraddr, &serverlen);
-    n = recvfrom(input_, (char*)(&datagram_size_in_bytes), sizeof(datagram_size_in_bytes), 0, nullptr, nullptr);
-    if (n < 0)
-    {
-        NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error receiving first length datagram.";
-        return -1;    
-    }
-    //}
-    cout << "read " << n << " bytes" << endl;
-    cout << "datagram_size_in_bytes = " << datagram_size_in_bytes << endl;
-
-    if ( datagram_size_in_bytes > DATA_BUFFER_SIZE )
-    {
-        NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Invalid datagram size " << datagram_size_in_bytes;
-        return -1;
-    }
+If power and angle are both selected in the EK500 Datagram dialog, first angle 
+datagrams are sent then power.  The datagrams will have the same timestamp.  
+All the datagrams for each type will be sent consecutively followed by the next
+type.
 */
+    char* buf_power = nullptr;
+    char* buf_angle = nullptr;
 
-// read from source to get header and datagram
-    cout << "attempting to read datagram..." << endl;
-    //serveraddr.sin_addr.s_addr = 0;
-    //while ( serveraddr.sin_addr.s_addr != host_.sin_addr.s_addr )
-    //{
-       // n = recvfrom(input_, buf, datagram_size_in_bytes, 0, &serveraddr, &serverlen);
-    sockaddr_in sender;
-    socklen_t socklen = sizeof(sender);
+string ptime_str;
+size_t data_bytes = 0;
+data_bytes = get_datagram("B1", ptime_str, buf_angle);
+if (!(data_bytes>0)) {
+    NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error getting angle data.";
+    return -1;
+}
+data_bytes = get_datagram("W1", ptime_str, buf_power);
+if (!(data_bytes>0)) {
+    NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error getting power data.";
+    return -1;
+}
 
-    int n = recvfrom(input_, buf_, DATA_BUFFER_SIZE, 0, (struct sockaddr *)&sender, &socklen);
-    if (n < 0)
-    {
-        NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error reading datagram header.";
-        return -1;    
-    }
-    //}
-    cout << "read " << n << " bytes from " << inet_ntoa(sender.sin_addr) << endl;
-
-    NIMS_LOG_DEBUG << "    extracting header";
-    cout << string(buf_, 12) << endl;
-
-    strncpy(pframe->header.device, "Simrad EK60 echo sounder",
-        sizeof(pframe->header.device));
+    //NIMS_LOG_DEBUG << "    constructing header";
+    pframe->header = header_; // copy constant part of header
     
-    pframe->header.version  = 0;
+    // TODO:  need to assign a ping number since there is none in datagram
     pframe->header.ping_num = 0;
 
-    /*
-    "The DateTime structure contains a 64-bit integer value stating the number of
-    100 nanosecond intervals since January 1,1601. This is the internal ”filetime”
-    used by the Windows NT operating system."
-    */
-    /*
     // time of ping in seconds since midnight 1-Jan-1970
-    double ntSecs = (hdr.date_time.highWord * 2^32 + hdr.date_time.lowWord) / 100 / 1e9;
-    double utc = NT_TO_UTC(ntSecs);
-    pframe->header.ping_sec      = (uint32_t)floor(utc); 
-    pframe->header.ping_millisec = (uint32_t)(utc - pframe->header.ping_sec)*1000;
+    // NOTE:  Assumes sonar host computer is set to same timezone
+    // as NIMS computer.  Assumes current time is always later than
+    // ping time, since ping happened in the past.
+    pt::ptime tnow(pt::second_clock::local_time());
+    // ISO time sting: YYYYMMDDTHHMMSS,fffffffff
+    string tnow_str = pt::to_iso_string(tnow);
+    //NIMS_LOG_DEBUG << "time now is " << tnow_str;
+    string tping_str = string(tnow_str,0,9) + string(buf_+3,6) + ',' + string(buf_+9,2) + "0000000";
+    //NIMS_LOG_DEBUG << "ping time is " << tping_str;
+    pt::ptime tping = pt::from_iso_string(tping_str);
+    if (tping > tnow) tping = tping - greg::days(1);
+    pt::time_duration diff = tping - t_epoch_;
+    pframe->header.ping_sec      = (uint32_t)(diff.total_seconds()); 
+    pframe->header.ping_millisec = (uint32_t)stoi(string(buf_+9,2),nullptr,10)*10;
 
-
-    pframe->header.soundspeed_mps = dg.SoundVelocity;
-    pframe->header.num_samples    = dg.count;
-    pframe->header.range_min_m    = 0;
-    pframe->header.range_max_m    = 0;
-    pframe->header.winstart_sec   = 0; // not used
-    pframe->header.winlen_sec     = 0; // not used
-    pframe->header.num_beams      = 0; // for EK60, this is num pings
-    //for (int m=0; m<header.nNumBeams; ++m)
-    //{
-     //   if (kMaxBeams == m) break; // max in frame_buffer.h
-     //   pframe->header.beam_angles_deg[m] = header.fBeamList[m];
-    //}
-    pframe->header.freq_hz           = dg.frequency;
-    pframe->header.pulselen_microsec = dg.pulseLength * 1e6;
-    pframe->header.pulserep_hz       = 0;
+    pframe->header.num_samples = data_bytes/sizeof(SHORT);
     
-    NIMS_LOG_DEBUG << "    extracting data";
     // copy data to frame 
-    /*
-    size_t frame_data_size = sizeof(framedata_t)*(header.nNumSamples)*(header.nNumBeams);
+    //NIMS_LOG_DEBUG << "    allocating frame memory";
+    size_t frame_data_size = sizeof(framedata_t)*(pframe->header.num_samples)*(pframe->header.num_beams);
     pframe->malloc_data(frame_data_size);
     if ( pframe->size() != frame_data_size )
-        ERROR_MSG_EXIT("Error allocating memory for frame data.");
-    framedata_t* fdp = pframe->data_ptr();
-    for (int ii = 0; ii < header.nNumBeams; ++ii) // column
     {
-        for (int jj = 0; jj < header.nNumSamples; ++jj) // row
-        {
-            fdp[ii*(header.nNumSamples) + jj] = ABS_IQ( bfData[ii*(header.nNumSamples) + jj] );
-            
-        }
+        NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error allocating memory for frame data.";
+        free(buf_angle);
+        free(buf_power);
+        return -1;
     }
-*/
-    
+    //NIMS_LOG_DEBUG << "    extracting data, " << pframe->header.num_samples << " samples";
+    framedata_t* fdp = pframe->data_ptr();
+    BYTE b;
+    SHORT raw;
+    for (int r = 0; r < pframe->header.num_samples; ++r) // row
+    { 
+        memcpy(&b, buf_angle+(2*r), 1);      
+        memcpy(&raw, buf_power+(2*r), 2);
+        //NIMS_LOG_DEBUG << "r = " << r << ", b = " << +b << ", power = " << raw;
+        fdp[(b+128)*(pframe->header.num_samples) + r] = (framedata_t)(raw*POWER_SCALE);
+    }
+
+    //NIMS_LOG_DEBUG << " done getting ping data.";
+    free(buf_angle);
+    free(buf_power);
+     return 0;
+
     
 } // DataSourceEK60::GetPing
+
+
+size_t DataSourceEK60::get_datagram(string dtype_str, string& dtime_str, char* &buf_data)
+{
+     
+    BYTE pkt_num;
+    SHORT firstbyte;
+    SHORT bytes_in_pkt;
+    size_t bytes_so_far = 0; // data bytes copied to buffer so far
+
+// loop here until we get a full datagram of the desired type, which may be
+// split over multiple packets
+bool got_it = false;
+while (!got_it)
+{
+    //NIMS_LOG_DEBUG << "getting datagram...";
+    if (bytes_so_far > 0) free(buf_data);
+    buf_data = nullptr;
+    bytes_so_far = 0;
+    int last_pkt = -1; // sequence number of last packet received
+
+    BYTE eod = 0x00; // end of data flag
+    while (eod == 0x00) // more packets, 0x80 indicates last packet
+    {
+        sockaddr_in sender;
+        socklen_t socklen = sizeof(sender);
+        int n = recvfrom(input_, buf_, DATA_BUFFER_SIZE, 0, (struct sockaddr *)&sender, &socklen);
+        if (n < 0)
+        {
+            // TODO: maybe try again before returning.
+            NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error reading datagram.";
+            return -1;    
+        }
+       // NIMS_LOG_DEBUG << "read " << n << " bytes from " << inet_ntoa(sender.sin_addr) << ": " << string(buf_, 12)<< endl;
+
+        // check type
+        string dtype = string(buf_,2);
+        if (dtype != dtype_str) 
+        {
+            NIMS_LOG_WARNING << "ignoring invalid datagram type: " << dtype;
+            break; // start over looking for datagram
+        }
+
+        // parse datagram
+        // TODO: make offsets #defines for maintainability
+        string pingtimestr = string(buf_+3,8);
+        memcpy(&pkt_num, buf_+12, sizeof(pkt_num));
+        memcpy(&eod, buf_+13, sizeof(eod));
+        memcpy(&firstbyte, buf_+14, sizeof(firstbyte));
+        memcpy(&bytes_in_pkt, buf_+16, sizeof(bytes_in_pkt));
+ 
+        // check for lost packets
+        if (pkt_num > last_pkt + 1)
+        {   
+            //last_pkt = -1;
+            NIMS_LOG_WARNING << "dropped packet, waiting for next ping";
+            break; // start over looking for angle datagram
+        }
+        // TODO: could also check for same timestring
+        last_pkt = pkt_num;
+        char* new_buf = (char *)realloc(buf_data, bytes_so_far + bytes_in_pkt);
+        if (new_buf == nullptr)
+        {
+            NIMS_LOG_ERROR << "DataSourceEK60::GetPing() Error allocating memory";
+            return -1;
+        }
+        buf_data = new_buf;
+        memcpy(buf_data+bytes_so_far,buf_+18,bytes_in_pkt);
+        bytes_so_far += bytes_in_pkt;
+
+    } // while (eod == 0x00) 
+    
+    //NIMS_LOG_DEBUG << "eod: " << eod;
+    if (eod == -128) got_it = true;
+} // while (!got_it)
+//NIMS_LOG_DEBUG << "got datagram: " << pkt_num +1 << " packets, " << bytes_so_far << " total bytes";
+
+return bytes_so_far;
+
+} // DataSourceEK60::get_datagram

@@ -36,7 +36,7 @@ find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
 find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
 
 # NOTE: order of these matters for log_setup/log/thread, filesystem needs to be at the end
-find_package(Boost REQUIRED COMPONENTS system program_options log_setup log thread filesystem )
+find_package(Boost REQUIRED COMPONENTS system program_options log_setup log thread filesystem date_time)
 
 # NOTE: If your yaml is in a non-standard place (see nims-source/cmake/Modules/FindYaml-cpp.cmake 
 #       for the standard places), then uncomment the following line and

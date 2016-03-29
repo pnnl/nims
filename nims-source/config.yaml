@@ -11,13 +11,13 @@ APPLICATIONS:
           - -c
           - config.yaml
           - -l
-          - warning
+          - debug
     - name: detector
       args:
           - -c
           - config.yaml
           - -l
-          - warning
+          - debug
     - name: tracker
       args:
           - -c
@@ -35,17 +35,27 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
 # 1 = M3, 2 = BlueView, 3 = EK60
-SONAR_TYPE: 1
+SONAR_TYPE: 3
 
 # Used for M3, BlueView and EK60
-#SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
-SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
+SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
+#SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
 #SONAR_HOST_ADDR: 192.168.1.45 # shari's BlueView
 #SONAR_HOST_ADDR: 130.20.85.189 # arm
-#SONAR_HOST_ADDR: 192.168.5.233 # AMP
 
-# Used by EK60, no idea what this should be
-SONAR_PORT: 20000
+# Used for EK60 Sonar type
+SONAR_EK60:
+  # Ethernet Output dialog 
+  sonar_port: 3000
+  # Transducer parameters dialog
+  along_sensitivity: 23.0
+  along_offset: 0.0
+  athwart_sensitivity: 23.0
+  athwart_offset: 0.0
+  # not sure where to get this, and if user settable
+  along_beamwidth: 6.78
+  athwart_beamwidth: 6.83
+
 # Used by nims.py
 WEB_SERVER_PORT: 8080
 

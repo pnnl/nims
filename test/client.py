@@ -8,8 +8,9 @@ import socket
 from time import sleep
 
 #host = '127.0.0.1'
-host = 'we15128'
-port = 20001
+host = 'we30982'
+#host = '130.20.41.143'
+port = 3000
 backlog = 5
 size = 4096
 

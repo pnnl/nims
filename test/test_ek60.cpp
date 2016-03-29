@@ -50,7 +50,8 @@ int main (int argc, char * argv[]) {
 	int sonar_type;
 	string sonar_host_addr;
 	string fb_name;
-  uint16_t sonar_port;
+  EK60Params ek60_params;
+  
     try 
     {
         YAML::Node config = YAML::LoadFile(cfgpath);
@@ -58,9 +59,22 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "SONAR_TYPE = " << sonar_type;
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
         NIMS_LOG_DEBUG << "SONAR_HOST_ADDR = " << sonar_host_addr;
-        sonar_port = config["SONAR_PORT"].as<int>();
-        NIMS_LOG_DEBUG << "SONAR_PORT = " << sonar_port;
-        fb_name = config["FRAMEBUFFER_NAME"].as<string>();
+      fb_name = config["FRAMEBUFFER_NAME"].as<string>();
+          YAML::Node params = config["SONAR_EK60"];
+        ek60_params.port = params["sonar_port"].as<int>();
+        NIMS_LOG_DEBUG << "sonar_port: " << ek60_params.port;
+        ek60_params.along_beamwidth = params["along_beamwidth"].as<float>();
+        NIMS_LOG_DEBUG << "along_beamwidth: " << ek60_params.along_beamwidth;
+        ek60_params.athwart_beamwidth = params["athwart_beamwidth"].as<float>();
+        NIMS_LOG_DEBUG << "athwart_beamwidth: " << ek60_params.athwart_beamwidth;
+        ek60_params.along_sensitivity = params["along_sensitivity"].as<float>();
+        NIMS_LOG_DEBUG << "along_sensitivity: " << ek60_params.along_sensitivity;
+        ek60_params.along_offset = params["along_offset"].as<float>();
+        NIMS_LOG_DEBUG << "along_offset: " << ek60_params.along_offset;
+        ek60_params.athwart_sensitivity = params["athwart_sensitivity"].as<float>();
+        NIMS_LOG_DEBUG << "athwart_sensitivity: " << ek60_params.athwart_sensitivity;
+        ek60_params.athwart_offset = params["athwart_offset"].as<float>();
+        NIMS_LOG_DEBUG << "athwart_offset: " << ek60_params.athwart_offset;
      }
      catch( const std::exception& e )
     {
@@ -69,16 +83,7 @@ int main (int argc, char * argv[]) {
     }
     
     
-    
-    // create fb before datasource, so tracker doesn't bail out
-    // when it tries to open a nonexistent writer queue
-    FrameBufferWriter fb(fb_name);
-    if ( -1 == fb.Initialize() )
-    {
-       NIMS_LOG_ERROR << "Error initializing frame buffer writer.";
-       return -1;
-    }
-   
+       
  	DataSource *input; // This is a virtual class.   
     
 	// TODO: Define an enum or ?  Need to match config file definition.
@@ -86,7 +91,7 @@ int main (int argc, char * argv[]) {
 	{
 	    case NIMS_SONAR_EK60 :
             NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
-            input = new DataSourceEK60(sonar_host_addr, sonar_port);
+            input = new DataSourceEK60(sonar_host_addr, ek60_params);
             break;
         default :
              NIMS_LOG_ERROR << "invalid sonar type: " << sonar_type;
@@ -114,27 +119,33 @@ int main (int argc, char * argv[]) {
         
    } while ( !input->is_good() );
     
-   if (0 == sigint_received) 
-   {
+     if (sigint_received) {
+               NIMS_LOG_WARNING << "exiting due to SIGINT";
+               return 0;
+    }
+ 
        NIMS_LOG_DEBUG << "connected to source!";
 
       // the framedata_t (frame_buffer.h) is either float or double
       int cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1;
 
        size_t frame_count=0;
-       while ( input->more_data() )
-       {
-           cout << "Press ENTER to get a ping..." << std::flush;
-           std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+       //while ( input->more_data() )
+       //{
+           //cout << "Press ENTER to get a ping..." << std::flush;
+           //std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
            
            Frame frame;
-           if ( -1 == input->GetPing(&frame) ) break;
+           if ( -1 == input->GetPing(&frame) )
+           {
     
-           // if we get INT during a recv(), GetPing returns -1 
-           if (sigint_received) {
-               NIMS_LOG_WARNING << "exiting due to SIGINT";
-               break;
-           }
+              // if we get INT during a recv(), GetPing returns -1 
+              if (sigint_received) {
+                  NIMS_LOG_WARNING << "exiting due to SIGINT";
+               return 0;
+              }
+              return 1;
+            }
     
            NIMS_LOG_DEBUG << "got frame!";
            NIMS_LOG_DEBUG << frame.header << endl;
@@ -144,14 +155,18 @@ int main (int argc, char * argv[]) {
            double min_val,max_val;
            minMaxIdx(ping_data, &min_val, &max_val);
            NIMS_LOG_DEBUG << "frame values from " << min_val << " to " << max_val;
-           Mat im;
-           ping_data.convertTo(im,CV_16U);
-          imwrite("PingData.png", im);
-
-        
+          /*
+          for (int b=0; b<frame.header.num_beams; ++b)
+          {
+            for (int r=0; b<frame.header.num_samples; ++r)
+            {
+              cout << ping_data.at<framedata_t>(r,b);
+            }
+          }
+        */
            ++frame_count;
-        }
-    }
+       // }
+
         
 	NIMS_LOG_DEBUG << "Ending runloop; SIGINT: " << sigint_received;
     return 0;

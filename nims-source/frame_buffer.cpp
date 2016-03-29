@@ -172,7 +172,7 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     shared_name += boost::lexical_cast<std::string>(frame_count_++);
     
     NIMS_LOG_DEBUG << "FrameBufferWriter: putting frame " 
-                   << new_frame.header.ping_num << " in " << shared_name;
+                   << frame_count_ << "(ping " << new_frame.header.ping_num << ")" << " in " << shared_name;
         
     /*
      Create -rw------- since we don't need executable pages.
