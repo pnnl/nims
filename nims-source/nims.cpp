@@ -150,6 +150,10 @@ static int WaitForTaskLaunch(nims::Task *task, const mqd_t mq)
             NIMS_LOG_ERROR << "check in timed out after " << CHECKIN_TIME_LIMIT_SECONDS << " seconds";
             exit(errno);
         }
+        else if (EINTR == errno) {
+            // do nothing; no idea what signal is interrupting this
+            nims_perror("subtask checkin interrupted");
+        }
         else if (EAGAIN != errno) {
             // any other error
             nims_perror("subtask checkin failed");
