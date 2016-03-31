@@ -2,6 +2,7 @@
 # import nims_py.pxd
 from nims_py cimport get_next_message, get_next_message_timed, create_message_queue
 from nims_py cimport Track, TracksMessage, sizeof_tracks_message, sizeof_track
+import math
 
 cdef class PyTrack:
     
@@ -115,10 +116,30 @@ cdef class PyTrack:
         s += "}"
         return s
 
-    def dict_value(self):
+    def dict_value(self, ensure_finite=False):
         ret = dict()
         for k in self._allkeys:
-            ret[k] = getattr(self, k)
+            v = getattr(self, k)
+            
+            # Tracker is stuffing nan/inf/-inf values in, and
+            # the python JSON conversion changes them to a
+            # string representation that is not valid.
+            #
+            # Cleaner to change here rather than force the clients
+            # to iterate the nested dictionaries.
+            def _is_finite_value(v):
+                try:
+                    if math.isnan(v):
+                        return False
+                    if math.isinf(v):
+                        return False
+                except Exception, e:
+                    pass
+                return True
+                
+            if ensure_finite and _is_finite_value(v) == False:
+                v = None
+            ret[k] = v
             
         return ret
 
@@ -171,12 +192,12 @@ cdef class PyTracksMessage:
     def __str__(self):
         return str(self.dict_value())    
         
-    def dict_value(self):
+    def dict_value(self, ensure_finite=False):
         ret = dict()
         ret["frame_num"] = self.frame_num
         ret["ping_num_sonar"] = self.ping_num_sonar
         ret["num_tracks"] = self.num_tracks
-        ret["tracks"] = [ptrk.dict_value() for ptrk in self.tracks()]
+        ret["tracks"] = [ptrk.dict_value(ensure_finite=ensure_finite) for ptrk in self.tracks()]
         return ret
 
 cpdef int nims_checkin_py():

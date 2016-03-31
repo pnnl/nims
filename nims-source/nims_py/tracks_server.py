@@ -76,6 +76,7 @@ import signal
 import os, sys
 import json
 from datetime import datetime
+import math
 
 def log_error(s):
     """mimic format of boost log"""
@@ -190,7 +191,8 @@ class DetectionServer(object):
                 self._messages = list()
                 self._condition.release()
                 for msg in messages_to_send:
-                    jv = json.dumps(msg.dict_value()).encode("utf-8")
+                    msg_dict = msg.dict_value(ensure_finite=True)
+                    jv = json.dumps(msg_dict, allow_nan=False).encode("utf-8")
                     #log_error("writing to socket: %s" % (jv))
                     self._client_socket.send(jv)
                     self._client_socket.send("\0")

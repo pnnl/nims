@@ -39,12 +39,12 @@ cdef extern from "tracks_message.h":
 
 cdef extern from "nims_py_ext.h":
   
+    TracksMessage get_next_track(int mq)
+    TracksMessage get_next_track_timed(int mq, int secs, int ns)
     int get_next_message(int mq, void *msg, size_t msgsize)
     int create_message_queue(size_t message_size, char *name)
     int get_next_message_timed(int mq, void *msg, size_t msgsize, int secs, int ns)
     int nims_checkin()
-    size_t sizeof_detection_message()
-    size_t sizeof_detection()
     size_t sizeof_tracks_message()
     size_t sizeof_track()
-    
+

@@ -45,6 +45,15 @@ int get_next_message(mqd_t mq, void *msg, size_t msgsize)
   
 }
 
+struct TracksMessage get_next_track(mqd_t mq)
+{
+   struct TracksMessage trk;
+   memset(&trk, 0, sizeof(trk));
+   
+   get_next_message(mq, &trk, sizeof(trk));
+   return trk;
+}
+
 int get_next_message_timed(mqd_t mq, void *msg, size_t msgsize, int secs, int ns)
 {
     struct timespec ts;
@@ -57,6 +66,20 @@ int get_next_message_timed(mqd_t mq, void *msg, size_t msgsize, int secs, int ns
     if (ret >= 0) return ret;
     if (ETIMEDOUT == errno) return 0;
     return -1;
+}
+
+struct TracksMessage get_next_track_timed(mqd_t mq, int secs, int ns)
+{
+   struct TracksMessage trk;
+   memset(&trk, 0, sizeof(trk));
+   
+   get_next_message_timed(mq, &trk, sizeof(trk), secs, ns);
+   if (trk.num_tracks) {
+      struct Track tk = trk.tracks[0];
+      fprintf(stderr, "**** id=%d, size_sq_m=%.2f, last_pos_bearing=%.2f, last_vel_elevation=%.2f\n", tk.id, tk.size_sq_m, tk.last_pos_bearing, tk.last_vel_elevation);
+   }
+   
+   return trk;
 }
 
 int nims_checkin()
