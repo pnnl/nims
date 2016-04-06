@@ -21,28 +21,16 @@ void TrackedObject::init_tracking(int Nstate, int Nmeasure, float q, float r)
     F.at<float>(2,3) = 1;
     F.copyTo(kf_.transitionMatrix);
     
-    //cout << "kf_.transitionMatrix is " << kf_.transitionMatrix.rows << " x " << kf_.transitionMatrix.cols << endl;
-    //cout << kf_.transitionMatrix << endl;
-    
     kf_.measurementMatrix.at<float>(0,0) = 1.0;
     kf_.measurementMatrix.at<float>(1,2) = 1.0;
 
-    //cout << "kf_.measurementMatrix is " << kf_.measurementMatrix.rows << " x " << kf_.measurementMatrix.cols << endl;
-    //cout << kf_.measurementMatrix << endl;
-    
     setIdentity(kf_.processNoiseCov, Scalar::all(q)); // values from example
     kf_.processNoiseCov.at<float>(0,1) = q;
     kf_.processNoiseCov.at<float>(1,0) = q;
     kf_.processNoiseCov.at<float>(2,3) = q;
     kf_.processNoiseCov.at<float>(3,2) = q;
     
-    //cout << "kf_.processNoiseCov is " << kf_.processNoiseCov.rows << " x " << kf_.processNoiseCov.cols << endl;
-    //cout << kf_.processNoiseCov << endl;  
-    
     setIdentity(kf_.measurementNoiseCov, Scalar::all(r));
-    
-    //cout << "kf_.measurementNoiseCov is " << kf_.measurementNoiseCov.rows << " x " << kf_.measurementNoiseCov.cols << endl;
-    //cout << kf_.measurementNoiseCov << endl;
     
     setIdentity(kf_.errorCovPost, Scalar::all(1));
     //randn(kf_.statePost, Scalar::all(0), Scalar::all(0.1));
@@ -69,7 +57,7 @@ TrackedObject::TrackedObject(const Point2f& initial_pos, InputArray initial_imag
 	
 }
 */
-TrackedObject::TrackedObject(long id, long epoch, Detection initial_det, float process_noise, float measurement_noise)
+TrackedObject::TrackedObject(long id, float epoch, Detection initial_det, float process_noise, float measurement_noise)
 {
     id_ = id;
     epoch_.push_back(epoch);
@@ -84,24 +72,9 @@ TrackedObject::TrackedObject(long id, long epoch, Detection initial_det, float p
     detections_.push_back(initial_det);
 
 }
-/*
-void TrackedObject::update( long epoch, const cv::Point2f& new_pos, InputArray new_image)
-{
-    Mat new_image_ = new_image.getMat();
-    CV_Assert( new_image_.type() == CV_32FC1 || new_image_.type() == CV_8UC1 || new_image_.type() == CV_8UC3 || new_image_.empty() );
 
-	epoch_.push_back(epoch);
-	position_.push_back(new_pos);
-	image_.push_back(new_image_);
 
-    
-    Mat_<float> measurement(2,1);
-	measurement(0) = new_pos.x;
-	measurement(1) = new_pos.y;
-    kf_.correct(measurement);
-}
-*/
-void TrackedObject::update(long epoch, Detection new_det)
+void TrackedObject::update(float epoch, Detection new_det)
 {
     epoch_.push_back(epoch);
     detections_.push_back(new_det);
@@ -113,19 +86,8 @@ void TrackedObject::update(long epoch, Detection new_det)
 
 }
 
-/*
-Point2f TrackedObject::predict( long epoch)
-{
-    Mat prediction = kf_.predict();
-	// elapsed time
-	float dt = epoch - epoch_.back();
-    kf_.transitionMatrix.at<float>(0,1) = dt;
-    kf_.transitionMatrix.at<float>(2,3) = dt;
-    return Point2f(prediction.at<float>(0),prediction.at<float>(2));
-}
-*/
 
-Detection TrackedObject::predict(long epoch)
+Detection TrackedObject::predict(float epoch)
 {
     Mat prediction = kf_.predict();
     // elapsed time
@@ -195,99 +157,6 @@ void  TrackedObject::get_track_smoothed(vector<long>& epoch, vector<Point2f>& po
 		}
 }
 */
-/*
-void   TrackedObject::get_last_image(OutputArray lastimg) const
-{
-	if (image_.empty()) return;
-	//cout << "size of image track is " << image_.size() << endl;
-	Mat backimg = image_.back();
-	lastimg.create(backimg.rows,backimg.cols,backimg.type());
-	Mat _lastimg = lastimg.getMat();
-	//cout << "lastimg_ size is " << _lastimg.rows << " x " << _lastimg.cols << endl;
-	backimg.copyTo(_lastimg);
-}
-
-void TrackedObject::get_track_attributes(
-                          float start_range,   // range of first sample in ping data
-                          float range_step,    // delta range for each sample
-                          float start_bearing, // beam angle of first beam in ping data
-                          float bearing_step,  // delta angle of each beam
-                          float ping_rate,
-                          TrackAttributes& attr)
-{
-    attr.first_frame = epoch_.front();
-    attr.last_frame = epoch_.back();
-    attr.first_range = start_range + range_step * ((int)position_.front().y - 1);
-    attr.last_range = start_range + range_step * ((int)position_.back().y - 1);
-    attr.first_bearing = start_bearing + bearing_step * ((int)position_.front().x - 1);
-    attr.last_bearing = start_bearing + bearing_step * ((int)position_.back().x - 1);
-    
-    double degtorad=0.0174533;
-    //float rawtodb=(float)90/(float)255;
-    vector<float> rng;
-    vector<float> brg;
-    //vector<double> intensity;
-    vector<float> speed; speed.push_back(0.0);
-    int Nsteps = epoch_.size();
-    attr.max_run = 0;
-    int run = 1;
-    for (int n=0; n<Nsteps; ++n)
-    {
-        rng.push_back(start_range + range_step * ((int)position_[n].y - 1));
-        brg.push_back(start_bearing + bearing_step * ((int)position_[n].x - 1));
-        //double maxval;
-        //minMaxIdx(img[n],NULL,&maxval);
-        //intensity.push_back(maxval);
-        if (0<n)
-        {
-            float dist = sqrt( pow(rng[n-1],2) + pow(rng[n],2)
-                              - 2*rng[n-1]*rng[n]*cos(degtorad*(brg[n]-brg[n-1])) );
-            float dt = (float)(epoch_[n]-epoch_[n-1])/ping_rate;
-            speed.push_back( (0<dt) ? dist/dt : 0);
-            run = (epoch_[n]-epoch_[n-1] == 1) ? run+1 : 1;
-            if (attr.max_run < run) attr.max_run = run;
-        }
-    }
-    attr.min_range = *min_element(rng.begin(),rng.end());
-    attr.max_range = *max_element(rng.begin(),rng.end());
-    attr.min_bearing = *min_element(brg.begin(),brg.end());
-    attr.max_bearing = *max_element(brg.begin(),brg.end());
-    attr.frame_count = Nsteps;
-    Scalar meanval, stdval;
-    //meanStdDev(Mat(intensity),meanval,stdval);
-    //attr.mean_intensity = meanval[0]*rawtodb;
-    //attr.std_intensity = stdval[0]*rawtodb;
-    meanStdDev(Mat(speed),meanval,stdval);
-    attr.mean_speed = meanval[0];
-    attr.std_speed = stdval[0];
-}
-
-*/
-std::ostream& operator<<(std::ostream& strm, const TrackAttributes& attr)
-{
-    strm << attr.track_id << ", "
-    << attr.first_frame << ", "
-    << attr.last_frame << ", "
-    << attr.first_range << ", "
-    << attr.last_range << ", "
-    << attr.first_bearing << ", "
-    << attr.last_bearing << ", "
-    << attr.min_range << ", "
-    << attr.max_range << ", "
-    << attr.min_bearing << ", "
-    << attr.max_bearing << ", "
-    << attr.frame_count << ", "
-    << attr.max_run << ", "
-    //<< attr.mean_intensity << ", "
-    //<< attr.std_intensity << ", "
-    << attr.mean_speed << ", "
-    << attr.std_speed << ", "
-    ;
-    
-    return strm;
-    
-}
-
 
 void print_attribute_labels(std::ostream& strm)
 {

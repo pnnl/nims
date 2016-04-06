@@ -224,9 +224,9 @@ int main (int argc, char * argv[]) {
     {
         YAML::Node config = YAML::LoadFile(cfgpath); // throws exception if bad path
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
-        YAML::Node params = config["TRACKER"];
-        N             = params["num_pings_for_moving_avg"].as<int>();
-        NIMS_LOG_DEBUG << "num_pings_for_moving_avg = " << N;
+        YAML::Node params = config["DETECTOR"];
+        N             = params["moving_avg_seconds"].as<int>();
+        NIMS_LOG_DEBUG << "moving_avg_seconds = " << N;
        thresh_stdevs = params["threshold_in_stdevs"].as<float>();
         NIMS_LOG_DEBUG << "threshold_in_stdevs = " << thresh_stdevs;
         min_size      = params["min_target_size"].as<int>();
@@ -327,7 +327,7 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_WARNING << "exiting due to SIGINT";
             break;
         }
-
+        NIMS_LOG_DEBUG << "got frame " << frame_index;
         // Update background
         NIMS_LOG_DEBUG << "Updating mean background";
         update_background(bg, next_ping);
@@ -356,7 +356,9 @@ int main (int argc, char * argv[]) {
 
         vector<Detection> detections;
         int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, ptw, detections);  
-        DetectionMessage msg_det(frame_index, next_ping.header.ping_num, detections);
+        NIMS_LOG_DEBUG << "sending message with " << detections.size() << " detections";
+        DetectionMessage msg_det(frame_index, next_ping.header.ping_num, 
+            next_ping.header.ping_sec + (float)next_ping.header.ping_millisec/1000.0, detections);
         mq_send(mq_det, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
        
        

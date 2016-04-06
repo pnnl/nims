@@ -65,10 +65,10 @@
         mq_ui_name = "/" + config["TRACKER_NAME"].as<string>();
         mq_socket_name = "/" + config["TRACKER_SOCKET_NAME"].as<string>();
         YAML::Node params = config["TRACKER"];        
-        maxgap            = params["max_ping_gap_in_track"].as<int>();
-        NIMS_LOG_DEBUG << "max_ping_gap_in_track: " << maxgap;
-        mintrack          = params["min_pings_for_track"].as<int>();
-        NIMS_LOG_DEBUG << "min_pings_for_track: " << mintrack;
+        maxgap            = params["max_gap_in_track_seconds"].as<int>();
+        NIMS_LOG_DEBUG << "max_gap_in_track_seconds: " << maxgap;
+        mintrack          = params["min_track_seconds"].as<int>();
+        NIMS_LOG_DEBUG << "min_track_seconds: " << mintrack;
         process_noise     = params["process_noise"].as<float>();
         NIMS_LOG_DEBUG << "process_noise: " << process_noise;
         measurement_noise = params["measurement_noise"].as<float>();
@@ -98,6 +98,8 @@
 	int next_id = 0;
 	long completed_tracks_count = 0;
 	
+    // moved to archiver.cpp
+    /*
     // TODO: Make the output a class, so can implement as csv
     //       file or database or whatever.
  	// output file for saving track data
@@ -115,21 +117,38 @@
   }
   print_attribute_labels(outtxtfile);
   outtxtfile << endl;
-
+*/
     // Create message queues
+  // queues used by Python processes are named in the config file
+  // other queues are named in nims_ipc.h
     mqd_t mq_ui = CreateMessageQueue(mq_ui_name, sizeof(TracksMessage), true); // non-blocking
     mqd_t mq_socket = CreateMessageQueue(mq_socket_name, sizeof(TracksMessage), true);
+    /*
+    NOTE:  The detector will open/create this queue non-blocking, but tracker must block.
+    The same queue, opened under a different descriptor, can have different blocking behavior.
+    */
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, sizeof(DetectionMessage));
     if (mq_det < 0) 
     {
         NIMS_LOG_ERROR << "Error creating MQ_DETECTOR_TRACKER_QUEUE";
         return -1;
     }
+    mqd_t mq_arc = CreateMessageQueue(MQ_TRACKER_ARCHIVER_QUEUE, sizeof(TracksMessage), true);
+    if (mq_det < 0) 
+    {
+        NIMS_LOG_ERROR << "Error creating MQ_TRACKER_ARCHIVER_QUEUE";
+        return -1;
+    }
     NIMS_LOG_DEBUG << "message queues created";
+    if (sigint_received) {
+        NIMS_LOG_WARNING << "exiting due to SIGINT";
+        return 0;
+    }
 
     //-------------------------------------------------------------------------
     // MAIN LOOP
-    while (true)
+    sigint_received = 0;
+    while (!sigint_received)
     {
         DetectionMessage msg_det;
         int ret =  mq_receive(mq_det, (char *)&msg_det, sizeof(DetectionMessage), nullptr);
@@ -140,7 +159,7 @@
             NIMS_LOG_WARNING << "sigint_received is " << sigint_received;
         }
         NIMS_LOG_DEBUG << "received detections message with " 
-        << msg_det.num_detections << " detections";
+                       << msg_det.num_detections << " detections";
         if (ret > 0 & msg_det.num_detections > 0)
         {
             int n_obj = msg_det.num_detections;
@@ -167,14 +186,14 @@
                 {
 
                     //Point2f pnt = active_tracks[a].predict(msg_det.ping_num);
-                    Detection pred = active_tracks[a].predict(msg_det.ping_num);
+                    Detection pred = active_tracks[a].predict(msg_det.ping_time);
                     predicted_positions_x(a) = pred.center[0];
                     predicted_positions_y(a) = pred.center[1];
                     
 
                     NIMS_LOG_DEBUG << "   ID " << active_id[a]
                     << ": predicted object at " << pred.center[0]
-                    << ", " << pred.center[1] << ", last updated in frame "
+                    << ", " << pred.center[1] << ", last updated at "
                     << active_tracks[a].last_epoch();
                     
                     magnitude(predicted_positions_x(a)-detected_positions_x,
@@ -216,6 +235,12 @@
                 
             } // if active tracks
             
+            if (sigint_received) {
+                NIMS_LOG_WARNING << "tracker end of loop: exiting due to SIGINT";
+                break;
+            }
+
+
             // create new active tracks for unmatched detections
             for (int f=0; f<n_obj; ++f)
             {
@@ -234,7 +259,7 @@
 
                     //active_tracks.push_back(newfish);
                     active_tracks.push_back( TrackedObject(next_id, 
-                        msg_det.ping_num, msg_det.detections[f], 
+                        msg_det.ping_time, msg_det.detections[f], 
                         process_noise, measurement_noise) );
                     active_id.push_back(next_id);
 
@@ -252,11 +277,12 @@
            } // if detections
 
         // de-activate tracks and report still active ones 
-           vector<Track> tracks; // tracks 
-           int idx = 0;
+        vector<Track> tracks; // active tracks 
+        vector<Track> completed; // completed tracks 
+          int idx = 0;
            while (idx < active_tracks.size())
            {
-            if ( msg_det.ping_num - active_tracks[idx].last_epoch() > maxgap )
+            if ( msg_det.ping_time - active_tracks[idx].last_epoch() > maxgap )
             {
                 NIMS_LOG_DEBUG << "ID " << active_id[idx]
                 << ": deactivated, last updated in frame "
@@ -264,17 +290,9 @@
                 // save if greater than minimum length
                 if ( active_tracks[idx].track_length() > mintrack )
                 {
-                    //completed_tracks.push_back(active_tracks[idx]);
-                    //completed_id.push_back(active_id[idx]);
-                    // save completed track to disk
+                    completed.push_back( Track(completed_tracks_count, 
+                        active_tracks[idx].get_track()) );
                     ++completed_tracks_count;
-                    TrackAttributes attr;
-                   // active_tracks[idx].get_track_attributes(
-                   //                                         start_range,range_step,
-                   //                                         start_bearing,bearing_step,
-                   //                                         ping_rate, attr);
-                    attr.track_id = completed_tracks_count;
-                    outtxtfile << attr << endl;
                     
                     NIMS_LOG_DEBUG << "ID " << active_id[idx]
                     << ": saved as completed track";
@@ -299,19 +317,19 @@
         } // for each active
         
             // send UI and socket messages
-        TracksMessage msg_trks(msg_det.frame_num, msg_det.ping_num, tracks);
+        TracksMessage msg_trks(msg_det.frame_num, msg_det.ping_num, msg_det.ping_time, tracks);
             mq_send(mq_ui, (const char *)&msg_trks, sizeof(msg_trks), 0); // non-blocking
             mq_send(mq_socket, (const char *)&msg_trks, sizeof(msg_trks), 0);
             NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_trks)
-                << " bytes); ping_num = " << msg_trks.ping_num_sonar << "; num_tracks = "
-<< msg_trks.num_tracks;
+                << " bytes); ping_num = " << msg_trks.ping_num_sonar 
+                << "; num_tracks = " << msg_trks.num_tracks;
 
+    TracksMessage msg_complete(msg_det.frame_num, msg_det.ping_num, msg_det.ping_time, completed);            
+    mq_send(mq_arc, (const char *)&msg_complete, sizeof(msg_complete), 0); // non-blocking
 
-
-    if (sigint_received) {
-        NIMS_LOG_WARNING << "tracker end of loop: exiting due to SIGINT";
-        break;
-    }
+        NIMS_LOG_DEBUG << "sent completed tracks message (" << sizeof(msg_complete)
+                << " bytes);  num_tracks = " << msg_complete.num_tracks;
+  
 
 } // main loop
     
@@ -324,8 +342,9 @@
     //mq_unlink(mq_socket_name.c_str());
     
     // close output files
-    outtxtfile.close();
+   // outtxtfile.close();
     
-    cout << endl << "Ending " << argv[0] << endl;
-    return 0;
+    // this is the only way to exit
+    NIMS_LOG_WARNING << "exiting due to SIGINT";
+     return 0;
 }

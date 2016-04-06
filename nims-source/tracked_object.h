@@ -18,44 +18,18 @@
 
 #include "detections.h"
 
-struct TrackAttributes {
-    uint32_t track_id;
-    int first_frame; // TODO: change these to time
-    int last_frame;
-    float first_range;
-    float last_range;
-    float first_bearing;
-    float last_bearing;
-    float min_range;
-    float max_range;
-    float min_bearing;
-    float max_bearing;
-    int frame_count;
-    int max_run;
-    float mean_intensity;
-    float std_intensity;
-    float mean_speed;
-    float std_speed;
-    // TODO:  add size
-};
-std::ostream& operator<<(std::ostream& strm, const TrackAttributes& attr);
-void print_attribute_labels(std::ostream& strm);
-
 class TrackedObject
 {
 public:
     // Constructor
     //TrackedObject(const cv::Point2f& initial_pos,  cv::InputArray initial_image = cv::noArray(),
      //              int initial_epoch = 0, float process_noise = 1e-5, float measurement_noise = 1e-1);
-    TrackedObject(long id, long epoch, Detection initial_det, float process_noise = 1e-5, float measurement_noise = 1e-1);
+    TrackedObject(long id, float epoch, Detection initial_det, float process_noise = 1e-5, float measurement_noise = 1e-1);
     // Modifiers
-    void        update(long epoch, Detection new_det);
-    Detection   predict(long epoch);
+    void        update(float epoch, Detection new_det);
+    Detection   predict(float epoch);
     
     // Accessors
-    // get a copy of the current track
-	//void  get_track(vector<long>& epoch, vector<cv::Point2f>& position) const
-	                // { epoch.assign(epoch_); position.assign(position_); }; 
     long get_id() { return id_; };
 
     const std::vector<Detection>& get_track() { return detections_; };
@@ -67,24 +41,15 @@ public:
     // get the last image of the track	
     //void  get_last_image(cv::OutputArray lastimg) const; 
     // the epoch of the last update
-    long  last_epoch()   const { return epoch_.back(); };
+    float  last_epoch()   const { return epoch_.back(); };
     // the length of the track 
 	long  track_length() const { return detections_.size(); }; 
-	// get track attributes based on sonar configuration
-    /*
-    void get_track_attributes(float start_range,   
-                              float range_step,    
-                              float start_bearing, 
-                              float bearing_step,  
-                              float ping_rate,
-                              TrackAttributes& attr);
-*/
+
 private:
     void init_tracking(int Nstate, int Nmeasure, float q, float r);
+    
     long                     id_; // unique identifier
-    std::vector<long>        epoch_;
-    //std::vector<cv::Point2f> position_;
-    //std::vector<cv::Mat>     image_;
+    std::vector<float>        epoch_;
     std::vector<Detection>   detections_;
     cv::KalmanFilter         kf_;
     

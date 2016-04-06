@@ -22,7 +22,7 @@
 
  enum dimension_t {RANGE=0, BEARING, ELEVATION};
 
-// convert pixels (cells) in a frame image (echogram) to 
+// used to convert pixels (cells) in a frame image (echogram) to 
 // world coordinates relative to the sonar head
  struct PixelToWorld
  {
@@ -75,17 +75,19 @@ struct __attribute__ ((__packed__)) Detection
     Detection(float ts, const std::vector<cv::Point2i>& points, const PixelToWorld& ptw)
     {
         timestamp = ts;
-        cv::RotatedRect rr = fitEllipse(points);
+        //cv::RotatedRect rr = fitEllipse(points);
+        cv::RotatedRect rr = minAreaRect(points);
         // TODO:  Test this conversion.
         center[BEARING] = ptw.start[BEARING] + ptw.step[BEARING]*rr.center.x; 
         center[RANGE] =   ptw.start[RANGE] +   ptw.step[RANGE]*rr.center.y; 
         center[ELEVATION] = 0.0;
+
         rot_deg[0] = rr.angle; rot_deg[1] = 0.0;
 
         cv::Rect bb = boundingRect(points);
         size[BEARING] = ptw.step[BEARING]*bb.width; 
         size[RANGE] =   ptw.step[RANGE]*bb.height; 
-        size[ELEVATION] = 0.0;
+        size[ELEVATION] = 1.0;
 
         // TODO: figure out how to set these.
         mean_intensity =0.0;
@@ -98,6 +100,7 @@ struct __attribute__ ((__packed__)) DetectionMessage
 {
     uint32_t  frame_num; // frame number from FrameBuffer
     uint32_t  ping_num; // sonar ping number 
+    float ping_time; // seconds since midnight 1-Jan-1970
     uint32_t  num_detections; // number of detections
     Detection detections[MAX_DETECTIONS_PER_FRAME];
 
@@ -105,14 +108,17 @@ struct __attribute__ ((__packed__)) DetectionMessage
     {
         frame_num = 0;
         ping_num = 0;
+        ping_time = 0.0;
+
         num_detections = 0;
         memset(detections, 0, sizeof(detections));
     };
     
-     DetectionMessage(uint32_t fnum, uint32_t pnum, std::vector<Detection> vec_detections )
+     DetectionMessage(uint32_t fnum, uint32_t pnum, float ptime, std::vector<Detection> vec_detections )
     {
         frame_num = fnum;
         ping_num = pnum;
+        ping_time = ptime;
         num_detections = std::min((int)vec_detections.size(),MAX_DETECTIONS_PER_FRAME);
         std::copy(vec_detections.begin(), 
                 vec_detections.begin()+num_detections, detections);
