@@ -61,7 +61,8 @@ struct __attribute__ ((__packed__)) Track
 	Track()
 	{
 		id = 0;           
-		size_sq_m = 0.0;       
+		size_sq_m = 0.0;   
+		speed_mps = 0.0;    
 		target_strength = 0.0; 
 
 		min_range_m = 0.0;     
@@ -91,7 +92,8 @@ struct __attribute__ ((__packed__)) Track
 	Track(uint16_t trknum, const std::vector<Detection>& detections)
 	{
 		id = trknum;           
-		size_sq_m = 0.0;       
+		size_sq_m = 0.0; 
+		speed_mps = 0.0;      
 		target_strength = 0.0; 
 		min_range_m = 1000.0;     
 		max_range_m = -1000.0;
@@ -121,15 +123,20 @@ struct __attribute__ ((__packed__)) Track
 		last_pos_bearing = detections.back().center[BEARING];
 		last_pos_elevation = detections.back().center[ELEVATION];
 
-		if (pings_visible > 1)
+		last_vel_range = 0.0;   
+		last_vel_bearing = 0.0;
+		last_vel_elevation = 0.0;
+
+	if (pings_visible > 1)
 		{
-		std::vector<int>::size_type next_to_last = detections.size() - 2; 
-		float dt = detections.back().timestamp - detections[next_to_last].timestamp;
-		last_vel_range = (last_pos_range - detections[next_to_last].center[1])/dt;   
-		last_vel_bearing = (last_pos_bearing - detections[next_to_last].center[0])/dt;
-		last_vel_elevation = (last_pos_elevation - detections[next_to_last].center[2])/dt;
+			std::vector<int>::size_type next_to_last = detections.size() - 2; 
+			float dt = detections.back().timestamp - detections[next_to_last].timestamp;
+			last_vel_range = (last_pos_range - detections[next_to_last].center[1])/dt;   
+			last_vel_bearing = (last_pos_bearing - detections[next_to_last].center[0])/dt;
+			last_vel_elevation = (last_pos_elevation - detections[next_to_last].center[2])/dt;
 		}
 
+		// TODO: convert width and height to meters instead of degrees
 	    width = detections.back().size[BEARING];            
 		length = detections.back().size[RANGE];        
 		height = detections.back().size[ELEVATION];        
@@ -142,6 +149,7 @@ struct __attribute__ ((__packed__)) TracksMessage
 {
     uint32_t  frame_num;   // NIMS internal ping number from FrameHeader
     uint32_t  ping_num_sonar; // sonar ping number
+    float     ping_time; // seconds since Jan 1, 1970
     uint32_t  num_tracks; // number of tracks
     Track     tracks[MAX_ACTIVE_TRACKS]; // track data
 
@@ -149,15 +157,19 @@ struct __attribute__ ((__packed__)) TracksMessage
     {
         frame_num = 0;
         ping_num_sonar = 0;
+        ping_time = 0.0;
         num_tracks = 0;
-        memset(tracks, 0, sizeof(tracks));
+        memset(tracks, 0, sizeof(Track)*MAX_ACTIVE_TRACKS);
     };
-    TracksMessage(uint32_t fnum, uint32_t pnum_s, std::vector<Track> vec_tracks )
+    TracksMessage(uint32_t fnum, uint32_t pnum_s, float ts, std::vector<Track> vec_tracks )
     {
         frame_num = fnum;
         ping_num_sonar = pnum_s;
+        ping_time = ts;
         num_tracks = std::min((int)vec_tracks.size(),MAX_ACTIVE_TRACKS);
-         std::copy(vec_tracks.begin(), 
+        memset(tracks, 0, sizeof(Track)*MAX_ACTIVE_TRACKS);
+        // is this really ok?
+        std::copy(vec_tracks.begin(), 
                 vec_tracks.begin()+num_tracks, tracks);
    };
 
