@@ -48,14 +48,14 @@ add_executable(test_frame_buffer_get test_frame_buffer_get.cpp ${COMMON_SOURCES}
 add_executable(test_frame_buffer test_frame_buffer.cpp ${NIMS_SOURCE_DIR}/log.cpp)
 add_executable(test_blueview test_blueview.cpp ${NIMS_SOURCE_DIR}/data_source_blueview.cpp ${COMMON_SOURCES})
 add_executable(test_ek60 test_ek60.cpp ${NIMS_SOURCE_DIR}/data_source_ek60.cpp ${COMMON_SOURCES})
-
+add_executable(test_types test_types.cpp ${NIMS_SOURCE_DIR}/tracked_object.cpp)
 
 target_link_libraries(test_frame_buffer_put ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
 target_link_libraries(test_frame_buffer_get ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
 target_link_libraries(test_frame_buffer ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} rt)
 target_link_libraries(test_blueview ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} ${OpenCV_LIBRARIES} ${Bvtsdk_LIB} rt)
 target_link_libraries(test_ek60 ${Boost_LIBRARIES} ${YAMLCPP_LIBRARY} ${OpenCV_LIBRARIES} ${Bvtsdk_LIB} rt)
-
+target_link_libraries(test_types ${OpenCV_LIBRARIES})
 
 ADD_CUSTOM_COMMAND(TARGET nims
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
