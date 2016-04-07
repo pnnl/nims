@@ -8,6 +8,7 @@
  *
  */
 #include <iostream> // cout, cin, cerr
+ #include <fstream> // ofstream
 #include <string>   // for strings
 
 
@@ -26,6 +27,26 @@
  using namespace boost;
  namespace fs = boost::filesystem;
  using namespace cv;
+
+bool TEST=false;
+
+template<typename T> void write_mat_to_file(InputArray _mat, fs::path outfilepath)
+{
+    Mat m = _mat.getMat();
+    ofstream ofs( outfilepath.string().c_str() ); 
+
+    Size size = m.size();
+    for (int i=0; i<size.height; ++i) // each row
+    {
+        ofs << m.at<T>(i,0);
+        for (int j=1; j<size.width; ++j) // each column
+        {
+            ofs << "," << m.at<T>(i,j);
+        }
+        ofs << endl;
+    }
+    ofs.close();
+}
 
 // Generate the mapping from beam-range to x-y for display
 int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
@@ -174,7 +195,6 @@ int detect_objects(const Background& bg, const Frame& ping,
     detections.clear();
     Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
     Mat foregroundMask = ((ping_data - bg.ping_mean) / bg.ping_stdv) > thresh_stdevs;
-    //NIMS_LOG_DEBUG << "foregroundMask: " << foregroundMask.rows << " rows x " << foregroundMask.cols << " cols";
     int nz = countNonZero(foregroundMask);
     NIMS_LOG_DEBUG << "number of samples above threshold: "<< nz << " ("
                    << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
@@ -200,6 +220,15 @@ int detect_objects(const Background& bg, const Frame& ping,
         }
 
     }
+    if (TEST)
+    {
+        ostringstream ss;
+        ss << ping.header.ping_num << "_" << ping.header.ping_sec << "-" << ping.header.ping_millisec;
+        write_mat_to_file<framedata_t>(ping_data, string(ss.str() + "_ping.csv"));
+        write_mat_to_file<framedata_t>(bg.ping_mean, string(ss.str() + "_mean.csv"));
+        write_mat_to_file<framedata_t>(bg.ping_stdv, string(ss.str() + "_stdv.csv"));
+        write_mat_to_file<char>(foregroundMask, string(ss.str() + "_mask.csv"));
+    }
     return detections.size();
 } // detect_objects
 
@@ -208,7 +237,12 @@ int detect_objects(const Background& bg, const Frame& ping,
 //  MAIN
 ///////////////////////////////////////////////////////////////////////////////
 int main (int argc, char * argv[]) {
-
+cout << argc << ", " << argv[1] << endl;
+    if ( argc == 2 && (string(argv[1]) == string("test")) ) 
+        {
+            TEST = true;
+            cout << endl << "!!!!!!!!!!!! TEST MODE !!!!!!!!!!!!!!!!!!" << endl;
+        }
     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
     setup_logging(string(basename(argv[0])), cfgpath, log_level);
@@ -339,7 +373,7 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "mean background values from " << min_val << " to " << max_val;
         minMaxIdx(bg.ping_stdv, &min_val, &max_val);
         NIMS_LOG_DEBUG << "std dev background values from " << min_val << " to " << max_val;
-
+        /*
         if (VIEW)
         {
             // create 3-channel color image for viewing/saving
@@ -350,7 +384,7 @@ int main (int argc, char * argv[]) {
             // convert grayscale to color image
             //cvtColor(imgray, imc, CV_GRAY2RGB);
         }
-            
+        */    
         // Detect objects
         NIMS_LOG_DEBUG << "Detecting objects";
 
