@@ -47,8 +47,8 @@
     string mq_ui_name;
     string mq_socket_name;
     
-    int maxgap = 3; // maximum gap in frames allowed within a track
-    int mintrack = 10; // minimum number of steps to be considered a track
+    float maxgap_secs = 1.0; // maximum gap in seconds allowed within a track
+    int mintrack_steps = 10; // minimum number of steps to be considered a track
     float process_noise = 1e-1;     // process is animal swimming
     float measurement_noise = 1e-2; // measurement is backscatter
 	int pred_err_max = 15; // max difference in pixels between prediction and actual
@@ -65,10 +65,10 @@
         mq_ui_name = "/" + config["TRACKER_NAME"].as<string>();
         mq_socket_name = "/" + config["TRACKER_SOCKET_NAME"].as<string>();
         YAML::Node params = config["TRACKER"];        
-        maxgap            = params["max_gap_in_track_seconds"].as<int>();
-        NIMS_LOG_DEBUG << "max_gap_in_track_seconds: " << maxgap;
-        mintrack          = params["min_track_seconds"].as<int>();
-        NIMS_LOG_DEBUG << "min_track_seconds: " << mintrack;
+        maxgap_secs            = params["max_gap_in_track_seconds"].as<float>();
+        NIMS_LOG_DEBUG << "max_gap_in_track_seconds: " << maxgap_secs;
+        mintrack_steps          = params["min_track_steps"].as<int>();
+        NIMS_LOG_DEBUG << "min_track_steps: " << mintrack_steps;
         process_noise     = params["process_noise"].as<float>();
         NIMS_LOG_DEBUG << "process_noise: " << process_noise;
         measurement_noise = params["measurement_noise"].as<float>();
@@ -98,26 +98,6 @@
 	int next_id = 0;
 	long completed_tracks_count = 0;
 	
-    // moved to archiver.cpp
-    /*
-    // TODO: Make the output a class, so can implement as csv
-    //       file or database or whatever.
- 	// output file for saving track data
-  time_t rawtime;
-  time(&rawtime);
-    char timestr[16]; // YYYYMMDD-hhmmss
-    strftime(timestr, 16, "%Y%m%d-%H%M%S", gmtime(&rawtime));
-    fs::path outtxtfilepath("nims_tracks-" + string(timestr) + ".csv");
-    NIMS_LOG_DEBUG << "saving track data to " << outtxtfilepath;
-    ofstream outtxtfile(outtxtfilepath.string().c_str(),ios::out | ios::binary);
-    if (!outtxtfile.is_open())
-    {
-      NIMS_LOG_ERROR << "Error opening output file: " << outtxtfilepath;
-      return (-1);
-  }
-  print_attribute_labels(outtxtfile);
-  outtxtfile << endl;
-*/
     // Create message queues
   // queues used by Python processes are named in the config file
   // other queues are named in nims_ipc.h
@@ -190,12 +170,6 @@
                     predicted_positions_x(a) = pred.center[0];
                     predicted_positions_y(a) = pred.center[1];
                     
-
-                    NIMS_LOG_DEBUG << "   ID " << active_id[a]
-                    << ": predicted object at " << pred.center[0]
-                    << ", " << pred.center[1] << ", last updated at "
-                    << active_tracks[a].last_epoch();
-                    
                     magnitude(predicted_positions_x(a)-detected_positions_x,
                       predicted_positions_y(a)-detected_positions_y,
                       distances.row(a));
@@ -221,11 +195,7 @@
                     if ( countNonZero(distances(Range(min_idx[0],min_idx[0]+1),
                         Range(f+1,n_obj)) < min_dist) ) continue;
 
-                        NIMS_LOG_DEBUG << "ID " << active_id[min_idx[0]]
-                    << ": matched detection " << f;
-                    //active_tracks[min_idx[0]].update(msg_det.ping_num,
-                     //                                Point2f(detected_positions_x(f), detected_positions_y(f)));
-                    active_tracks[min_idx[0]].update(msg_det.ping_num, msg_det.detections[f]);
+                    active_tracks[min_idx[0]].update(msg_det.ping_time, msg_det.detections[f]);
                     // mark detection as matched
                     detected_not_matched.at<unsigned char>(f) = 0;
                     // mark track as matched
@@ -246,30 +216,11 @@
             {
                 if ( detected_not_matched.at<unsigned char>(f) )
                 {
-                    NIMS_LOG_DEBUG  << "ID " << next_id
-                    << ": starting new track at "
-                    << detected_positions_x(f) << ", "
-                    << detected_positions_y(f);
-                    /*
-                    TrackedObject newfish(Point2f(detected_positions_x(f),
-                                                  detected_positions_y(f)),
-                                          cv::noArray(), msg_det.ping_num,
-                                          process_noise, measurement_noise);
-                                          */
-
-                    //active_tracks.push_back(newfish);
-                    active_tracks.push_back( TrackedObject(next_id, 
+                        active_tracks.push_back( TrackedObject(next_id, 
                         msg_det.ping_time, msg_det.detections[f], 
                         process_noise, measurement_noise) );
                     active_id.push_back(next_id);
 
-                    // update UI message
-                    /*
-                     msg_ui.detections[f].center_range = detected_positions_y(f);
-                     msg_ui.detections[f].center_beam = detected_positions_x(f);
-                     msg_ui.detections[f].track_id = next_id;
-                     msg_ui.detections[f].new_track = true;
-                     */
                      ++next_id;
                  } // if not matched
              } // for each detection
@@ -282,30 +233,23 @@
           int idx = 0;
            while (idx < active_tracks.size())
            {
-            if ( msg_det.ping_time - active_tracks[idx].last_epoch() > maxgap )
+            if ( msg_det.ping_time - active_tracks[idx].last_epoch() > maxgap_secs )
             {
-                NIMS_LOG_DEBUG << "ID " << active_id[idx]
-                << ": deactivated, last updated in frame "
-                << active_tracks[idx].last_epoch();
                 // save if greater than minimum length
-                if ( active_tracks[idx].track_length() > mintrack )
+                if ( active_tracks[idx].track_length() > mintrack_steps )
                 {
                     completed.push_back( Track(completed_tracks_count, 
                         active_tracks[idx].get_track()) );
                     ++completed_tracks_count;
                     
-                    NIMS_LOG_DEBUG << "ID " << active_id[idx]
-                    << ": saved as completed track";
-                } // if it's a keeper
+                 } // if it's a keeper
                 active_tracks.erase(active_tracks.begin()+idx);
                 //active_id.erase(active_id.begin()+idx);
             } // if deactivate 
             else
             {
-                if (active_tracks[idx].track_length() > mintrack)
+                if (active_tracks[idx].track_length() > mintrack_steps)
                 {
-                    NIMS_LOG_DEBUG <<  "adding track " << active_tracks[idx].get_id() 
-                    << " to tracks message";
 
                     tracks.push_back( Track(active_tracks[idx].get_id(), 
                         active_tracks[idx].get_track()) );

@@ -35,7 +35,7 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
 # 1 = M3, 2 = BlueView, 3 = EK60
-SONAR_TYPE: 3
+SONAR_TYPE: 1
 
 # Used for M3, BlueView and EK60
 SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
@@ -66,14 +66,14 @@ TRACKSERVER_SOCKET_PORT: 8001
 DETECTOR:
     moving_avg_seconds       : 10
     threshold_in_stdevs      : 2.0
-    min_target_size          : 6
+    min_target_size          : 8
 
 # for extract_1.mmb, change min_target_size to 10
 #
 ### TRACKER ###
 TRACKER:
-    max_gap_in_track_seconds : 1
-    min_track_seconds        : 3
+    max_gap_in_track_seconds : 1.0
+    min_track_steps          : 10 
     process_noise            : 0.1
     measurement_noise        : 0.001
     max_prediction_error     : 15

@@ -102,7 +102,6 @@ struct __attribute__ ((__packed__)) Track
 		min_elevation_deg = 1000.0;
 		max_elevation_deg = -1000.0;
 
-		NIMS_LOG_DEBUG << "initializing track " << trknum << " with " << detections.size() << " detections";
 		for (int k=0; k<detections.size(); ++k)
 		{
 			size_sq_m += detections[k].size[RANGE]*detections[k].size[BEARING];       

@@ -96,11 +96,8 @@ struct Background
     Mat ping_stdv;
 };
 
-int initialize_background(Background& bg, int num_frames, FrameBufferReader& fb)
+int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
 {
-    bg.N = num_frames;
-    bg.oldest_frame = 0;
-
     // Initialize the moving window.
         Frame next_ping;
     if ( fb.GetNextFrame(&next_ping)==-1 )
@@ -112,6 +109,9 @@ int initialize_background(Background& bg, int num_frames, FrameBufferReader& fb)
     bg.dim_sizes[0] = (int)next_ping.header.num_beams;
     bg.dim_sizes[1] = (int)next_ping.header.num_samples;
     bg.total_samples = next_ping.header.num_beams*next_ping.header.num_samples;
+    bg.N = (int)(next_ping.header.pulserep_hz * bg_secs);
+    bg.oldest_frame = 0;
+
 
     // the framedata_t (frame_buffer.h) is either float or double
     bg.cv_type = sizeof(framedata_t)==4 ? CV_32FC1 : CV_64FC1;
@@ -216,7 +216,7 @@ int main (int argc, char * argv[]) {
     
     // READ CONFIG FILE
     string fb_name; // frame buffer
-    int N;  // number of pings for moving average
+    float bg_secs;
     float thresh_stdevs = 3.0;
     int min_size = 1;
     
@@ -225,8 +225,8 @@ int main (int argc, char * argv[]) {
         YAML::Node config = YAML::LoadFile(cfgpath); // throws exception if bad path
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
         YAML::Node params = config["DETECTOR"];
-        N             = params["moving_avg_seconds"].as<int>();
-        NIMS_LOG_DEBUG << "moving_avg_seconds = " << N;
+        bg_secs             = params["moving_avg_seconds"].as<float>();
+        NIMS_LOG_DEBUG << "moving_avg_seconds = " << bg_secs;
        thresh_stdevs = params["threshold_in_stdevs"].as<float>();
         NIMS_LOG_DEBUG << "threshold_in_stdevs = " << thresh_stdevs;
         min_size      = params["min_target_size"].as<int>();
@@ -268,7 +268,7 @@ int main (int argc, char * argv[]) {
     // Initialize the moving average.
         NIMS_LOG_DEBUG << "Initializing moving average and std dev";
         Background bg;
-        if ( initialize_background(bg, N, fb)<0 )
+        if ( initialize_background(bg, bg_secs, fb)<0 )
         {
            // ??? arm: is log and continue the correct behavior?
             NIMS_LOG_ERROR << "Error initializing background!";
