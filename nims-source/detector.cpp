@@ -196,15 +196,16 @@ int detect_objects(const Background& bg, const Frame& ping,
     Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
     Mat foregroundMask = ((ping_data - bg.ping_mean) / bg.ping_stdv) > thresh_stdevs;
     int nz = countNonZero(foregroundMask);
-    NIMS_LOG_DEBUG << "number of samples above threshold: "<< nz << " ("
+    NIMS_LOG_DEBUG << ping.header.ping_num << " number of samples above threshold: "<< nz << " ("
                    << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
     if (nz > 0)
     {
         float timestamp = ping.header.ping_sec + (float)ping.header.ping_millisec/1000.0;
         PixelGrouping objects;
-        group_pixels(foregroundMask.reshape(0,(int)ping.header.num_beams), min_size, objects);
+        // Mat::reshape(nchan, nrows)
+        group_pixels(foregroundMask.reshape(0,(int)ping.header.num_samples), min_size, objects);
         int n_obj = objects.size();
-        NIMS_LOG_DEBUG << "number of detected objects: " << n_obj;
+        NIMS_LOG_DEBUG << ping.header.ping_num << " number of detected objects: " << n_obj;
             // guard against tracking a lot of noise            
         if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
         {
@@ -227,7 +228,11 @@ int detect_objects(const Background& bg, const Frame& ping,
         write_mat_to_file<framedata_t>(ping_data, string(ss.str() + "_ping.csv"));
         write_mat_to_file<framedata_t>(bg.ping_mean, string(ss.str() + "_mean.csv"));
         write_mat_to_file<framedata_t>(bg.ping_stdv, string(ss.str() + "_stdv.csv"));
-        write_mat_to_file<char>(foregroundMask, string(ss.str() + "_mask.csv"));
+        ofstream ofs( string(ss.str() + "_det.csv").c_str() ); 
+        ofs << ptw;
+        for (int d=0; d<detections.size(); ++ d)
+            ofs << detections[d];
+        ofs.close();
     }
     return detections.size();
 } // detect_objects
@@ -237,7 +242,7 @@ int detect_objects(const Background& bg, const Frame& ping,
 //  MAIN
 ///////////////////////////////////////////////////////////////////////////////
 int main (int argc, char * argv[]) {
-cout << argc << ", " << argv[1] << endl;
+
     if ( argc == 2 && (string(argv[1]) == string("test")) ) 
         {
             TEST = true;

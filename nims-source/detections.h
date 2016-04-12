@@ -15,6 +15,7 @@
 #include <cstring>  // memset
  #include <vector>
  #include <algorithm> // std::copy, min
+ #include <ios> // io formatting
 
 //#include "log.h"      // NIMS logging
 
@@ -41,6 +42,15 @@
         step[ELEVATION] = step_el;
     };
  };
+
+std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
+{
+   strm 
+    << p.start[BEARING] << "," << p.start[RANGE] << "," << p.start[ELEVATION]
+    << "," << p.step[BEARING] << "," << p.step[RANGE] << "," << p.step[ELEVATION]
+     << std::endl;
+    return strm;
+};
 
 // Data structure for describing the objects detected
 // in one ping image.  Detections are possibly fish
@@ -94,6 +104,24 @@ struct __attribute__ ((__packed__)) Detection
         max_intensity = 0.0;
     };
     
+};
+
+std::ostream& operator<<(std::ostream& strm, const Detection& d)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << d.timestamp 
+    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
+    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
+    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+    return strm;
 };
 
 struct __attribute__ ((__packed__)) DetectionMessage
