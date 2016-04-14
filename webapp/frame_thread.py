@@ -96,7 +96,7 @@ class FrameThread(threading.Thread):
                 logger.info('Received invalid message: ignoring')
                 continue
             try:
-                logger.info(' -- Connecting to', frame.shm_location)
+                logger.info(' -- Connecting to::' + frame.shm_location)
                 shm_frame = SharedMemory(frame.shm_location, O_RDONLY, size=frame.frame_length)
             except StandardError as e:
                 logger.info(' -- Error connecting to', frame.shm_location, '::', e.__repr__())
