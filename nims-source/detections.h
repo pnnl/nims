@@ -42,7 +42,8 @@
         step[ELEVATION] = step_el;
     };
  };
-
+ // TODO:  Resolve multiple definitions link error.
+/*
 std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
 {
    strm 
@@ -51,7 +52,7 @@ std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
      << std::endl;
     return strm;
 };
-
+*/
 // Data structure for describing the objects detected
 // in one ping image.  Detections are possibly fish
 // or marine mammals or some other object moving
@@ -106,6 +107,8 @@ struct __attribute__ ((__packed__)) Detection
     
 };
 
+ // TODO:  Resolve multiple definitions link error.
+/*
 std::ostream& operator<<(std::ostream& strm, const Detection& d)
 {
     std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
@@ -123,7 +126,7 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
     strm.setf(fflags);
     return strm;
 };
-
+*/
 struct __attribute__ ((__packed__)) DetectionMessage
 {
     uint32_t  frame_num; // frame number from FrameBuffer

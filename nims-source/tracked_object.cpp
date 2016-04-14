@@ -158,6 +158,7 @@ void  TrackedObject::get_track_smoothed(vector<long>& epoch, vector<Point2f>& po
 }
 */
 
+/*
 void print_attribute_labels(std::ostream& strm)
 {
     strm << "Track ID, "
@@ -180,7 +181,7 @@ void print_attribute_labels(std::ostream& strm)
     ;
     
 }
-
+*/
 
 
 

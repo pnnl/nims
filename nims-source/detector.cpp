@@ -228,11 +228,13 @@ int detect_objects(const Background& bg, const Frame& ping,
         write_mat_to_file<framedata_t>(ping_data, string(ss.str() + "_ping.csv"));
         write_mat_to_file<framedata_t>(bg.ping_mean, string(ss.str() + "_mean.csv"));
         write_mat_to_file<framedata_t>(bg.ping_stdv, string(ss.str() + "_stdv.csv"));
+        /*
         ofstream ofs( string(ss.str() + "_det.csv").c_str() ); 
         ofs << ptw;
         for (int d=0; d<detections.size(); ++ d)
             ofs << detections[d];
         ofs.close();
+        */
     }
     return detections.size();
 } // detect_objects
