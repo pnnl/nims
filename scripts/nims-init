@@ -13,6 +13,7 @@
 
 # export for all applications
 export NIMS_HOME=/home/nims/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$NIMS_HOME/lib
 
 APPLICATION_PATH=$NIMS_HOME
 NIMS_PY_PIDFILE=/var/run/nims.py.pid

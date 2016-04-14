@@ -65,7 +65,8 @@ if ! [ $? = 0 ]; then
     exit 1
 fi
 
-copy_to_bin $BUILD_DIR/config.yaml
+#copy_to_bin $BUILD_DIR/config.yaml
+echo "*** WARNING *** not copying config.yaml to avoid clobbering it"
 copy_to_bin $BUILD_DIR/nims-init
 
 copy_to_bin $BUILD_DIR/nims
@@ -75,13 +76,6 @@ copy_to_bin $BUILD_DIR/tracker
 copy_to_bin $BUILD_DIR/../webapp
 copy_to_bin $BUILD_DIR/tracks_server.py
 copy_to_bin $BUILD_DIR/tracks_client.py
+copy_to_bin $BUILD_DIR/lib
 
-$SSH 'mkdir -p ~/bin/lib/python'
-if ! [ $? = 0 ]; then
-    echo "failed to create ~/bin/lib/python on $HOST"
-    exit 1
-fi
-
-# should walk lib and copy it, but oh well
-$SCP $BUILD_DIR/lib/python/nims_py.so $USER@$HOST:~/bin/lib/python
-$SCP $BUILD_DIR/lib/python/nims_py-0.0.0.egg-info $USER@$HOST:~/bin/lib/python
+$SCP $BUILD_DIR/../vendorsrc/bvt_sdk_4.2.0.9446/lib $USER@$HOST:~/bin
