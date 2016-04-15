@@ -341,15 +341,16 @@ int main (int argc, char * argv[]) {
         {
            // ??? arm: is log and continue the correct behavior?
             NIMS_LOG_ERROR << "Error initializing background!";
-            
-            // need to exit if we got a SIGINT
-            if (sigint_received) {
-                NIMS_LOG_WARNING << "exiting due to SIGINT";
-                return 0;
-            }
+
         }
         NIMS_LOG_DEBUG << "Moving average and std dev initialized";
-
+        
+        // need to exit if we got a SIGINT
+        if (sigint_received) {
+            NIMS_LOG_WARNING << "exiting due to SIGINT";
+            return 0;
+        }
+        
     // Get one ping to get header info.
     Frame next_ping;
     fb.GetNextFrame(&next_ping);
@@ -390,7 +391,7 @@ int main (int argc, char * argv[]) {
     // MAIN LOOP
     
     int frame_index = -1;
-    while ( (frame_index = fb.GetNextFrame(&next_ping)) != -1)
+    while ( (frame_index = fb.GetNextFrame(&next_ping)) != -1 && 0 == sigint_received)
     {
         if (sigint_received) {
             NIMS_LOG_WARNING << "exiting due to SIGINT";
@@ -429,7 +430,12 @@ int main (int argc, char * argv[]) {
         DetectionMessage msg_det(frame_index, next_ping.header.ping_num, 
             next_ping.header.ping_sec + (float)next_ping.header.ping_millisec/1000.0, detections);
         mq_send(mq_det, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
-       
+        
+        // may interrupt mq_send, and we don't want to re
+        if (sigint_received) {
+            NIMS_LOG_WARNING << "exiting due to SIGINT";
+            break;
+        }       
        
             /*
              if (VIEW)

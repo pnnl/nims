@@ -55,7 +55,7 @@ bool Task::launch()
     
     int blockpipe[2] = { -1, -1 };
     if (pipe(blockpipe))
-        perror("nims: failed to create blockpipe");
+        perror("nims::Task failed to create blockpipe");
     
    /*
     Figure out the max number of file descriptors for a process; 
@@ -93,7 +93,7 @@ bool Task::launch()
         _exit(ret);
         
     } else if (-1 == pid_) {
-        perror("nims::LaunchProcess fork()");
+        perror("nims::Task fork()");
         
         // all setup is complete, so now widow the pipe and exec in the child
         close(blockpipe[0]);   
@@ -116,7 +116,12 @@ bool Task::launch()
     return pid_ > 0;
 }
 
-void Task::signal(int sig)
+int Task::signal(int sig)
 {
-    kill(pid_, sig);
+    int ret = 0;
+    if (0 != kill(pid_, sig)) {
+       ret = errno;
+       perror("nims::Task kill failed");
+    }
+    return ret;
 }

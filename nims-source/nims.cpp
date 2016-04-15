@@ -99,11 +99,22 @@ static void InterruptChildProcesses()
         if (getpgid(getpid()) == getpgid(t->get_pid())) {
             NIMS_LOG_WARNING << "sending SIGINT to " << t->name()
                 << " [" << t->get_pid() << "]";
-            t->signal(SIGINT);
+            int ret = t->signal(SIGINT);
+            if (ret)
+               NIMS_LOG_ERROR << "failed to kill " << t->name()
+               << " [" << t->get_pid() << "] with error " << strerror(ret);
             
             // make sure we reap all child processes
-            if (-1 == waitpid(t->get_pid(), NULL, 0))
+            ret = HANDLE_EINTR(waitpid(t->get_pid(), NULL, WUNTRACED|WCONTINUED));
+            if (-1 == ret)
                nims_perror("waitpid failed");
+            
+            NIMS_LOG_WARNING << "waitpid returned " << ret << " for " 
+               << t->name();
+        }
+        else {
+           NIMS_LOG_WARNING << "wrong process group id for " << t->name()
+               << " [" << t->get_pid() << "]";
         }
     }
     
@@ -147,16 +158,19 @@ static int WaitForTaskLaunch(nims::Task *task, const mqd_t mq)
             &timeout) == -1) {
         
         if (ETIMEDOUT == errno) {
-            NIMS_LOG_ERROR << "check in timed out after " << CHECKIN_TIME_LIMIT_SECONDS << " seconds";
+            NIMS_LOG_ERROR << "check in timed out after " 
+               << CHECKIN_TIME_LIMIT_SECONDS << " seconds; exiting";
+            InterruptChildProcesses();
             exit(errno);
         }
         else if (EINTR == errno) {
             // do nothing; no idea what signal is interrupting this
-            nims_perror("subtask checkin interrupted");
+            nims_perror("subtask checkin interrupted; ignoring");
         }
         else if (EAGAIN != errno) {
             // any other error
-            nims_perror("subtask checkin failed");
+            nims_perror("subtask checkin failed; exiting");
+            InterruptChildProcesses();
             exit(errno);
         }
         

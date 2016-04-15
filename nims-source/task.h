@@ -23,7 +23,7 @@ public:
   Task(const fs::path &absolute_path, const std::vector<std::string> &args);
   ~Task();
   pid_t get_pid() { return pid_; }
-  void signal(int sig);
+  int signal(int sig); // returns errno or zero on success
   bool launch();
   std::string name();
 protected:
