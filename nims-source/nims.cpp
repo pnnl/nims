@@ -99,18 +99,39 @@ static void InterruptChildProcesses()
         if (getpgid(getpid()) == getpgid(t->get_pid())) {
             NIMS_LOG_WARNING << "sending SIGINT to " << t->name()
                 << " [" << t->get_pid() << "]";
-            int ret = t->signal(SIGINT);
-            if (ret)
-               NIMS_LOG_ERROR << "failed to kill " << t->name()
-               << " [" << t->get_pid() << "] with error " << strerror(ret);
             
-            // make sure we reap all child processes
-            ret = HANDLE_EINTR(waitpid(t->get_pid(), NULL, WUNTRACED|WCONTINUED));
-            if (-1 == ret)
-               nims_perror("waitpid failed");
+            bool keep_trying = true;
+            do {
+               int ret = t->signal(SIGINT);
+               if (ret)
+                  NIMS_LOG_ERROR << "failed to kill " << t->name()
+                  << " [" << t->get_pid() << "] with error " << strerror(ret);
+               
+               NIMS_LOG_WARNING << "killed " << t->name()
+                  << " [" << t->get_pid() << "]";
             
-            NIMS_LOG_WARNING << "waitpid returned " << ret << " for " 
-               << t->name();
+               // make sure we reap all child processes
+               int status;
+               ret = HANDLE_EINTR(waitpid(t->get_pid(), &status, WUNTRACED|WCONTINUED));
+               if (-1 == ret)
+                  nims_perror("waitpid failed");
+               
+               NIMS_LOG_WARNING << "waitpid returned " << ret << " for " 
+                  << t->name();
+                              
+               if (WIFEXITED(status)) {
+                  keep_trying = false;
+                  NIMS_LOG_WARNING << "waitpid says task exited "  << t->name()
+                     << " [" << t->get_pid() << "]";
+               }
+               
+               if (WIFSIGNALED(status)) {
+                  NIMS_LOG_WARNING << "waitpid says task signaled "  << t->name()
+                     << " [" << t->get_pid() << "]";
+               }
+            
+
+            } while (keep_trying);
         }
         else {
            NIMS_LOG_WARNING << "wrong process group id for " << t->name()

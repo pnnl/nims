@@ -50,7 +50,7 @@ case $1 in
       # fi
       log_daemon_msg "Stopping NIMS applications" nims
       start-stop-daemon --stop --signal INT --user nims \
-        --exec $APPLICATION_PATH/nims --retry 5
+        --exec $APPLICATION_PATH/nims --retry=INT/30/KILL/5
       start-stop-daemon --stop --user nims --name nims.py
       log_end_msg 0
       ;;
