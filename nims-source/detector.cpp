@@ -40,6 +40,24 @@ std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
     return strm;
 };
 
+std::ostream& operator<<(std::ostream& strm, const Detection& d)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << d.timestamp 
+    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
+    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
+    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+    return strm;
+};
+
 template<typename T> void write_mat_to_file(InputArray _mat, fs::path outfilepath)
 {
     Mat m = _mat.getMat();
@@ -58,23 +76,6 @@ template<typename T> void write_mat_to_file(InputArray _mat, fs::path outfilepat
     ofs.close();
 }
 
-std::ostream& operator<<(std::ostream& strm, const Detection& d)
-{
-    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
-    int prec = strm.precision();
-    strm.precision(3);
-
-    strm << d.timestamp 
-    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
-    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
-    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
-    << std::endl;
-
-    // restore formatting
-    strm.precision(prec);
-    strm.setf(fflags);
-    return strm;
-};
 
 // Generate the mapping from beam-range to x-y for display
 int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
@@ -228,7 +229,7 @@ int detect_objects(const Background& bg, const Frame& ping,
                    << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
     if (nz > 0)
     {
-        float timestamp = ping.header.ping_sec + (float)ping.header.ping_millisec/1000.0;
+        double timestamp = (double)ping.header.ping_sec + (double)ping.header.ping_millisec/1000.0;
         PixelGrouping objects;
         // Mat::reshape(nchan, nrows)
         group_pixels(foregroundMask.reshape(0,(int)ping.header.num_samples), min_size, objects);
