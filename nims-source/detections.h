@@ -145,7 +145,7 @@ struct __attribute__ ((__packed__)) DetectionMessage
         memset(detections, 0, sizeof(Detection)*MAX_DETECTIONS_PER_FRAME);
     };
     
-     DetectionMessage(uint32_t fnum, uint32_t pnum, doiuble ptime, std::vector<Detection> vec_detections )
+     DetectionMessage(uint32_t fnum, uint32_t pnum, double ptime, std::vector<Detection> vec_detections )
     {
         frame_num = fnum;
         ping_num = pnum;
