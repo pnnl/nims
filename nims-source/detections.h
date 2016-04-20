@@ -59,7 +59,7 @@ std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
 // through the sonar field of view.
 struct __attribute__ ((__packed__)) Detection
 {
-    float timestamp; // seconds since midnight 1-Jan-1970
+    double timestamp; // seconds since midnight 1-Jan-1970
     // spatial shape information
     float center[3]; // x,y,z
     float size[3];   // width, length, height
@@ -83,7 +83,7 @@ struct __attribute__ ((__packed__)) Detection
     };
     
     // create a detection from a set of connected points
-    Detection(float ts, const std::vector<cv::Point2i>& points, const PixelToWorld& ptw)
+    Detection(double ts, const std::vector<cv::Point2i>& points, const PixelToWorld& ptw)
     {
         timestamp = ts;
         //cv::RotatedRect rr = fitEllipse(points);
@@ -131,7 +131,7 @@ struct __attribute__ ((__packed__)) DetectionMessage
 {
     uint32_t  frame_num; // frame number from FrameBuffer
     uint32_t  ping_num; // sonar ping number 
-    float ping_time; // seconds since midnight 1-Jan-1970
+    double ping_time; // seconds since midnight 1-Jan-1970
     uint32_t  num_detections; // number of detections
     Detection detections[MAX_DETECTIONS_PER_FRAME];
 
@@ -142,10 +142,10 @@ struct __attribute__ ((__packed__)) DetectionMessage
         ping_time = 0.0;
 
         num_detections = 0;
-        memset(detections, 0, sizeof(detections));
+        memset(detections, 0, sizeof(Detection)*MAX_DETECTIONS_PER_FRAME);
     };
     
-     DetectionMessage(uint32_t fnum, uint32_t pnum, float ptime, std::vector<Detection> vec_detections )
+     DetectionMessage(uint32_t fnum, uint32_t pnum, doiuble ptime, std::vector<Detection> vec_detections )
     {
         frame_num = fnum;
         ping_num = pnum;
