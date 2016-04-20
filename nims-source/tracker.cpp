@@ -21,8 +21,7 @@
 #include "log.h"            // NIMS_LOG_* macros
 #include "nims_ipc.h"       // shared mem
 #include "tracked_object.h" // tracking
-//#include "pixelgroup.h"     // connected components
-#include "detections.h"     // detection message for UI
+#include "detections.h"     // detection message 
 #include "tracks_message.h"
 
  using namespace std;
@@ -30,15 +29,39 @@
  namespace fs = boost::filesystem;
  using namespace cv;
 
+bool TEST=false;
 
+// Defining these here instead of in detections.h to avoid multiple definition link error.
+std::ostream& operator<<(std::ostream& strm, const Detection& d)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << d.timestamp 
+    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
+    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
+    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+    return strm;
+};
 
  int main (int argc, char * argv[]) {
 
+    if ( argc == 2 && (string(argv[1]) == string("test")) ) 
+        {
+            TEST = true;
+            cout << endl << "!!!!!!!!!!!! TEST MODE !!!!!!!!!!!!!!!!!!" << endl;
+        }
     string cfgpath, log_level;
     if ( parse_command_line(argc, argv, cfgpath, log_level) != 0 ) return -1;
     setup_logging(string(basename(argv[0])), cfgpath, log_level);
     setup_signal_handling();
-    	//--------------------------------------------------------------------------
+    //--------------------------------------------------------------------------
 	// DO STUFF
     NIMS_LOG_DEBUG << "Starting " << argv[0];
     
@@ -88,6 +111,13 @@
     // NIMS parent process (and subsequent termination).
     SubprocessCheckin(getpid());
     
+    // for TEST
+    ofstream ofs; 
+
+    if (TEST)
+        ofs.open(string("tracks.csv"));
+                
+
     //-------------------------------------------------------------------------
 	// SETUP TRACKING
     
@@ -196,6 +226,11 @@
                         Range(f+1,n_obj)) < min_dist) ) continue;
 
                     active_tracks[min_idx[0]].update(msg_det.ping_time, msg_det.detections[f]);
+                    if (TEST)
+                    {
+                        ofs << active_tracks[min_idx[0]].get_id() << "," << msg_det.ping_num << ", " << msg_det.detections[f];
+
+                    }
                     // mark detection as matched
                     detected_not_matched.at<unsigned char>(f) = 0;
                     // mark track as matched
@@ -219,6 +254,11 @@
                         active_tracks.push_back( TrackedObject(next_id, 
                         msg_det.ping_time, msg_det.detections[f], 
                         process_noise, measurement_noise) );
+                    if (TEST)
+                    {
+                        ofs << active_tracks.back().get_id() << "," << msg_det.ping_num << ", " << msg_det.detections[f];
+
+                    }
                     active_id.push_back(next_id);
 
                      ++next_id;
@@ -273,12 +313,15 @@
 
         NIMS_LOG_DEBUG << "sent completed tracks message (" << sizeof(msg_complete)
                 << " bytes);  num_tracks = " << msg_complete.num_tracks;
-  
+    
+
 
 } // main loop
     
     //-------------------------------------------------------------------------
 	// CLEANUP
+    if (TEST)
+        ofs.close(); 
     // close message queues
     mq_close(mq_ui);
     mq_close(mq_socket);
