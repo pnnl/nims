@@ -24,10 +24,11 @@ public:
     // Constructor
     //TrackedObject(const cv::Point2f& initial_pos,  cv::InputArray initial_image = cv::noArray(),
      //              int initial_epoch = 0, float process_noise = 1e-5, float measurement_noise = 1e-1);
-    TrackedObject(long id, float epoch, Detection initial_det, float process_noise = 1e-5, float measurement_noise = 1e-1);
-    // Modifiers
-    void        update(float epoch, Detection new_det);
-    Detection   predict(float epoch);
+    //TrackedObject(long id, float epoch, Detection initial_det, float process_noise = 1e-5, float measurement_noise = 1e-1);
+     TrackedObject(long id, Detection initial_det, float process_noise = 1e-5, float measurement_noise = 1e-1);
+   // Modifiers
+    void        update(Detection new_det);
+    Detection   predict(double epoch);
     
     // Accessors
     long get_id() { return id_; };
@@ -41,7 +42,7 @@ public:
     // get the last image of the track	
     //void  get_last_image(cv::OutputArray lastimg) const; 
     // the epoch of the last update
-    float  last_epoch()   const { return epoch_.back(); };
+    double  last_epoch()   const { return detections_.back().timestamp; };
     // the length of the track 
 	long  track_length() const { return detections_.size(); }; 
 
@@ -49,7 +50,7 @@ private:
     void init_tracking(int Nstate, int Nmeasure, float q, float r);
     
     long                     id_; // unique identifier
-    std::vector<float>        epoch_;
+    //std::vector<float>        epoch_;
     std::vector<Detection>   detections_;
     cv::KalmanFilter         kf_;
     

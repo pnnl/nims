@@ -57,10 +57,11 @@ TrackedObject::TrackedObject(const Point2f& initial_pos, InputArray initial_imag
 	
 }
 */
-TrackedObject::TrackedObject(long id, float epoch, Detection initial_det, float process_noise, float measurement_noise)
+//TrackedObject::TrackedObject(long id, float epoch, Detection initial_det, float process_noise, float measurement_noise)
+TrackedObject::TrackedObject(long id, Detection initial_det, float process_noise, float measurement_noise)
 {
     id_ = id;
-    epoch_.push_back(epoch);
+    //epoch_.push_back(epoch);
     
     int Nstate = 4; // x, vx, y, vy
     int Nmeasure = 2; // x, y
@@ -74,9 +75,10 @@ TrackedObject::TrackedObject(long id, float epoch, Detection initial_det, float 
 }
 
 
-void TrackedObject::update(float epoch, Detection new_det)
+//void TrackedObject::update(float epoch, Detection new_det)
+void TrackedObject::update(Detection new_det)
 {
-    epoch_.push_back(epoch);
+    //epoch_.push_back(epoch);
     detections_.push_back(new_det);
 
     Mat_<float> measurement(2,1);
@@ -87,11 +89,12 @@ void TrackedObject::update(float epoch, Detection new_det)
 }
 
 
-Detection TrackedObject::predict(float epoch)
+Detection TrackedObject::predict(double epoch)
 {
     Mat prediction = kf_.predict();
     // elapsed time
-    float dt = epoch - epoch_.back();
+    //float dt = epoch - epoch_.back();
+    float dt = epoch - detections_.back().timestamp;
     kf_.transitionMatrix.at<float>(0,1) = dt;
     kf_.transitionMatrix.at<float>(2,3) = dt;
 

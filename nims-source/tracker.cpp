@@ -115,7 +115,12 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
     ofstream ofs; 
 
     if (TEST)
-        ofs.open(string("tracks.csv"));
+    {
+        ostringstream ss;
+        ss << "tracks_" << maxgap_secs << "-" << mintrack_steps << "-" << pred_err_max << ".csv";
+        ofs.open(ss.str());
+        ofs << "Id,Ping,Time,Bearing,Range,El,Width,Length,Height,Theta,Phi" << endl;
+    }
                 
 
     //-------------------------------------------------------------------------
@@ -225,7 +230,8 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
                     if ( countNonZero(distances(Range(min_idx[0],min_idx[0]+1),
                         Range(f+1,n_obj)) < min_dist) ) continue;
 
-                    active_tracks[min_idx[0]].update(msg_det.ping_time, msg_det.detections[f]);
+                   // active_tracks[min_idx[0]].update(msg_det.ping_time, msg_det.detections[f]);
+                    active_tracks[min_idx[0]].update(msg_det.detections[f]);
                     if (TEST)
                     {
                         ofs << active_tracks[min_idx[0]].get_id() << "," << msg_det.ping_num << ", " << msg_det.detections[f];
@@ -252,7 +258,7 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
                 if ( detected_not_matched.at<unsigned char>(f) )
                 {
                         active_tracks.push_back( TrackedObject(next_id, 
-                        msg_det.ping_time, msg_det.detections[f], 
+                        msg_det.detections[f], 
                         process_noise, measurement_noise) );
                     if (TEST)
                     {
