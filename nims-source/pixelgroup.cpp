@@ -39,14 +39,14 @@ int pnt2idx(Point2i pnt, int mcols) {
 // dst is a vector of indices of the nonzero elements
 // of src.
 long find(InputArray src, vector<unsigned>& out) {
+
+	// input must be binary image of unsigned char
+ 	Mat matsrc = src.getMat();
+   CV_Assert( matsrc.type() == CV_8UC1 ); 
 	
 	long Nfound = 0;
-	Mat matsrc;
-	src.getMat().convertTo(matsrc, CV_8U); // get Mat headers
 	Size matsize = matsrc.size();
 	out.clear();
-	
-	// TODO: Make sure src is a single channel.
 	
 	if ( matsrc.isContinuous() )
 	{
@@ -56,8 +56,8 @@ long find(InputArray src, vector<unsigned>& out) {
 	
 	for (int i=0; i<matsize.height; i++)
 	{
-		uchar *dat = matsrc.ptr(0);
-		for (long j=0; j<matsize.width; ++j)
+		uchar *dat = matsrc.ptr(i);
+		for (int j=0; j<matsize.width; ++j)
 		{
 			if ( dat[j] )
 			{
