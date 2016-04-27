@@ -31,7 +31,7 @@
 
 bool TEST=false;
 
-// Defining these here instead of in detections.h to avoid multiple definition link error.
+// Defining this here instead of in detections.h to avoid multiple definition link error.
 std::ostream& operator<<(std::ostream& strm, const Detection& d)
 {
     std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
@@ -112,7 +112,7 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
     SubprocessCheckin(getpid());
     
     // for TEST
-    ofstream ofs; 
+    ofstream ofs,ofs2; 
 
     if (TEST)
     {
@@ -120,6 +120,10 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
         ss << "tracks_" << maxgap_secs << "-" << mintrack_steps << "-" << pred_err_max << ".csv";
         ofs.open(ss.str());
         ofs << "Id,Ping,Time,Bearing,Range,El,Width,Length,Height,Theta,Phi" << endl;
+        ostringstream ss2;
+        ss2 << "tracks-msg_" << maxgap_secs << "-" << mintrack_steps << "-" << pred_err_max << ".csv";
+        ofs2.open(ss2.str());
+        ofs2 << "Time,Frame,Ping,NTracks" << endl;
     }
                 
 
@@ -310,9 +314,12 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
         TracksMessage msg_trks(msg_det.frame_num, msg_det.ping_num, msg_det.ping_time, tracks);
             mq_send(mq_ui, (const char *)&msg_trks, sizeof(msg_trks), 0); // non-blocking
             mq_send(mq_socket, (const char *)&msg_trks, sizeof(msg_trks), 0);
-            NIMS_LOG_DEBUG << "sent UI message (" << sizeof(msg_trks)
-                << " bytes); ping_num = " << msg_trks.ping_num_sonar 
-                << "; num_tracks = " << msg_trks.num_tracks;
+            NIMS_LOG_DEBUG << "sent tracks message  ping_time = " << msg_trks.ping_time 
+                           << ", ping_num = " << msg_trks.ping_num_sonar 
+                           << ", num_tracks = " << msg_trks.num_tracks;
+
+if (TEST)
+    ofs2 << msg_trks;
 
     TracksMessage msg_complete(msg_det.frame_num, msg_det.ping_num, msg_det.ping_time, completed);            
     mq_send(mq_arc, (const char *)&msg_complete, sizeof(msg_complete), 0); // non-blocking
