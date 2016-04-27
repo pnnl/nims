@@ -148,7 +148,7 @@ struct __attribute__ ((__packed__)) TracksMessage
 {
     uint32_t  frame_num;   // NIMS internal ping number from FrameHeader
     uint32_t  ping_num_sonar; // sonar ping number
-    float     ping_time; // seconds since Jan 1, 1970
+    double     ping_time; // seconds since Jan 1, 1970
     uint32_t  num_tracks; // number of tracks
     Track     tracks[MAX_ACTIVE_TRACKS]; // track data
 
@@ -160,7 +160,7 @@ struct __attribute__ ((__packed__)) TracksMessage
         num_tracks = 0;
         memset(tracks, 0, sizeof(Track)*MAX_ACTIVE_TRACKS);
     };
-    TracksMessage(uint32_t fnum, uint32_t pnum_s, float ts, std::vector<Track> vec_tracks )
+    TracksMessage(uint32_t fnum, uint32_t pnum_s, double ts, std::vector<Track> vec_tracks )
     {
         frame_num = fnum;
         ping_num_sonar = pnum_s;
@@ -173,5 +173,22 @@ struct __attribute__ ((__packed__)) TracksMessage
    };
 
 }; // TracksMessage
+
+std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << tm.ping_time 
+    << "," << tm.frame_num << "," << tm.ping_num_sonar << "," << tm.num_tracks
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+
+    return strm;
+};
 
 #endif // __NIMS_TRACKS_MESSAGE_H__
