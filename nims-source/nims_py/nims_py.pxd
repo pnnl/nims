@@ -34,6 +34,7 @@ cdef extern from "tracks_message.h":
     struct TracksMessage:
         unsigned int frame_num      # NIMS internal ping number from FrameHeader
         unsigned int ping_num_sonar # sonar ping number
+        double       ping_time      # seconds since 1 January 1970
         unsigned int num_tracks     # number of tracks
         Track tracks[_MAX_ACTIVE_TRACKS]
 

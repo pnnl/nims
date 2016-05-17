@@ -3,6 +3,7 @@
 from nims_py cimport get_next_message, get_next_message_timed, create_message_queue
 from nims_py cimport Track, TracksMessage, sizeof_tracks_message, sizeof_track
 import math
+import sys
 
 cdef class PyTrack:
     
@@ -150,6 +151,7 @@ cdef class PyTracksMessage:
     def __cinit__(self):
         self._msg.frame_num = 0
         self._msg.ping_num_sonar = 0
+        self._msg.ping_time = 0.0
         self._msg.num_tracks = 0
         
     property frame_num:
@@ -163,6 +165,10 @@ cdef class PyTracksMessage:
     property num_tracks:
         def __get__(self):
             return self._msg.num_tracks
+            
+    property ping_time:
+        def __get__(self):
+            return self._msg.ping_time
             
     def tracks(self):
         # returns PyTrack objects
@@ -196,6 +202,7 @@ cdef class PyTracksMessage:
         ret = dict()
         ret["frame_num"] = self.frame_num
         ret["ping_num_sonar"] = self.ping_num_sonar
+        ret["ping_time"] = self.ping_time
         ret["num_tracks"] = self.num_tracks
         ret["tracks"] = [ptrk.dict_value(ensure_finite=ensure_finite) for ptrk in self.tracks()]
         return ret
@@ -220,7 +227,7 @@ cpdef object get_next_tracks_message_py(int mq):
     if sz > 0:
         pmsg._msg = msg
     else:
-        print "error getting next message"
+        sys.stderr.write("get_next_tracks_message_py: error getting next message\n")
     
     return pmsg
             
@@ -236,7 +243,7 @@ cpdef object get_next_tracks_message_timed_py(int mq, float timeout_secs):
     if sz > 0:
         pmsg._msg = msg
     elif -1 == sz:
-        print "error getting next message"
+        sys.stderr.write("get_next_tracks_message_timed_py: error getting next message\n")
     else:
         # timeout is not an error
         pass
