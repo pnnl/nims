@@ -31,25 +31,6 @@
 
 bool TEST=false;
 
-// Defining this here instead of in detections.h to avoid multiple definition link error.
-std::ostream& operator<<(std::ostream& strm, const Detection& d)
-{
-    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
-    int prec = strm.precision();
-    strm.precision(3);
-
-    strm << d.timestamp 
-    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
-    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
-    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
-    << std::endl;
-
-    // restore formatting
-    strm.precision(prec);
-    strm.setf(fflags);
-    return strm;
-};
-
  int main (int argc, char * argv[]) {
 
     if ( argc == 2 && (string(argv[1]) == string("test")) ) 

@@ -41,7 +41,8 @@ struct __attribute__ ((__packed__)) FrameHeader
     float     winstart_sec;    // start of sampling window (sec)
     float     winlen_sec;      // length of sampling window (sec)
     uint32_t  num_beams;       // number of beams
-    // TODO: replace the array with angle_min and angle_max, like range
+    // NOTE: The beam angles of the M3 are not uniformly spaced; they are
+    // wider at the ends of the array and narrower in the middle.
     float     beam_angles_deg[kMaxBeams] { }; // beam angles (deg)
     uint32_t  freq_hz;         // sonar frequency (Hz)
     uint32_t  pulselen_microsec;     // pulse length (microsec)
@@ -71,6 +72,29 @@ struct __attribute__ ((__packed__)) FrameHeader
 
 std::ostream& operator<<(std::ostream& strm, const FrameHeader& fh);
 
+// The frame data is what's often referred to as the echogram from 
+// a single sonar ping.  Each value in the echogram is the intensity 
+// of the backscatter from a position in space.  The position is 
+// referenced by a range (distance from the transducer) and a bearing
+// (azimuth angle, with 0 degrees in the center).  The echogram is 
+// often viewed as a 2D matrix with range on the vertical axis and
+// bearing on the horizontal axis.  Using this convention, the frame 
+// data are arranged in row-major order:
+/*   
+     00 01 ... 0(N-1)
+    10 11 ... 1(N1)
+    .
+    .
+    .
+    (M-1)0 (M-1)1 ... (M-1)(N-1)
+
+    where N is the number of beams and M is the number of samples. 
+*/
+// data_ptr()[k] is the value from the mth range bin and the nth 
+// bearing angle, where m = floor(k/num_beams) and n = k % num_beams 
+// and k = m * num_beams + n
+// 
+// 
 typedef float framedata_t; // type for data values
 struct Frame
 {
@@ -89,6 +113,8 @@ struct Frame
     
     size_t size() const { return data_size; };
     framedata_t * const data_ptr() const { return pdata; };
+    framedata_t get(int range_bin, int beam) const 
+        { return pdata[range_bin*header.num_beams + beam]; };
     
     void malloc_data(size_t size) {
       if (data_size > 0) free(pdata);

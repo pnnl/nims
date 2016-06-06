@@ -30,15 +30,6 @@
 
 bool TEST=false;
 
-// Defining these here instead of in detections.h to avoid multiple definition link error.
-std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
-{
-   strm 
-    << p.start[BEARING] << "," << p.start[RANGE] << "," << p.start[ELEVATION]
-    << "," << p.step[BEARING] << "," << p.step[RANGE] << "," << p.step[ELEVATION]
-     << std::endl;
-    return strm;
-};
 
 std::ostream& operator<<(std::ostream& strm, const Detection& d)
 {
@@ -50,6 +41,7 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
     << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
     << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
     << "," << d.rot_deg[0] << "," << d.rot_deg[1]
+    << "," << d.intensity_min << "," << d.intensity_max << "," << d.intensity_sum
     << std::endl;
 
     // restore formatting
@@ -79,20 +71,21 @@ template<typename T> void write_mat_to_file(InputArray _mat, fs::path outfilepat
 
 // Generate the mapping from beam-range to x-y for display
 int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray _map_y)
- {
+{
     // range bin resolution in meters per pixel
     float rng_step = (hdr.range_max_m - hdr.range_min_m)/(hdr.num_samples - 1);
     NIMS_LOG_DEBUG << "PingImagePolarToCart: range resolution is " << rng_step;
+    float y1 = hdr.range_min_m; // y coordinate of first row of image pixels
     float y2 = hdr.range_max_m; // y coordinate of first row of image pixels
     
-    float beam_step = hdr.beam_angles_deg[1] - hdr.beam_angles_deg[0];
+    //float beam_step = hdr.beam_angles_deg[1] - hdr.beam_angles_deg[0];
     double theta1 = (double)hdr.beam_angles_deg[0] * M_PI/180.0;
     double theta2 = (double)hdr.beam_angles_deg[hdr.num_beams-1] * M_PI/180.0;
     float x1 = hdr.range_max_m*sin(theta1);
     float x2 = hdr.range_max_m*sin(theta2);
     NIMS_LOG_DEBUG << "PingImagePolarToCart: beam angles from " << hdr.beam_angles_deg[0]
     << " to " << hdr.beam_angles_deg[hdr.num_beams-1];
-    NIMS_LOG_DEBUG << "PingImagePolarToCart: beam angle step is " << beam_step;
+    //NIMS_LOG_DEBUG << "PingImagePolarToCart: beam angle step is " << beam_step;
     NIMS_LOG_DEBUG << "PingImagePolarToCart: x1 = " << x1 << ", x2 = " << x2;
     
     // size of image
@@ -108,7 +101,11 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
     // initialize map to 0's
     map_x = Mat::zeros(nrows, ncols, CV_32FC1);
     map_y = Mat::zeros(nrows, ncols, CV_32FC1);
-    
+
+    vector<float> beam_angles_deg(hdr.beam_angles_deg,
+        hdr.beam_angles_deg + hdr.num_beams );
+    vector<float>::iterator low,up;
+    float x,y, rng,beam_deg,i_rng,i_beam;
     // each row is a range
     for (int m=0; m<nrows; ++m)
     {
@@ -116,17 +113,24 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
         for (int n=0; n<ncols; ++n)
         {
             // convert row, col to x,y coordinates, centered at origin
-            float x = x1 + n*rng_step;
-            float y = y2 - m*rng_step;
+           x = x1 + n*rng_step;
+           y = y2 - m*rng_step;
             // convert x,y to beam-range
-            float rng = sqrt(pow(x,2)+pow(y,2));
-            float beam_deg = 90 - (atan2(y,x)*(180/M_PI));
+           rng = sqrt(pow(x,2)+pow(y,2));
+           beam_deg = 90 - (atan2(y,x)*(180/M_PI));
+            //cout << endl << "rng = " << rng << ", beam_deg = " << beam_deg << endl;
             // convert beam-range to indices
-            float i_rng = (rng - hdr.range_min_m) / rng_step;
-            float i_beam = (beam_deg - hdr.beam_angles_deg[0]) / beam_step;
-            if (i_rng >=0 && i_rng < hdr.num_samples
-                && i_beam >= 0 && i_beam < hdr.num_beams)
-            {
+           if (rng >= hdr.range_min_m && rng <= hdr.range_max_m 
+            && beam_deg >= hdr.beam_angles_deg[0] && beam_deg <= hdr.beam_angles_deg[hdr.num_beams-1])
+           {
+               i_rng = (rng - hdr.range_min_m) / rng_step;
+               up = upper_bound(beam_angles_deg.begin(), beam_angles_deg.end(), beam_deg);
+                // cout << "*(up - 1) = " << *(up-1)  << ", *up = " << *up << endl;
+                if (up != beam_angles_deg.end() ) 
+                    i_beam = up - beam_angles_deg.begin() - (*up - beam_deg)/(*up - *(up -1));
+                else
+                    i_beam = hdr.num_beams-1;
+
                 map_x(m,n) = i_beam;
                 map_y(m,n) = i_rng;
             }
@@ -137,8 +141,9 @@ int PingImagePolarToCart(const FrameHeader &hdr, OutputArray _map_x, OutputArray
 struct Background 
 {
     int N; // number of frames for moving window
-    int dim_sizes[2]; // size of each frame data dimension
     int total_samples; // number of elements in frame data
+    vector<float> beam_angles_deg;
+    vector<float> range_bins_m;
     int cv_type;       // openCV code for frame data type
     int oldest_frame; // index of oldest frame in moving window
     Mat pings; // moving window
@@ -149,17 +154,20 @@ struct Background
 int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
 {
     // Initialize the moving window.
-        Frame next_ping;
-    if ( fb.GetNextFrame(&next_ping)==-1 )
+        Frame ping;
+    if ( fb.GetNextFrame(&ping)==-1 )
         {
             NIMS_LOG_ERROR << "Error getting ping for initial moving average.";
             return -1;
         }
     // NOTE:  data is stored transposed
-    bg.dim_sizes[0] = (int)next_ping.header.num_beams;
-    bg.dim_sizes[1] = (int)next_ping.header.num_samples;
-    bg.total_samples = next_ping.header.num_beams*next_ping.header.num_samples;
-    bg.N = (int)(next_ping.header.pulserep_hz * bg_secs);
+    bg.total_samples = ping.header.num_beams*ping.header.num_samples;
+    bg.beam_angles_deg = vector<float>(ping.header.beam_angles_deg, 
+                           ping.header.beam_angles_deg+ping.header.num_beams);
+    float range_bin_size = (ping.header.range_max_m - ping.header.range_min_m)/(ping.header.num_samples-1);
+    for (int k=0; k<ping.header.num_samples; ++k)
+        bg.range_bins_m.push_back(ping.header.range_min_m + k*range_bin_size);
+    bg.N = (int)(ping.header.pulserep_hz * bg_secs);
     bg.oldest_frame = 0;
 
 
@@ -168,14 +176,14 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
     bg.pings.create(bg.N, bg.total_samples, bg.cv_type);
     for (int k=0; k<bg.N; ++k)
     {
-        if ( fb.GetNextFrame(&next_ping)==-1 )
+        if ( fb.GetNextFrame(&ping)==-1 )
         {
             NIMS_LOG_ERROR << "Error getting ping for initial moving average.";
             return -1;
         }
             // Create a cv::Mat wrapper for the ping data
-        Mat ping_data(2,bg.dim_sizes,bg.cv_type,next_ping.data_ptr());
-        ping_data.reshape(0,1).copyTo(bg.pings.row(k));
+        Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
+        ping_data.copyTo(bg.pings.row(k));
     }
     reduce(bg.pings, bg.ping_mean, 0, CV_REDUCE_AVG);
 
@@ -195,8 +203,10 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
 int update_background(Background& bg, const Frame& new_ping)
 {
     // replace oldest frame with new one
-    Mat ping_data(2,bg.dim_sizes,bg.cv_type,new_ping.data_ptr());
-    ping_data.reshape(0,1).copyTo(bg.pings.row(bg.oldest_frame));
+    //Mat ping_data(2,bg.dim_sizes,bg.cv_type,new_ping.data_ptr());
+    //ping_data.reshape(0,1).copyTo(bg.pings.row(bg.oldest_frame));
+    Mat ping_data(1,bg.total_samples,bg.cv_type,new_ping.data_ptr());
+    ping_data.copyTo(bg.pings.row(bg.oldest_frame));
     ++bg.oldest_frame;
     bg.oldest_frame %= bg.N; // wrap around from N-1 to 0
 
@@ -218,39 +228,51 @@ int update_background(Background& bg, const Frame& new_ping)
 
 
 int detect_objects(const Background& bg, const Frame& ping, 
-    float thresh_stdevs, int min_size, const PixelToWorld& ptw, 
-    vector<Detection>& detections)
+    float thresh_stdevs, int min_size,  vector<Detection>& detections)
 {
     detections.clear();
     Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
     Mat foregroundMask = ((ping_data - bg.ping_mean) / bg.ping_stdv) > thresh_stdevs;
     int nz = countNonZero(foregroundMask);
-    NIMS_LOG_DEBUG << ping.header.ping_num << " number of samples above threshold: "<< nz << " ("
+    NIMS_LOG_DEBUG << "ping " << ping.header.ping_num << ": number of samples above threshold is "<< nz << " ("
                    << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
     if (nz > 0)
     {
-        double timestamp = (double)ping.header.ping_sec + (double)ping.header.ping_millisec/1000.0;
         PixelGrouping objects;
-        // Mat::reshape(nchan, nrows)
-        group_pixels(foregroundMask.reshape(0,(int)ping.header.num_samples), min_size, objects);
+        NIMS_LOG_DEBUG << "grouping pixels";
+        group_pixels(ping_data.reshape(0,(int)ping.header.num_samples), foregroundMask.reshape(0,(int)ping.header.num_samples), 
+            min_size, objects);
         int n_obj = objects.size();
         NIMS_LOG_DEBUG << ping.header.ping_num << " number of detected objects: " << n_obj;
-            // guard against tracking a lot of noise            
-        if (n_obj > MAX_DETECTIONS_PER_FRAME) // from detections.h
-        {
-            NIMS_LOG_WARNING << "Too many false positives, not detecting";
-        }
-        else 
-        {
-            for (int k=0; k<n_obj; ++k)
-            {
-            // convert pixel grouping to detections
-                detections.push_back(Detection(timestamp, objects[k], ptw));
-            }
-        }
+        
+        double ts = (double)ping.header.ping_sec + (double)ping.header.ping_millisec/1000.0;
 
+        // convert pixel grouping to detections
+       for (int k=0; k<n_obj; ++k)
+        {
+            Detection d;
+            d.timestamp = ts;
+            cv::RotatedRect rr = minAreaRect(objects[k].points);
+            d.center[BEARING] = bg.beam_angles_deg[rr.center.x]; 
+            d.center[RANGE] =   bg.range_bins_m[rr.center.y]; 
+            d.center[ELEVATION] = 0.0;
+
+            d.rot_deg[0] = rr.angle; d.rot_deg[1] = 0.0;
+
+            cv::Rect bb = boundingRect(objects[k].points);
+            d.size[BEARING] = bg.beam_angles_deg[bb.x+bb.width] - bg.beam_angles_deg[bb.x]; 
+            d.size[RANGE] =   bg.range_bins_m[bb.y+bb.height] - bg.range_bins_m[bb.y]; 
+            d.size[ELEVATION] = 1.0;
+
+            d.intensity_min = *(std::min_element(objects[k].intensity.begin(),objects[k].intensity.end()));
+            d.intensity_max = *(std::max_element(objects[k].intensity.begin(),objects[k].intensity.end()));
+            d.intensity_sum = std::accumulate(objects[k].intensity.begin(),objects[k].intensity.end(),0.0);
+    
+            detections.push_back(d);
+        }
     }
-    if (TEST)
+
+        if (TEST)
     {
         ostringstream ss;
         ss << ping.header.ping_num << "_" << ping.header.ping_sec << "-" << ping.header.ping_millisec;
@@ -259,7 +281,7 @@ int detect_objects(const Background& bg, const Frame& ping,
         write_mat_to_file<framedata_t>(bg.ping_stdv, string(ss.str() + "_stdv.csv"));
         
         ofstream ofs( string(ss.str() + "_det.csv").c_str() ); 
-        ofs << ptw;
+        //ofs << ptw;
         for (int d=0; d<detections.size(); ++ d)
             ofs << detections[d];
         ofs.close();
@@ -312,6 +334,7 @@ int main (int argc, char * argv[]) {
      
     // For testing
     bool VIEW = true; // display new ping images
+    /*
     const char *WIN_PING="Ping Image";
     const char *WIN_MEAN="Mean Intensity Image";
     if (VIEW)
@@ -319,6 +342,7 @@ int main (int argc, char * argv[]) {
         //namedWindow(WIN_PING, CV_WINDOW_NORMAL );
         //namedWindow(WIN_MEAN, CV_WINDOW_NORMAL );
     }
+    */
     //int disp_ms = 100; // time duration of window display
     
 	//--------------------------------------------------------------------------
@@ -358,12 +382,6 @@ int main (int argc, char * argv[]) {
     FrameHeader *fh = &next_ping.header; // for notational convenience
     float beam_max = fh->beam_angles_deg[(fh->num_beams-1)];
     float beam_min = fh->beam_angles_deg[0];
-    PixelToWorld ptw(fh->range_min_m,
-                     beam_min,
-                     0.0,
-                     (fh->range_max_m - fh->range_min_m)/(fh->num_samples-1),
-                     (beam_max - beam_min)/(fh->num_beams-1),
-                     0.0);
     Mat map_x, map_y;
     if (VIEW)
     {
@@ -377,7 +395,7 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "image mapping:  range index is from "
         << min_rng << " to " << max_rng;
     }
-    //Mat imc(ping_mean.size(), CV_8UC3); // used for VIEW
+ 
     
     // check before entering loop; GetNextFrame may have been interrupted
     if (sigint_received) {
@@ -404,8 +422,8 @@ int main (int argc, char * argv[]) {
         update_background(bg, next_ping);
 
         double min_val,max_val;
-        minMaxIdx(bg.pings.row(bg.N-1), &min_val, &max_val);
-        NIMS_LOG_DEBUG << "ping data values from " << min_val << " to " << max_val;
+       // minMaxIdx(bg.pings.row(bg.N-1), &min_val, &max_val);
+       // NIMS_LOG_DEBUG << "ping data values from " << min_val << " to " << max_val;
         minMaxIdx(bg.ping_mean, &min_val, &max_val);
         NIMS_LOG_DEBUG << "mean background values from " << min_val << " to " << max_val;
         minMaxIdx(bg.ping_stdv, &min_val, &max_val);
@@ -426,10 +444,15 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "Detecting objects";
 
         vector<Detection> detections;
-        int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, ptw, detections);  
+        int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, detections);  
+            // Use max strongest objects    
+        sort(detections.begin(),detections.end(),compare_detection);
+        n_obj = std::min(n_obj, MAX_DETECTIONS_PER_FRAME);
+
         NIMS_LOG_DEBUG << "sending message with " << detections.size() << " detections";
         DetectionMessage msg_det(frame_index, next_ping.header.ping_num, 
-            next_ping.header.ping_sec + (float)next_ping.header.ping_millisec/1000.0, detections);
+            next_ping.header.ping_sec + (float)next_ping.header.ping_millisec/1000.0, 
+            vector<Detection>(detections.begin(),detections.begin()+n_obj));
         mq_send(mq_det, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
         
         // may interrupt mq_send, and we don't want to re
@@ -448,18 +471,39 @@ int main (int argc, char * argv[]) {
              drawContours(imc, contours, -1, Scalar(0,0,255));
              }
              */
-        /*
+        
         if (VIEW)
         {
+            double v1,v2;
+           // ping data as 1 x total_samples vector, 32F from 0.0 to ?
+            Mat ping_data(1,bg.total_samples,bg.cv_type,next_ping.data_ptr());
+            minMaxIdx(ping_data, &v1, &v2);
+            NIMS_LOG_DEBUG << "ping_data range from " << v1 << " to " << v2;
+
+             // reshape to single channel, num_samples rows
+            Mat im1 = ping_data.reshape(0,next_ping.header.num_samples);
+            minMaxIdx(im1, &v1, &v2);
+            NIMS_LOG_DEBUG << "im1 from " << v1 << " to " << v2;
+
+           // convert to single channel, 16U, scaling by 20 times
+            Mat im2;
+            im1.convertTo(im2,CV_16U,20.0,0.0);
+             minMaxIdx(im2, &v1, &v2);
+            NIMS_LOG_DEBUG << "im2 from " << v1 << " to " << v2;
+
+           // map from beam,range to x,y
             Mat im_out;
-            remap(imc.t(), im_out, map_x, map_y,
-              INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+            remap(im2, im_out, map_x, map_y,
+                   INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
+            minMaxIdx(im_out, &v1, &v2);
+            NIMS_LOG_DEBUG << "im_out from " << v1 << " to " << v2;
+
+
             stringstream pngfilepath;
             pngfilepath <<  "ping-" << frame_index % 20 << ".png";
-            //imwrite(pngfilepath.str(), im_out);
-            imwrite(pngfilepath.str(), imc);
+            imwrite(pngfilepath.str(), im_out);
         }
-*/
+
     } // while getting frames
         
     cout << endl << "Ending " << argv[0] << endl << endl;

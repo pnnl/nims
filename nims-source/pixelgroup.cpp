@@ -38,7 +38,8 @@ int pnt2idx(Point2i pnt, int mcols) {
 // src must be a logical array, matrix, or vector.
 // dst is a vector of indices of the nonzero elements
 // of src.
-long find(InputArray src, vector<unsigned>& out) {
+
+long find(InputArray src, vector<Point2i>& out) {
 
 	// input must be binary image of unsigned char
  	Mat matsrc = src.getMat();
@@ -48,20 +49,15 @@ long find(InputArray src, vector<unsigned>& out) {
 	Size matsize = matsrc.size();
 	out.clear();
 	
-	if ( matsrc.isContinuous() )
-	{
-		matsize.width *= matsize.height;
-		matsize.height = 1;
-	}
 	
-	for (int i=0; i<matsize.height; i++)
+	for (int i=0; i<matsize.height; i++) // y
 	{
 		uchar *dat = matsrc.ptr(i);
-		for (int j=0; j<matsize.width; ++j)
+		for (int j=0; j<matsize.width; ++j) // x
 		{
 			if ( dat[j] )
 			{
-				out.push_back(j);
+				out.push_back(Point2i(j,i));
 				++Nfound;
 			}
 		}
@@ -69,28 +65,27 @@ long find(InputArray src, vector<unsigned>& out) {
 	return(Nfound);
 }
 
-void getNeighbors(int idx, int mrows, int mcols, vector<unsigned>& outidx) {
-	outidx.clear();
-	int y = floor(idx/mcols);
-	int x = idx - y*mcols;
+
+
+void getNeighbors(Point2i pnt, Size2i sz, vector<Point2i>& out) {
+	out.clear();
 	
-	if (y>0)
+	if (pnt.x > 0)
 	{
-		if (x>0)       outidx.push_back((y-1)*mcols + x-1); // left, up
-        outidx.push_back((y-1)*mcols + x);   // up
-		if (x<mcols-1) outidx.push_back((y-1)*mcols + x+1); // right, up
+		if (pnt.y > 0) out.push_back(Point(pnt.x-1,pnt.y-1));
+		out.push_back(Point(pnt.x-1,pnt.y));
+		if ((pnt.y+1) < sz.height) out.push_back(Point(pnt.x-1,pnt.y+1));
 	}
-	
-	if (x>0)           outidx.push_back(y*mcols + (x-1));   // left
-	if (x<mcols-1)     outidx.push_back(y*mcols + (x+1));   // right
-	
-	if (y<mrows-1)
+
+	if (pnt.y > 0) out.push_back(Point(pnt.x,pnt.y-1));
+	if ((pnt.y+1) < sz.height) out.push_back(Point(pnt.x,pnt.y+1));
+
+	if ((pnt.x+1) < sz.width)
 	{
-		if (x>0)       outidx.push_back((y+1)*mcols + x-1); // left, down
-        outidx.push_back((y+1)*mcols + x);   // down
-		if (x<mcols-1) outidx.push_back((y+1)*mcols + x+1); // right, down
+		if (pnt.y > 0) out.push_back(Point(pnt.x+1,pnt.y-1));
+		out.push_back(Point(pnt.x+1,pnt.y));
+		if ((pnt.y+1) < sz.height) out.push_back(Point(pnt.x+1,pnt.y+1));		
 	}
-	
 }
 
 
@@ -100,12 +95,12 @@ std::ostream& operator<<(std::ostream& strm, const PixelGrouping& pg)
 	strm << "number of groups: " << n << endl;
 	for (int j=0;j<n;++j)
 	{
-		int nj = pg[j].size();
+		int nj = pg[j].points.size();
 		cout << "group " << j << ": " << nj << " pixels" << endl;
 		strm << "     ";
 		for (int k=0;k<nj;++k)
 		{
-			strm << "(" << pg[j][k].x << ", " << pg[j][k].y << ") "; 
+			strm << "(" << pg[j].points[k].x << ", " << pg[j].points[k].y << ") "; 
 		} // for each pixel in group
 		strm << endl;
 	} // for each group
@@ -113,68 +108,76 @@ std::ostream& operator<<(std::ostream& strm, const PixelGrouping& pg)
 	return strm;
 }
 
+// TODO:  TEST this function!
 // Get a list of the connected pixels in the binary image.
-void group_pixels(const cv::InputArray &imb, int min_size, PixelGrouping& blobs)
+void group_pixels(const cv::InputArray& im, const cv::InputArray& mask, int min_size, PixelGrouping& blobs)
 {
 
-	Mat matimb = imb.getMat();
-    CV_Assert( matimb.type() == CV_8UC1 ); // input must be binary image
+	Mat matim = im.getMat();
+	CV_Assert( matim.type() == CV_32FC1 );
+
+	Mat matmask = mask.getMat();
+    CV_Assert( matmask.type() == CV_8UC1 ); // mask must be binary image
+	CV_Assert( matmask.size() == matim.size() );
+
+Size2i im_sz = matim.size();
 
 	blobs.clear();
-	vector<unsigned>   pixListIdx; // index of nonzero pixels
-	long Npix = find(matimb, pixListIdx);
-	
+	// TODO:  Check for 2D or 3D, maybe template
+	vector<Point2i> pixList;
+	long Npix = find(matmask, pixList);
+
 	if (Npix==0) return;
 
-	unordered_set<int> ungroupedIdx(pixListIdx.begin(),pixListIdx.end());  // ungrouped pixels
-	vector<unsigned>  ineighbors;     // list of pixel neighbors
-	int               ipix;           // pixel index
+	vector<Point2i>  neighbors;     // list of pixel neighbors
+	Point2i          pix;           // pixel index
 	
-	while (!ungroupedIdx.empty()) // while ungrouped pixels
+	while (!pixList.empty()) // while ungrouped pixels
 	{
-		// start a new group
-		//cout << endl << "starting a new group " << endl;
-		//cout << "ungrouped pixels: " << ungroupedIdx.size() << endl;
-		
-		stack<unsigned>   pixReady;  // set of candidate pixels
+		if (matmask.at<unsigned char>(*pixList.begin()) == 0)
+		{
+			pixList.erase(pixList.begin());
+			continue;
+		}
+		stack<Point2i>   pixReady;  // set of candidate pixels
 		vector<Point2i>  groupPix;  // pixels in group
 		
 		// Pick an initial pixel, mark it as found and put it in the Ready list.
-		pixReady.push(*ungroupedIdx.begin());
-		ungroupedIdx.erase(ungroupedIdx.begin());
+		pixReady.push(*pixList.begin());
+		pixList.erase(pixList.begin());
 						
 		while (!pixReady.empty())
 		{
 			//cout << "pixels ready: " << pixReady.size() << endl;
-			ipix = pixReady.top();  // pick a pixel in the Ready list
+			pix = pixReady.top();  // pick a pixel in the Ready list
 			pixReady.pop();         // remove it from Ready
 			//cout << "grouping pixel " << ipix << endl;
 			
 			// add it to the current group
-			groupPix.push_back(idx2pnt(ipix, matimb.cols));
+			groupPix.push_back(pix);
 			
 			// find all its neighbors
-			getNeighbors(ipix,matimb.rows,matimb.cols,ineighbors);
+			getNeighbors(pix, im_sz, neighbors);
 			//cout << "neighbors (" << ineighbors.size() << "):" << endl;
-			for (int j=0;j<ineighbors.size();j++)
+			for (int j=0;j<neighbors.size();++j)
 			{
-				//cout << ineighbors[j] << " ";
-				if (matimb.reshape(0,1).at<unsigned char>(ineighbors[j])>0 )
+				if (matmask.at<unsigned char>(neighbors[j])>0 )
 				{
 					// mark neighbor as found
-					if ( ungroupedIdx.erase(ineighbors[j])>0 )
-					{
-						// add neighbor to the Ready list
-						pixReady.push(ineighbors[j]);
-					} // if ungrouped
+					matmask.at<unsigned char>(neighbors[j]) = 0;
+					// add neighbor to the Ready list
+					pixReady.push(neighbors[j]);
 				} // if neighbor valid
 			} // for each neighbor
 		} // pixels ready
 		// save group
 		if (groupPix.size() >= min_size)
-		    blobs.push_back(groupPix);
-		
+		{
+			vector<float> intensity;
+		    for (int p=0;p<groupPix.size();++p)
+		    	intensity.push_back(matim.at<float>(groupPix[p]));
+		    blobs.push_back(Blob(groupPix,intensity));
+		}
 	} // ungrouped pixels
-	
 	
 }
