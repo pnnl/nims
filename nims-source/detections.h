@@ -14,45 +14,17 @@
 #include <cstdint>  // fixed width integer types
 #include <cstring>  // memset
  #include <vector>
- #include <algorithm> // std::copy, min
+ #include <algorithm> // std::copy, min, max, sum
  #include <ios> // io formatting
 
 //#include "log.h"      // NIMS logging
+
+//#include "pixelgroup.h"
 
 #define MAX_DETECTIONS_PER_FRAME 100
 
  enum dimension_t {RANGE=0, BEARING, ELEVATION};
 
-// used to convert pixels (cells) in a frame image (echogram) to 
-// world coordinates relative to the sonar head
- struct PixelToWorld
- {
-    float start[3];
-    float step[3];
-
-    PixelToWorld(float start_rng, float start_brg, float start_el, 
-                 float step_rng, float step_brg, float step_el)
-    {
-        start[RANGE] = start_rng;
-        start[BEARING] = start_brg;
-        start[ELEVATION] = start_el;
-
-        step[RANGE] = step_rng;
-        step[BEARING] = step_brg;
-        step[ELEVATION] = step_el;
-    };
- };
- // TODO:  Resolve multiple definitions link error.
-/*
-std::ostream& operator<<(std::ostream& strm, const PixelToWorld& p)
-{
-   strm 
-    << p.start[BEARING] << "," << p.start[RANGE] << "," << p.start[ELEVATION]
-    << "," << p.step[BEARING] << "," << p.step[RANGE] << "," << p.step[ELEVATION]
-     << std::endl;
-    return strm;
-};
-*/
 // Data structure for describing the objects detected
 // in one ping image.  Detections are possibly fish
 // or marine mammals or some other object moving
@@ -68,44 +40,25 @@ struct __attribute__ ((__packed__)) Detection
     // rot_deg[1] is elevation angle with respect to x-y plane
     float rot_deg[2];  
     // target strength
-    float mean_intensity;
-    float max_intensity;
-    
+    float intensity_min;
+    float intensity_max;
+    float intensity_sum;
+   
     Detection()
     {
         timestamp = 0.0;
         center[RANGE] = 0.0; center[BEARING] = 0.0; center[ELEVATION] = 0.0;
         size[RANGE] = 0.0; size[BEARING] = 0.0; size[ELEVATION] = 0.0;
         rot_deg[0] = 0.0; rot_deg[1] = 0.0;
-        mean_intensity = 0.0;
-        max_intensity = 0.0;
+        intensity_min =0.0;
+        intensity_max = 0.0;
+        intensity_sum = 0.0;
        
     };
-    
-    // create a detection from a set of connected points
-    Detection(double ts, const std::vector<cv::Point2i>& points, const PixelToWorld& ptw)
-    {
-        timestamp = ts;
-        //cv::RotatedRect rr = fitEllipse(points);
-        cv::RotatedRect rr = minAreaRect(points);
-        // TODO:  Test this conversion.
-        center[BEARING] = ptw.start[BEARING] + ptw.step[BEARING]*rr.center.x; 
-        center[RANGE] =   ptw.start[RANGE] +   ptw.step[RANGE]*rr.center.y; 
-        center[ELEVATION] = 0.0;
-
-        rot_deg[0] = rr.angle; rot_deg[1] = 0.0;
-
-        cv::Rect bb = boundingRect(points);
-        size[BEARING] = ptw.step[BEARING]*bb.width; 
-        size[RANGE] =   ptw.step[RANGE]*bb.height; 
-        size[ELEVATION] = 1.0;
-
-        // TODO: figure out how to set these.
-        mean_intensity =0.0;
-        max_intensity = 0.0;
-    };
-    
+        
 };
+// used to sort detections in descending order of max intensity
+bool compare_detection(Detection d1, Detection d2) { return d1.intensity_max > d2.intensity_max; };
 
  // TODO:  Resolve multiple definitions link error.
 /*
@@ -127,6 +80,25 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
     return strm;
 };
 */
+std::ostream& operator<<(std::ostream& strm, const Detection& d)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << d.timestamp 
+    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
+    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
+    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
+    << "," << d.intensity_min << "," << d.intensity_max << "," << d.intensity_sum
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+    return strm;
+};
+
 struct __attribute__ ((__packed__)) DetectionMessage
 {
     uint32_t  frame_num; // frame number from FrameBuffer
@@ -157,7 +129,7 @@ struct __attribute__ ((__packed__)) DetectionMessage
    
 }; // Detections
 
-/*
+
 std::ostream& operator<<(std::ostream& strm, const DetectionMessage& dm)
 {
     strm << "    ping_num = " << dm.ping_num << "\n"
@@ -167,6 +139,6 @@ std::ostream& operator<<(std::ostream& strm, const DetectionMessage& dm)
     
     return strm;
 };
-*/
+
 
 #endif // __NIMS_DETECTIONS_H__
