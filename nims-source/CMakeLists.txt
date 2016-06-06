@@ -58,6 +58,7 @@ add_executable(ingester ingester.cpp data_source_m3.cpp data_source_ek60.cpp dat
 add_executable(detector detector.cpp pixelgroup.cpp frame_buffer.cpp log.cpp nims_ipc.cpp)
 add_executable(tracker tracker.cpp tracked_object.cpp log.cpp nims_ipc.cpp)
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
+add_executable(m3sim m3sim.cpp )
 
 target_link_libraries(ingester ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${YAMLCPP_LIBRARY} ${Bvtsdk_LIB} rt)
 target_link_libraries(detector ${Boost_LIBRARIES} ${OpenCV_LIBS} ${CMAKE_THREAD_LIBS_INIT} rt ${YAMLCPP_LIBRARY})
