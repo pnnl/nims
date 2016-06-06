@@ -354,12 +354,35 @@ int DataSourceM3::GetPing(Frame* pframe)
     pframe->malloc_data(frame_data_size);
     if ( pframe->size() != frame_data_size )
         ERROR_MSG_EXIT("Error allocating memory for frame data.");
+    /*
+    NOTE: The data is stored as
+
+    00 01 ... 0(M-1)
+    10 11 ... 1(M-1)
+    .
+    .
+    .
+    (N-1)0 (N-1)1 ... (N-1)(M-1)
+
+    where N is the number of beams and M is the number of samples.  The first 
+    column is near range and the first row is the minimum beam (leftmost) 
+    beam.  I'm assuming row major order, although this is not specified in
+    the M3 data format documentation.
+
+    The Frame data is stored as
+     00 01 ... 0(N-1)
+    10 11 ... 1(N1)
+    .
+    .
+    .
+    (M-1)0 (M-1)1 ... (M-1)(N-1)
+    */
     framedata_t* fdp = pframe->data_ptr();
-    for (int ii = 0; ii < header.nNumBeams; ++ii) // column
+    for (int n = 0; n < header.nNumBeams; ++n) // beam
     {
-        for (int jj = 0; jj < header.nNumSamples; ++jj) // row
+        for (int m = 0; m < header.nNumSamples; ++m) // sample
         {
-            fdp[ii*(header.nNumSamples) + jj] = ABS_IQ( bfData[ii*(header.nNumSamples) + jj] );
+            fdp[m*(header.nNumBeams) + n] = ABS_IQ( bfData[n*(header.nNumSamples) + m] );
             
         }
     }
@@ -407,7 +430,13 @@ strm << "fSWST = " << hdr.fSWST << endl;
 strm << "fSWL = " << hdr.fSWL << endl;
 strm << "nNumBeams = " << hdr.nNumBeams << endl;
 strm << "fBeamList[0] = " << hdr.fBeamList[0] << endl;
-strm << "fBeamList[MAX_NUM_BEAMS-1] = " << hdr.fBeamList[MAX_NUM_BEAMS-1] << endl;
+strm << "fBeamList[1] = " << hdr.fBeamList[1] << endl;
+strm << "fBeamList[2] = " << hdr.fBeamList[2] << endl;
+strm << "fBeamList[10] = " << hdr.fBeamList[10] << endl;
+strm << "fBeamList[11] = " << hdr.fBeamList[11] << endl;
+strm << "fBeamList[12] = " << hdr.fBeamList[12] << endl;
+strm << "fBeamList[nNumBeams-2] = " << hdr.fBeamList[hdr.nNumBeams-2] << endl;
+strm << "fBeamList[nNumBeams-1] = " << hdr.fBeamList[hdr.nNumBeams-1] << endl;
 strm << "fImageSampleInterval = " << hdr.fImageSampleInterval << endl;
 strm << "wImageDestination = " << hdr.wImageDestination << endl;
 strm << "dwModeID = " << hdr.dwModeID << endl;
