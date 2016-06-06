@@ -3,9 +3,10 @@
 
 #define NIMS_LOG_DEBUG std::cout
 
+#include "pixelgroup.h"
 #include "detections.h"
-#include "tracked_object.h"
-#include "tracks_message.h"
+//#include "tracked_object.h"
+//#include "tracks_message.h"
 
 
 using namespace std;
@@ -37,14 +38,14 @@ device = Kongsberg M3 Multibeam sonar
 */
 void M3()
 {
-	range_min = 0.4;
-	brg_min = -70.038;
+	range_min = 2.0;
+	brg_min = -59.5313;
 	el_min = 0.0;
-	range_max = 20.0;
-	brg_max = 70.038;
+	range_max = 50.0;
+	brg_max = 59.5313;
 	el_max = 0.0;
-	num_samples = 1373;
-	num_beams = 108;
+	num_samples = 1681;
+	num_beams = 128;
 	num_el = 1;
 
 	range_step = (range_max - range_min)/(num_samples-1);
@@ -89,8 +90,8 @@ cout << "el_step = " << el_step << ", el_max_calc = " << el_max_calc << endl;
 
 void print_detection(const Detection& d)
 {
-	cout << "center: " << d.center[RANGE] << ", " << d.center[BEARING] << ", " << d.center[ELEVATION] << endl;
-	cout << "size: " << d.size[RANGE] << ", " << d.size[BEARING] << ", " << d.size[ELEVATION] << endl;
+	cout << "center: " << d.center[BEARING] << ", " << d.center[RANGE] << ", " << d.center[ELEVATION] << endl;
+	cout << "size: " << d.size[BEARING] << ", " << d.size[RANGE] << ", " << d.size[ELEVATION] << endl;
 	cout << "rotation: " << d.rot_deg[0] << ", " << d.rot_deg[1] << endl;
 	//cout << "mean intensity: " << d.mean_intensity << endl;
 	//cout << "max instensity: " << d.max_intensity << endl;
@@ -130,6 +131,7 @@ rvrect.push_back(Point2i(1,2)+offset);
 rvrect.push_back(Point2i(0,3)+offset);
 }
 
+/*
 std::ostream& operator<<(std::ostream& strm, const Track& trk)
 {
 	strm  
@@ -165,13 +167,13 @@ std::ostream& operator<<(std::ostream& strm, const Track& trk)
 	return strm;
 
 }
-
+*/
 int main (int argc, char * argv[]) 
 {
 
 // set up frame buffer like M3
-//M3();
-Generic();
+M3();
+//Generic();
 
 print_all();
 
@@ -188,24 +190,27 @@ PixelToWorld ptw(range_min, brg_min, el_min,
                  range_step, brg_step, el_step);
 
 // test points
-Point2i ul(0,0);
-Point2i lr(num_beams-1, num_samples-1);
+// near range, port
+Point2i np(0,0);
+// far range, starboard
+Point2i fs(num_beams-1, num_samples-1);
+// mid range, center
 Point2i ctr((int)(num_beams/2), (int)(num_samples/2));
 
 float ts = 0.0;
 vector<Point2i> points;
 
 cout << endl;
-cout << "UPPER LEFT:" << endl;
+cout << "NEAR, PORT:" << endl;
 points.clear();
-points.push_back(ul);
+points.push_back(np);
 Detection det1(ts, points, ptw);
 print_detection(det1);
 
 cout << endl;
-cout << "LOWER RIGHT:" << endl;
+cout << "FAR, STARBOARD:" << endl;
 points.clear();
-points.push_back(lr);
+points.push_back(fs);
 Detection det2(ts, points, ptw);
 print_detection(det2);
 cout << endl;
@@ -216,7 +221,8 @@ points.push_back(ctr);
 Detection det3(ts, points, ptw);
 print_detection(det3);
 
-Point2i offset(20,20);
+Point2i offset(num_beams - 20,num_samples-40);
+cout << endl << "offset: x = " << offset.x << ", y = " << offset.y << endl;
 
 // 2x3 horizontal rectangle
 vector<Point2i> hrect;
@@ -248,6 +254,57 @@ Detection det_rr(ts, rvrect, ptw);
 print_detection(det_rr);
 cout << endl;
 
+//*************************************************
+// Test PixelGrouping to Detection
+// 
+
+// binary image
+Mat imb(num_samples, num_beams, CV_32FC1, Scalar(0.0));
+
+cout << "Expecting NEAR,PORT FAR,STARBOARD and CENTER" << endl;
+
+imb.at<float>(np) = 1.0;
+imb.at<float>(fs) = 1.0;
+imb.at<float>(ctr) = 1.0;
+
+int min_size = 1;
+PixelGrouping objects;
+group_pixels(Mat(imb>0.0), min_size, objects);
+int n_obj = objects.size();
+cout << endl << " number of detected objects: " << n_obj << endl;
+cout << endl;
+
+double timestamp = 0.0;
+for (int k=0; k<n_obj; ++k)
+{
+    // convert pixel grouping to detections
+    Detection det(timestamp, objects[k], ptw);
+	print_detection(det);
+	cout << endl;
+}
+imb.at<float>(np) = 0.0;
+imb.at<float>(fs) = 0.0;
+imb.at<float>(ctr) = 0.0;
+
+cout << "Expecting ROTATED RECT" << endl;
+for (int p=0; p<rvrect.size(); ++p)
+{
+	imb.at<float>(rvrect[p]) = 1.0;
+}
+
+group_pixels(Mat(imb>0.0), min_size, objects);
+n_obj = objects.size();
+cout << endl << " number of detected objects: " << n_obj << endl;
+cout << endl;
+for (int k=0; k<n_obj; ++k)
+{
+    // convert pixel grouping to detections
+    Detection det(timestamp, objects[k], ptw);
+	print_detection(det);
+	cout << endl;
+}
+
+/*
 //*************************************************
 // Test Detection to TrackedObject
 //  
@@ -293,7 +350,7 @@ tracks.push_back( Track(obj.get_id(), obj.get_track()) );
 tracks.push_back( Track(obj.get_id(), obj.get_track()) );
 tracks.push_back( Track(obj.get_id(), obj.get_track()) );
 cout << endl << tracks[0];
-TracksMessage msg_trks(frame_num, ping_num, tracks);
+TracksMessage msg_trks(frame_num, ping_num, ts, tracks);
 cout << endl << "created message with " << msg_trks.num_tracks << " tracks" << endl;
 for (int k=0;k<msg_trks.num_tracks;++k)
 {
@@ -301,6 +358,6 @@ for (int k=0;k<msg_trks.num_tracks;++k)
 	cout << msg_trks.tracks[k];
 }
 
-
+*/
 return 0;
 }
