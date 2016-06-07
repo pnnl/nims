@@ -53,7 +53,8 @@ int main (int argc, char * argv[]) {
 	int sonar_type;
 	string sonar_host_addr;
   // TODO: make this virtual, like source
-  EK60Params ek60_params;
+  EK60Params ek60_params; // EK60 parameters
+  BlueViewParams bv_params; // BlueView data directory
 	string fb_name;
     try 
     {
@@ -63,6 +64,14 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "SONAR_TYPE: " << sonar_type;
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
         NIMS_LOG_DEBUG << "SONAR_HOST_ADDR: " << sonar_host_addr;
+        if (sonar_type == NIMS_SONAR_BLUEVIEW)
+        {
+          YAML::Node params = config["SONAR_BLUEVIEW"];
+          bv_params.files = params["files"].as<bool>();
+          bv_params.host_addr = config["SONAR_HOST_ADDR"].as<string>();
+          bv_params.datadir = params["directory"].as<string>();
+        }
+
         if (sonar_type == NIMS_SONAR_EK60)
         {
           YAML::Node params = config["SONAR_EK60"];
@@ -112,7 +121,7 @@ int main (int argc, char * argv[]) {
             break;
  	    case NIMS_SONAR_BLUEVIEW :
             NIMS_LOG_DEBUG << "opening BlueView sonar as datasource";
-            input = new DataSourceBlueView(sonar_host_addr);
+            input = new DataSourceBlueView(bv_params);
             break;
 	    case NIMS_SONAR_EK60 :
             NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";

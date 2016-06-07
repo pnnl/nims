@@ -15,25 +15,31 @@
  exceptions which is a pain in the arse. Therefore
  I will use the C interface.
  */
-
 #include "data_source_blueview.h"
 
+#include <dirent.h> // list files in directory
 #include <cmath> // modf
 #include <cv.h> // opencv
 #include <highgui.h> // imwrite for TEST
+
 # include "frame_buffer.h"
 #include "log.h"
 
 using namespace std;
 using namespace cv; // openCV
 //-----------------------------------------------------------------------------
-DataSourceBlueView::DataSourceBlueView(std::string const &host_addr)
+DataSourceBlueView::DataSourceBlueView(BlueViewParams const &params)
 {
+    files_ = params.files;
+    if (files_)
+        host_or_path_ = params.datadir;
+    else
+        host_or_path_ = params.host_addr;
     son_ = NULL;
     head_ = NULL;
     imager_ = NULL;
     ping_count_ = 0;
-	host_addr_ = host_addr;
+	
 	
 	son_ = BVTSonar_Create();
 	if( son_ == NULL )
@@ -59,10 +65,35 @@ int DataSourceBlueView::connect()
 		NIMS_LOG_ERROR << "BVTSonar_Create: failed";
 		return -1;
 	}
-    int ret = BVTSonar_Open(son_, "NET", host_addr_.c_str());
+    int ret = -1;
+    if (files_)
+    {
+        // make sure directory exists
+        DIR           *d;
+        struct dirent *dir;
+        d = opendir(host_or_path_.c_str());
+        if (d == nullptr)
+        {
+            // TODO: perror
+            NIMS_LOG_ERROR << "Error reading data directory " << host_or_path_;
+            return -1;
+        }
+         // put existing files in queue
+         while ((dir = readdir(d)) != NULL)
+        {
+            NIMS_LOG_DEBUG <<  dir->d_name;
+        }
+       closedir(d);
+            
+        // watch for new files
+        // open first file
+        ret = BVTSonar_Open(son_, "FILE", host_or_path_.c_str());
+    }
+    else
+        ret = BVTSonar_Open(son_, "NET", host_or_path_.c_str());
 	if( ret != 0 )
 	{
-		NIMS_LOG_ERROR << "BVTSonar_Open " << host_addr_ << ": ret = " << ret;
+		NIMS_LOG_ERROR << "BVTSonar_Open " << host_or_path_ << ": ret = " << ret;
 		return -1;
 	}
 

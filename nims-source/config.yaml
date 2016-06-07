@@ -43,6 +43,12 @@ SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
 #SONAR_HOST_ADDR: 192.168.1.45 # shari's BlueView
 #SONAR_HOST_ADDR: 130.20.85.189 # arm
 
+SONAR_BLUEVIEW:
+   # Process files instead of live instrument stream
+  files: false
+  # Path to .son files to process
+  directory: ../data/BlueView
+
 # Used for EK60 Sonar type
 SONAR_EK60:
   # Ethernet Output dialog 
@@ -64,12 +70,10 @@ TRACKSERVER_SOCKET_PORT: 8001
 
 ### DETECTOR ###
 DETECTOR:
-    moving_avg_seconds       : 10
-    threshold_in_stdevs      : 2.0
-    min_target_size          : 8
+    moving_avg_seconds       : 30
+    threshold_in_stdevs      : 3.0
+    min_target_size          : 1
 
-# for extract_1.mmb, change min_target_size to 10
-#
 ### TRACKER ###
 TRACKER:
     max_gap_in_track_seconds : 1.0
