@@ -456,9 +456,9 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
         nims_perror("mmap() in GetNextFrame");
         return -1;
     }
-    
     // copy the data into this address space
     memset(&(next_frame->header), 0, sizeof(next_frame->header));
+    //NIMS_LOG_DEBUG << "copying header, " << sizeof(next_frame->header) << " bytes";
     memcpy(&(next_frame->header), shared_frame, sizeof(next_frame->header));
     size_t data_size;
     memcpy(&data_size, shared_frame + sizeof(next_frame->header), sizeof(data_size));
@@ -468,6 +468,7 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
         NIMS_LOG_ERROR << "Error: Can't allocate memory for frame data.";
         return -1;
     }
+    //NIMS_LOG_DEBUG << "copying data, " << data_size << " bytes";
     memcpy(next_frame->data_ptr(), shared_frame + sizeof(next_frame->header) 
            + sizeof(data_size), data_size);
     

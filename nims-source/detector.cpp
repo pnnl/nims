@@ -160,13 +160,16 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
             NIMS_LOG_ERROR << "Error getting ping for initial moving average.";
             return -1;
         }
+    NIMS_LOG_DEBUG << "got initial frame";
     // NOTE:  data is stored transposed
     bg.total_samples = ping.header.num_beams*ping.header.num_samples;
     bg.beam_angles_deg = vector<float>(ping.header.beam_angles_deg, 
                            ping.header.beam_angles_deg+ping.header.num_beams);
+    NIMS_LOG_DEBUG << "beam angles from " << bg.beam_angles_deg[0] << " to " << bg.beam_angles_deg.back();
     float range_bin_size = (ping.header.range_max_m - ping.header.range_min_m)/(ping.header.num_samples-1);
     for (int k=0; k<ping.header.num_samples; ++k)
         bg.range_bins_m.push_back(ping.header.range_min_m + k*range_bin_size);
+    NIMS_LOG_DEBUG << "range bins from " << bg.range_bins_m[0] << " to " << bg.range_bins_m.back();
     bg.N = (int)(ping.header.pulserep_hz * bg_secs);
     bg.oldest_frame = 0;
 
@@ -226,6 +229,8 @@ int update_background(Background& bg, const Frame& new_ping)
     return 0;
 } // update_background
 
+// used to sort detections in descending order of max intensity
+bool compare_detection(Detection d1, Detection d2) { return d1.intensity_max > d2.intensity_max; };
 
 int detect_objects(const Background& bg, const Frame& ping, 
     float thresh_stdevs, int min_size,  vector<Detection>& detections)
@@ -272,7 +277,7 @@ int detect_objects(const Background& bg, const Frame& ping,
         }
     }
 
-        if (TEST)
+    if (TEST)
     {
         ostringstream ss;
         ss << ping.header.ping_num << "_" << ping.header.ping_sec << "-" << ping.header.ping_millisec;
@@ -477,30 +482,28 @@ int main (int argc, char * argv[]) {
             double v1,v2;
            // ping data as 1 x total_samples vector, 32F from 0.0 to ?
             Mat ping_data(1,bg.total_samples,bg.cv_type,next_ping.data_ptr());
-            minMaxIdx(ping_data, &v1, &v2);
-            NIMS_LOG_DEBUG << "ping_data range from " << v1 << " to " << v2;
-
              // reshape to single channel, num_samples rows
             Mat im1 = ping_data.reshape(0,next_ping.header.num_samples);
             minMaxIdx(im1, &v1, &v2);
+            im1 *= 1./v2; // scale to [0,1]
+            cvtColor(im1,im1,CV_GRAY2BGR);
             NIMS_LOG_DEBUG << "im1 from " << v1 << " to " << v2;
 
            // convert to single channel, 16U, scaling by 20 times
             Mat im2;
-            im1.convertTo(im2,CV_16U,20.0,0.0);
-             minMaxIdx(im2, &v1, &v2);
+            im1.convertTo(im2,CV_8U,255.0,0.0);
+            minMaxIdx(im2, &v1, &v2);
             NIMS_LOG_DEBUG << "im2 from " << v1 << " to " << v2;
 
            // map from beam,range to x,y
             Mat im_out;
             remap(im2, im_out, map_x, map_y,
                    INTER_LINEAR, BORDER_CONSTANT, Scalar(0,0,0));
-            minMaxIdx(im_out, &v1, &v2);
-            NIMS_LOG_DEBUG << "im_out from " << v1 << " to " << v2;
-
+            //minMaxIdx(im_out, &v1, &v2);
+            //NIMS_LOG_DEBUG << "im_out from " << v1 << " to " << v2;
 
             stringstream pngfilepath;
-            pngfilepath <<  "ping-" << frame_index % 20 << ".png";
+            pngfilepath <<  "ping-" << frame_index % 30 << ".png";
             imwrite(pngfilepath.str(), im_out);
         }
 

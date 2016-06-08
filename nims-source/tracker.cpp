@@ -31,6 +31,53 @@
 
 bool TEST=false;
 
+// TODO:  Resolve multiple definition error so this can be in detections.h
+std::ostream& operator<<(std::ostream& strm, const Detection& d)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << d.timestamp 
+    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
+    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
+    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
+    << "," << d.intensity_min << "," << d.intensity_max << "," << d.intensity_sum
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+    return strm;
+};
+
+std::ostream& operator<<(std::ostream& strm, const DetectionMessage& dm)
+{
+    strm << "    ping_num = " << dm.ping_num << "\n"
+         << "    num_detections = " << dm.num_detections << "\n"
+    << std::endl;
+    
+    
+    return strm;
+};
+
+std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
+{
+    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
+    int prec = strm.precision();
+    strm.precision(3);
+
+    strm << tm.ping_time 
+    << "," << tm.frame_num << "," << tm.ping_num_sonar << "," << tm.num_tracks
+    << std::endl;
+
+    // restore formatting
+    strm.precision(prec);
+    strm.setf(fflags);
+
+    return strm;
+};
+
  int main (int argc, char * argv[]) {
 
     if ( argc == 2 && (string(argv[1]) == string("test")) ) 

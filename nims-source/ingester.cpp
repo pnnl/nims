@@ -70,6 +70,7 @@ int main (int argc, char * argv[]) {
           bv_params.files = params["files"].as<bool>();
           bv_params.host_addr = config["SONAR_HOST_ADDR"].as<string>();
           bv_params.datadir = params["directory"].as<string>();
+          bv_params.pulse_rate_hz = params["ping_rate_hz"].as<int>();
         }
 
         if (sonar_type == NIMS_SONAR_EK60)

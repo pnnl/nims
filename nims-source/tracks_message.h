@@ -105,7 +105,7 @@ struct __attribute__ ((__packed__)) Track
 		for (int k=0; k<detections.size(); ++k)
 		{
 			size_sq_m += detections[k].size[RANGE]*detections[k].size[BEARING];       
-			target_strength += detections[k].max_intensity; 
+			target_strength += detections[k].intensity_max; 
 			min_range_m = std::min(min_range_m,detections[k].center[RANGE]);     
 			max_range_m = std::max(max_range_m,detections[k].center[RANGE]);
 			min_bearing_deg = std::min(min_bearing_deg,detections[k].center[BEARING]);
@@ -175,6 +175,7 @@ struct __attribute__ ((__packed__)) TracksMessage
 }; // TracksMessage
 
 #if !(NIMS_CYTHON)
+/*
 std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
 {
     std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
@@ -193,4 +194,5 @@ std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
 };
 #endif // NIMS_CYTHON
 
+*/
 #endif // __NIMS_TRACKS_MESSAGE_H__

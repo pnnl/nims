@@ -26,6 +26,7 @@ struct BlueViewParams {
   bool files; // process files instead of live instrument stream
   std::string host_addr; // address to live instrument, ignored if files==true
   std::string datadir; // path for files to process, ignored if files==false
+  int pulse_rate_hz;   // pulse rate for files
 };
 
 class DataSourceBlueView : public DataSource {
@@ -42,6 +43,7 @@ class DataSourceBlueView : public DataSource {
     private:
       bool files_;
     	std::string host_or_path_;
+      int pulse_rate_hz_;
     	BVTSonar son_;
     	BVTHead  head_;
       BVTImageGenerator imager_;

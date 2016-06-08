@@ -35,7 +35,7 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
 # 1 = M3, 2 = BlueView, 3 = EK60
-SONAR_TYPE: 1
+SONAR_TYPE: 2
 
 # Used for M3, BlueView and EK60
 SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
@@ -45,9 +45,11 @@ SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
 
 SONAR_BLUEVIEW:
    # Process files instead of live instrument stream
-  files: false
+  files: true
   # Path to .son files to process
   directory: ../data/BlueView
+  # ping rate for files
+  ping_rate_hz: 9
 
 # Used for EK60 Sonar type
 SONAR_EK60:

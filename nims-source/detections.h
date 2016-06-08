@@ -57,8 +57,6 @@ struct __attribute__ ((__packed__)) Detection
     };
         
 };
-// used to sort detections in descending order of max intensity
-bool compare_detection(Detection d1, Detection d2) { return d1.intensity_max > d2.intensity_max; };
 
  // TODO:  Resolve multiple definitions link error.
 /*
@@ -80,24 +78,6 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
     return strm;
 };
 */
-std::ostream& operator<<(std::ostream& strm, const Detection& d)
-{
-    std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);
-    int prec = strm.precision();
-    strm.precision(3);
-
-    strm << d.timestamp 
-    << "," << d.center[BEARING] << "," << d.center[RANGE] << "," << d.center[ELEVATION]
-    << "," << d.size[BEARING] << "," << d.size[RANGE] << "," << d.size[ELEVATION]
-    << "," << d.rot_deg[0] << "," << d.rot_deg[1]
-    << "," << d.intensity_min << "," << d.intensity_max << "," << d.intensity_sum
-    << std::endl;
-
-    // restore formatting
-    strm.precision(prec);
-    strm.setf(fflags);
-    return strm;
-};
 
 struct __attribute__ ((__packed__)) DetectionMessage
 {
@@ -129,7 +109,7 @@ struct __attribute__ ((__packed__)) DetectionMessage
    
 }; // Detections
 
-
+/*
 std::ostream& operator<<(std::ostream& strm, const DetectionMessage& dm)
 {
     strm << "    ping_num = " << dm.ping_num << "\n"
@@ -139,6 +119,6 @@ std::ostream& operator<<(std::ostream& strm, const DetectionMessage& dm)
     
     return strm;
 };
-
+*/
 
 #endif // __NIMS_DETECTIONS_H__
