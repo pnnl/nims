@@ -4,6 +4,10 @@
 # us from cluttering up the binary directory
 LOG_DIR: /var/tmp
 
+# put a limit on disk space used (in megabytes) by the log
+# facility, or it gets out of control quickly
+LOG_DIR_MAX_SIZE_MB: 100
+
 # "name" is a path relative to the NIMS_HOME environment variable
 APPLICATIONS:
     - name: ingester

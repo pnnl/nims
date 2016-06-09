@@ -24,7 +24,7 @@
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/attributes/constant.hpp>
 #include <boost/log/support/date_time.hpp>
-#include <boost/log/sinks/text_file_backend.hpp>
+#include <boost/log/sinks.hpp>
 
 #include <boost/filesystem.hpp>
 #include "yaml-cpp/yaml.h"
@@ -34,6 +34,9 @@ namespace expr = boost::log::expressions;
 namespace src = boost::log::sources;
 namespace keywords = boost::log::keywords;
 namespace fs = boost::filesystem;
+namespace sinks = boost::log::sinks;
+
+typedef sinks::synchronous_sink< sinks::text_file_backend > file_sink;
 
 /*
 
@@ -131,6 +134,11 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
     YAML::Node config = YAML::LoadFile(cfgpath);
     fs::path log_dir(config["LOG_DIR"].as<std::string>());
     
+    // Looks like ~40 MB/day for ingester, less for others depending on level.
+    // I _think_ this is basically per-process, but it's not clear since
+    // ingester is currently the heavy hitter on log file production.
+    size_t max_log_dir_size = config["LOG_DIR_MAX_SIZE_MB"].as<int>();
+    
     // we need to munge the directory name, or only one user can run it per host
     // using "username-userid" is more readable than one by itself
     
@@ -143,7 +151,7 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
     log_dir = log_dir / uid_str / "log";
     fs::path log_file = log_dir / fs::path(task_name + "_%N.log");
     
-    logging::add_file_log(
+    boost::shared_ptr< file_sink > sink = logging::add_file_log(
         logging::keywords::file_name = log_file.string(),
         logging::keywords::rotation_size = 10 * 1024 * 1024,
         logging::keywords::time_based_rotation = logging::sinks::file::rotation_at_time_point(12, 0, 0),
@@ -157,6 +165,20 @@ void setup_logging(std::string const & task_name, std::string const & cfgpath, s
                             expr::smessage
         )
     );
+        
+    /* 
+       Not sure why I have to do this, but the max_size above doesn't
+       seem to do anything in testing, and scan_for_files throws an
+       error if I don't explicitly set a collector first. Anyway, this
+       deletes oldest files first, or appears to. 
+    */
+    sink->locked_backend()->set_file_collector(sinks::file::make_collector(
+        logging::keywords::target = log_dir.string(),
+        logging::keywords::max_size = max_log_dir_size * 1024 * 1024
+        )
+    );
+    // passing sinks::file::scan_all will delete files from other processes
+    sink->locked_backend()->scan_for_files();
     
     // mainly to separate log file blocks visually
     std::string uc_task_name;
