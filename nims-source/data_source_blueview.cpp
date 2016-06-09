@@ -19,6 +19,7 @@
 
 #include <dirent.h> // list files in directory
 #include <cmath> // modf
+#include <thread> // sleep_for
 #include <cv.h> // opencv
 #include <highgui.h> // imwrite for TEST
 
@@ -26,6 +27,7 @@
 #include "log.h"
 
 using namespace std;
+using namespace std::chrono;
 using namespace cv; // openCV
 //-----------------------------------------------------------------------------
 DataSourceBlueView::DataSourceBlueView(BlueViewParams const &params)
@@ -40,8 +42,10 @@ DataSourceBlueView::DataSourceBlueView(BlueViewParams const &params)
     head_ = NULL;
     imager_ = NULL;
     ping_count_ = 0;
-	
-	
+    // calc the ping repitition interval (time between pings)
+	pri_sec_ = duration<double> (1.0/pulse_rate_hz_);
+	t_last_ping_ = steady_clock::now();
+
 	son_ = BVTSonar_Create();
 	if( son_ == NULL )
 	{
@@ -88,7 +92,7 @@ int DataSourceBlueView::connect()
             
         // watch for new files
         // open first file
-       string filename("../data/BlueView/2016_03_24_06_41_01.son");
+       string filename("../data/BlueView/2016_03_24_00_41_00.son");
         ret = BVTSonar_Open(son_, "FILE", filename.c_str());
     }
     else
@@ -149,6 +153,9 @@ int DataSourceBlueView::GetPing(Frame* pframe)
         NIMS_LOG_ERROR << ("DataSourceBlueView::GetPing() Not connected to source.");
         return -1;
     }
+    if (files_)
+         // simulate the ping rate, otherwise the file is read as fast as possible
+        this_thread::sleep_until(t_last_ping_ + pri_sec_);
 
     BVTPing ping;
     int ret = BVTHead_GetPing(head_, -1, &ping);
@@ -248,13 +255,16 @@ int DataSourceBlueView::GetPing(Frame* pframe)
     int type_code = (sizeof(framedata_t) == 64) ? CV_64FC1 : CV_32FC1;
     Mat im2(imh, imw, type_code, fdp); // Mat wrapper
     im1.convertTo(im2, type_code, 1./65535., 0); // convert type with scaling
-    
+    // flip it because it's upside down
+    flip(im2,im2, 0);
+
     // TEST
      imwrite("MatGetBits.png", im1);
 
     BVTMagImage_Destroy(img);
     BVTPing_Destroy(ping);
 
+    t_last_ping_ = steady_clock::now();
     return ping_count_;
     
 } // DataSourceBlueView::GetPing

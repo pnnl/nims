@@ -15,6 +15,7 @@
 #include "data_source.h" // base class
 
  #include <string>
+ #include <chrono> // time functions
 
 #include <bvt_sdk.h> // BlueView SDK
 
@@ -48,7 +49,8 @@ class DataSourceBlueView : public DataSource {
     	BVTHead  head_;
       BVTImageGenerator imager_;
       uint32_t  ping_count_;
-    
+      std::chrono::steady_clock::time_point t_last_ping_; // used for file playback
+      std::chrono::duration<double> pri_sec_; // pulse repitition interval
 
 }; // DataSourceBlueView
    

@@ -173,9 +173,9 @@ struct __attribute__ ((__packed__)) TracksMessage
    };
 
 }; // TracksMessage
-
-#if !(NIMS_CYTHON)
 /*
+#if !(NIMS_CYTHON)
+
 std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
 {
     std::ios_base::fmtflags fflags = strm.setf(std::ios::fixed,std::ios::floatfield);

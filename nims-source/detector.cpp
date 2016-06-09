@@ -338,7 +338,7 @@ int main (int argc, char * argv[]) {
     
      
     // For testing
-    bool VIEW = true; // display new ping images
+    bool VIEW = false; // display new ping images
     /*
     const char *WIN_PING="Ping Image";
     const char *WIN_MEAN="Mean Intensity Image";
