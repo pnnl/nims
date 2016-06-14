@@ -39,7 +39,7 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
 # 1 = M3, 2 = BlueView, 3 = EK60
-SONAR_TYPE: 2
+SONAR_TYPE: 1
 
 # Used for M3, BlueView and EK60
 SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
@@ -67,6 +67,7 @@ SONAR_EK60:
   # not sure where to get this, and if user settable
   along_beamwidth: 6.78
   athwart_beamwidth: 6.83
+  ping_rate_hz: 1
 
 # Used by nims.py
 WEB_SERVER_PORT: 8080

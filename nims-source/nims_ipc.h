@@ -24,6 +24,7 @@ void setup_signal_handling();
 // Message Queues
 #define MQ_SUBPROCESS_CHECKIN_QUEUE "/nims_subprocess_checkin_queue"
 #define MQ_DETECTOR_TRACKER_QUEUE "/nims_detector_tracker_queue"
+#define MQ_DETECTOR_VIEWER_QUEUE "/nims_detector_viewer_queue"
 #define MQ_TRACKER_ARCHIVER_QUEUE "/nims_tracker_archiver_queue"
 
 // create/open a POSIX message queue with read/write permissions

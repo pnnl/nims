@@ -35,6 +35,7 @@ struct EK60Params {
   float athwart_sensitivity;
   float along_offset;
   float athwart_offset;
+  float ping_rate_hz;
 };
 
 class DataSourceEK60 : public DataSource {

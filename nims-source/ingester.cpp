@@ -90,7 +90,9 @@ int main (int argc, char * argv[]) {
           NIMS_LOG_DEBUG << "athwart_sensitivity: " << ek60_params.athwart_sensitivity;
           ek60_params.athwart_offset = params["athwart_offset"].as<float>();
           NIMS_LOG_DEBUG << "athwart_offset: " << ek60_params.athwart_offset;
-        }
+          ek60_params.ping_rate_hz = params["ping_rate_hz"].as<int>();
+           NIMS_LOG_DEBUG << "ping_rate_hz: " << ek60_params.ping_rate_hz;
+       }
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
         NIMS_LOG_DEBUG << "FRAMEBUFFER_NAME: " << fb_name;
      }

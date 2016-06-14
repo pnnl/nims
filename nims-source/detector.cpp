@@ -184,7 +184,7 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
             NIMS_LOG_ERROR << "Error getting ping for initial moving average.";
             return -1;
         }
-            // Create a cv::Mat wrapper for the ping data
+        // Create a cv::Mat wrapper for the ping data
         Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
         ping_data.copyTo(bg.pings.row(k));
     }
@@ -410,6 +410,8 @@ int main (int argc, char * argv[]) {
     
     mqd_t mq_det = CreateMessageQueue(MQ_DETECTOR_TRACKER_QUEUE, 
         sizeof(DetectionMessage), true); // non-blocking
+    mqd_t mq_det2 = CreateMessageQueue(MQ_DETECTOR_VIEWER_QUEUE, 
+        sizeof(DetectionMessage), true); // non-blocking
     
     //-------------------------------------------------------------------------
     // MAIN LOOP
@@ -459,7 +461,8 @@ int main (int argc, char * argv[]) {
             next_ping.header.ping_sec + (float)next_ping.header.ping_millisec/1000.0, 
             vector<Detection>(detections.begin(),detections.begin()+n_obj));
         mq_send(mq_det, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
-        
+        mq_send(mq_det2, (const char *)&msg_det, sizeof(msg_det), 0); // non-blocking
+     
         // may interrupt mq_send, and we don't want to re
         if (sigint_received) {
             NIMS_LOG_WARNING << "exiting due to SIGINT";

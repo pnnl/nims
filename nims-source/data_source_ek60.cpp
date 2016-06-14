@@ -149,7 +149,7 @@ int DataSourceEK60::connect()
 
     // PE,22114619,/TRANSCEIVER MENU/Transceiver-1 Menu/Pulse Length=0.512 ms
     header_.pulselen_microsec = 0 * 1e6;
-    header_.pulserep_hz       = 0;
+    header_.pulserep_hz       = params_.ping_rate_hz;
 
     return 0;
     
