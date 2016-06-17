@@ -26,8 +26,8 @@ def _reconnect(receive_socket=None):
     # get a timeout
     receive_socket.setblocking(False)
 
-    options = { "frequency" : 10, "host" : _HOST, "heartbeat" : 60.0 }
-    receive_socket.send("%s" % (json.dumps(options).encode("utf-8")))
+    options = { "frequency" : 10, "heartbeat" : 60.0 }
+    receive_socket.send(json.dumps(options).encode("utf-8"))
     
     return receive_socket
 
@@ -45,7 +45,7 @@ if __name__ == '__main__':
                 
                 rtr, rtw, ie = select.select([receive_socket], [], [], 120.0)
                 if len(rtr):
-                    new_data = receive_socket.recv(4096, MSG_DONTWAIT)
+                    new_data = receive_socket.recv(4096, MSG_DONTWAIT).decode("utf-8")
                     
                     # can this even happen, now that select it used?
                     if len(new_data) == 0:
@@ -58,8 +58,9 @@ if __name__ == '__main__':
                     if len(comps):
                         for raw_message in comps[0:-1]:
                             if raw_message:
-                                print raw_message
+                                print(raw_message)
                                 msg = json.loads(raw_message, encoding="utf-8")
+                                sys.stderr.write("received frame_num %d\n" % (msg["frame_num"]))
                             #outfile.write("ping_num %d\n" % (msg["ping_num"]))
                         if len(comps[-1]) == 0:
                             # all components received
@@ -73,7 +74,7 @@ if __name__ == '__main__':
                     data = ""
                     receive_socket = _reconnect(receive_socket)
                 
-            except select.error, e:
+            except select.error as e:
                 receive_socket.shutdown(2)
                 receive_socket.close()
                 sys.stderr.write("select error; trying to reconnect\n")
@@ -81,7 +82,7 @@ if __name__ == '__main__':
                 receive_socket = _reconnect(receive_socket)
                 
                 
-        except KeyboardInterrupt, e:
+        except KeyboardInterrupt as e:
             receive_socket.close()
             exit(0)
 

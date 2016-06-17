@@ -90,7 +90,7 @@ if os.getenv("NIMS_HOME"):
 # directory if we're debugging a standalone copy
 try:
     import nims_py
-except Exception, e:
+except Exception as e:
     log_error("*** %s" % (e))
     log_error("*** Make sure NIMS_HOME is set in your environment")
     exit(1)
@@ -136,6 +136,8 @@ class DetectionServer(object):
     def __init__(self, client_socket, address):
         super(DetectionServer, self).__init__()
         self._client_socket = client_socket
+        # cache this, since the socket might go dead at some point
+        self._host_string = "%s:%d" % self._client_socket.getpeername()
         self._client_address = address     
         self._messages = []
         self._condition = threading.Condition()
@@ -165,7 +167,7 @@ class DetectionServer(object):
         if key in self._options:
             return self._options[key]
         return None
-            
+        
     def run_server(self):
         """SPI: separate thread to send messages to a connected client."""
         data = ""
@@ -173,13 +175,13 @@ class DetectionServer(object):
             # !!! ok not to use condition here?
             while self._run:
                 data = self._client_socket.recv(64)
-                opts = json.loads(data, encoding="utf-8")
+                opts = json.loads(data.decode("utf-8"))
                 if len(opts):
                     self._options = opts
-                log_error("server received checkin data \"%s\" from %s" % (opts, self._client_socket.getpeername()))
+                log_error("server received checkin data \"%s\" from %s" % (opts, self._host_string))
                 break
-        except Exception, e:
-            log_error("Failed to receive checkin from %s. Exception %s" % (self._client_socket.getpeername(), e))
+        except Exception as e:
+            log_error("Failed to receive checkin from %s. Exception %s" % (self._host_string, e))
         
         try:
             self._condition.acquire()
@@ -195,26 +197,30 @@ class DetectionServer(object):
                     jv = json.dumps(msg_dict, allow_nan=False).encode("utf-8")
                     #log_error("writing to socket: %s" % (jv))
                     self._client_socket.send(jv)
-                    self._client_socket.send("\0")
+                    self._client_socket.send("\0".encode("utf-8"))
 
                 # heartbeat so the client knows we're still alive and doesn't
                 # try to reconnect (which creates another thread)
                 if len(messages_to_send) == 0:
-                    log_error("sending heartbeat to %s" % (self.get_option("host")))
-                    self._client_socket.send("\0")
+                    log_error("sending heartbeat to %s" % (self._host_string))
+                    self._client_socket.send("\0".encode("utf-8"))
                     
                 # lock before entering top of loop and checking _run
                 self._condition.acquire()                
 
             self._condition.release()
-        except Exception, e:
-            log_error("Failed to send data to server %s; assuming it disconnected. Exception %s" % (self._client_socket.getpeername(), e))
+        except Exception as e:
+            log_error("Failed to send data to server %s; assuming it disconnected. Exception %s" % (self._host_string, e))
             # this server object is dead, so my as well remove it
             _run_cond.acquire()
             _servers.remove(self)
-            _run_cond.release()     
-            self._client_socket.shutdown(2)
-            self._client_socket.close()
+            _run_cond.release()  
+            # this raises when the socket is not connected
+            try:
+                self._client_socket.shutdown(2)
+                self._client_socket.close()
+            except Exception as e:
+                pass
         
 def run_data_server():
     """

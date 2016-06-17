@@ -2,6 +2,7 @@
 # import nims_py.pxd
 from nims_py cimport get_next_message, get_next_message_timed, create_message_queue
 from nims_py cimport Track, TracksMessage, sizeof_tracks_message, sizeof_track
+from nims_py cimport nims_checkin
 import math
 import sys
 
