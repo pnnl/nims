@@ -132,7 +132,7 @@ the config file.
 
 \subsection{Dependencies}
 The UW webapp and Echometrics have some dependencies, but they
-can be installed using the Mint package manager, with one exception.
+can be installed using the Mint package manager, with few exceptions.
 \begin{lstlisting}
     sudo apt-get install python-scipy
     sudo apt-get install python-pandas
@@ -141,13 +141,14 @@ can be installed using the Mint package manager, with one exception.
     sudo apt-get install chromium-browser
     sudo apt-get install python2.7-dev
 \end{lstlisting}
-The exception is the \shell{posix\_ipc} package, which is not
+The exceptions are not
 provided by Ubuntu. In that case, we can install \shell{python-pip},
-which is provided by Ubuntu, and install \shell{posix\_ipc} from
+which is provided by Ubuntu, and install them from
 PyPi as follows:
 \begin{lstlisting}
     sudo apt-get install python-pip
     sudo pip install posix_ipc
+    sudo pip install ruamel.yaml
 \end{lstlisting}
 This avoids manual download and configuration/compile, and pip
 can also be used for later updates.
