@@ -430,10 +430,6 @@ function display_image(image, image_type, obj) {
             py = (track["min_range_m"] + (.5 * height)) / max_range;
             py = 500- (py  * 500);
 
-
-          //  ctx.save();
-          //  ctx.scale(1, height / width);
-          //  console.log('drawing target:' + width + 'x' + height)
             ctx.beginPath();
             ctx.moveTo(px, py - height / 2)
             ctx.bezierCurveTo(px + width / 2, py - height / 2,
@@ -451,16 +447,47 @@ function display_image(image, image_type, obj) {
 
             label = track['id']
             ctx.fillText(label, px, py - 2);
-            //ctx.arc(px, py, width, 0, 2 * Math.PI, false);
-          //  ctx.restore()
-
-            
 
             ctx.strokeStyle = '#ffffff';
             ctx.stroke();
             ctx.globalAlpha = 1;
             ctx.closePath()
 
+            // now draw the path
+            // find my path first
+            id = track['id'];
+            path = 0
+            for (t = 0; t < paths.length; t++)
+            {
+                if (paths[t]['id']==id)
+                {
+                    path == paths[t];
+                    break;
+                }
+            }
+            if (path == 0)
+                continue;
+            points = path['points'];
+            trackpath = new Path2D();
+            trackpath.moveTo(px, py);
+            for (var p = points.length - 1; p >-0; p--) // points per track per target (p = rng,brng)
+            {
+                pnt = points[p]
+                rng = pnt[0]
+                brng = pnt[1]
+
+                diff = Math.abs(min_angle - brng);
+                brng = (diff / sector_size) * 500;
+                span = (max_range - min_range);
+                diff = rng - min_range;
+                rng = (diff / span) * 500;
+
+                trackpath.lineTo(brng, rng);
+
+
+            }
+            ctx.stroke()
+            ctx.closePath()
             //}
         }
         //ctx.arc(250, 250, 20, 0, 2 * Math.PI, false);

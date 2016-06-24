@@ -92,7 +92,7 @@ def edit_global_config(yaml=None, who=None):
 
 def write_yaml_config():
     global globalYAML
-    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
+    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../"), "config.yaml")
     open(yaml_path, "w").write(ruamel.yaml.dump(globalYAML, Dumper=ruamel.yaml.RoundTripDumper))
 
 
@@ -102,7 +102,7 @@ def readYAMLConfig():
     :return:
     """
     global globalYAML
-    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
+    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../"), "config.yaml")
     try:
         globalYAML = ruamel.yaml.load(open(yaml_path, "r"), ruamel.yaml.RoundTripLoader)
     except:
