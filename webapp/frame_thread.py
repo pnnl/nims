@@ -85,24 +85,33 @@ class FrameThread(threading.Thread):
             logger.info(" - sent queue: " + self.display_q_name)
         except ExistentialError as e:
             logger.info(' - Could not connect to /nims_framebuffer::' + e.__repr__())
-        # mqTracker = posix_ipc.MessageQueue("/nims_tracker", posix_ipc.O_RDONLY)
-        # logger.info("Connected to /nims_tracker")
+
+        try:
+            logger.info('Connecting to /nims_tracker')
+            trackbuffer_q = MessageQueue("/nims_tracker", O_RDONLY)
+        except ExistentialError as e:
+            logger.info(' - Could not connect to /nims_tracker::' + e.__repr__())
+
 
         time.sleep(1)  # apparently necessary to create this latency for the frame_buffer app?
 
         while True:
+            num_bins = 10
+            echo_bins = []
+
+            #print 'Loop...'
             frame = frames.frame_message(display_q.receive()[0])
             if frame.valid is False:
                 logger.info('Received invalid message: ignoring')
                 continue
             try:
-                logger.info(' -- Connecting to::' + frame.shm_location)
+                logger.info(' -- Connecting to ' + frame.shm_location)
                 shm_frame = SharedMemory(frame.shm_location, O_RDONLY, size=frame.frame_length)
             except StandardError as e:
                 logger.info(' -- Error connecting to', frame.shm_location, '::', e.__repr__())
                 continue
 
-            logger.info('Connecting to memory map')
+            #logger.info('Connecting to memory map')
             mapped = mmap(shm_frame.fd, shm_frame.size)
             shm_frame.close_fd()
             frame_buffer = frames.frame_buffer(mapped.read(frame.frame_length))
@@ -113,13 +122,29 @@ class FrameThread(threading.Thread):
 
             # self.frames[frame_buffer.ping_num[0]] = frame_buffer
             logger.info('Calculating EchoMetrics')
+
+            # here we bin.
+            # let's for the sake of argument says 10 by depth / 10?
             echo_metrics = calculate_echometrics(frame_buffer)
+
+
+
+            # try to get tracks? should print out the tracks if we recv them
+            #print 'getting tracks...'
+            try:
+                tracks = frames.track_message(trackbuffer_q.receive(.1)[0])
+            except:
+                tracks = None
+            #print 'got tracks....'
 
             clients = copy.copy(self.clients)
             logger.info('Sending frame to clients')
             for client in clients:
                 try:
-                    client.send_data(frame_buffer, echo_metrics, None)
+                    print 'tracks type:', type(tracks)
+                    print 'metrics type:', type(echo_metrics)
+                    print 'buffer type:', type(frame_buffer)
+                    client.send_data(frame_buffer, echo_metrics, tracks)
                 except StandardError as e:
                     logger.info("Error sending image to client")
                     print sys.exc_info()
@@ -127,6 +152,24 @@ class FrameThread(threading.Thread):
 
         return
 
+def average_multibeam(frame_buffer):
+    try:
+        image_data = frame_buffer.image
+        num_beams = frame_buffer.num_beams[0]
+        num_samples = frame_buffer.num_samples[0]
+        array = np.array(image_data).reshape(num_samples, num_beams, )
+        echo = np.average(array)
+        return echo
+
+    except AttributeError as e:
+        print average_multibeam.__name__, "failed to parse frame_buffer:", e
+        import traceback
+        line_no = traceback.extract_stack()[-1][1]
+        print 'line:', line_no
+        return None
+
+def calculate_echometrics_by_bin(echogram, depth_bin):
+    return
 
 def calculate_echometrics(frame_buffer):
     """
@@ -153,7 +196,10 @@ def calculate_echometrics(frame_buffer):
 
     x_index = range(1, num_beams + 1)
     range_step = float(range_max) / num_samples
+
     y_range = [i * range_step for i in range(0, num_samples)]
+    #y_range = range(0 , num_samples, range_step)
+    #y_range = [1, num_samples, 10]
     array = np.array(image_data).reshape(num_samples, num_beams, )
 
     echo = echometrics.Echogram(array, np.array(y_range), index=np.array(x_index))

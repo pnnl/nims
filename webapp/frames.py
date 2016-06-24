@@ -2,7 +2,7 @@
 
 # Python modules
 from struct import *
-
+import sys
 
 # 3rd party modules
 
@@ -98,7 +98,7 @@ class frame_message:
             self.shm_location = shm
             return True
         except:
-            print "Failed to parse buff:", sys.exc_info()
+            print "Failed to parse frame buffer:", sys.exc_info()
             return False
 
     def print_message(self):
@@ -113,49 +113,59 @@ class track_message:
 
 
     def __init__(self, message):
-        #self.f = f
-        self.tracks = []
+        self.targets = []
         self.valid = self.parse_message(message)
         self.max_detections = 100
-        detections  = []
+
 
     def unpacker(self, fmt, buff):
         s = calcsize(fmt)
-        return unpack(fmt, buff[:s]), buff[s:]
+        return unpack(fmt, buff[:s])[0], buff[s:]
 
     def parse_message(self, message):
-        try:    
-            self.pingid, message = self.unpacker('i', message)
-            self.num_detections, message = self.unpacker('i', message)
-            #self.f.write("%d\n" % self.pingid[0])
-            #self.f.write("%d\n" % int(self.num_detections[0]))
-            #print " - pingid:", self.pingid[0]
-            #print " - detections:", self.num_detections[0]
-            if self.num_detections[0] > 0:
-                print " FOUND DETECTIONS"
-            if self.num_detections[0] > 0:
-                for i in range(0, self.num_detections[0]):
-                    center_range, message = self.unpacker('f', message)
-                    center_beam, message = self.unpacker('f', message)
-                    track_id, message = self.unpacker('i', message)
-                    is_new_track = self.unpacker('?', message)
-                    #try:
-                    #    self.f.write("%d " % int(center_range[0]))
-                    #except Exception, e:
-                    #    self.f.write("0 ")
+        # message format:  III[SHffffffffffHfffffffff]
+        try:
+            # first 3x32 bit ints are the track header
+            self.frame_num, message = self.unpacker('I', message)
+            self.ping_num , message = self.unpacker('I', message)
+            self.ping_time, message = self.unpacker('d', message)
+            self.num_tracks, message = self.unpacker('I', message)
 
-                    #try:
-                    #    self.f.write("%d\n" % int(center_beam[0]))
-                    #except Exception, e:
-                    #    self.f.write("0\n")
+            print 'Frame:', self.frame_num
+            print ' - ping:', self.ping_num
+            print ' - ping time:', self.ping_time
+            print ' - num tracks:', self.num_tracks
 
-                    track = [track_id[0], center_range[0], center_beam[0], is_new_track[0]]
-                    self.tracks.append(track)
-                
+            for i in range(self.num_tracks):
+                target = {}
+                target['id'],message = self.unpacker('H', message)
+                target['size_sq_m'], message = self.unpacker('f', message)
+                target['speed_mps'], message = self.unpacker('f', message)
+                target['target_strength'], message = self.unpacker('f', message)
+                target['min_range_m'], message = self.unpacker('f', message)
+                target['max_range_m'], message = self.unpacker('f', message)
+                target['min_bearing_deg'], message = self.unpacker('f', message)
+                target['max_bearing_deg'], message = self.unpacker('f', message)
+                target['min_elevation_deg'], message = self.unpacker('f', message)
+                target['max_elevation_deg'], message = self.unpacker('f', message)
+                target['first_detect'], message = self.unpacker('f', message) #time
+                target['pings_visible'], message = self.unpacker('H', message)
+                target['last_pos_range'], message = self.unpacker('f', message)
+                target['last_pos_bearing'], message = self.unpacker('f', message)
+                target['last_pos_elevation'], message = self.unpacker('f', message)
+                target['last_vel_range'], message = self.unpacker('f', message)
+                target['last_vel_bearing'], message = self.unpacker('f', message)
+                target['last_vel_elevation'], message = self.unpacker('f', message)
+                target['width'], message = self.unpacker('f', message)
+                target['length'], message = self.unpacker('f', message)
+                target['height'], message = self.unpacker('f', message)
+
+                #print 'Target:', target
+                self.targets.append(target)
 
             return True
         except:
-            print "Failed to parse buff:", sys.exc_info()
+            print "Failed to parse track buffer:", sys.exc_info()
             return False
 
     def print_message(self):

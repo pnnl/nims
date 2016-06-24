@@ -103,7 +103,13 @@ def readYAMLConfig():
     """
     global globalYAML
     yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
-    globalYAML = ruamel.yaml.load(open(yaml_path, "r"), ruamel.yaml.RoundTripLoader)
+    try:
+        globalYAML = ruamel.yaml.load(open(yaml_path, "r"), ruamel.yaml.RoundTripLoader)
+    except:
+        import yaml
+        stream = file(globalYAML)
+        globalYAML = yaml.load(stream)
+
     if type(globalYAML) == StringType:
         globalYAML = ast.literal_eval(globalYAML)
     logger.info('Configuration Path: ' + yaml_path)

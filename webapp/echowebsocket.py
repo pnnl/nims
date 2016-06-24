@@ -55,19 +55,22 @@ class EchoWebSocket(tornado.websocket.WebSocketHandler):
                  inertia=metrics['inertia'],
                  proportion_occupied=metrics['proportion_occupied'],
                  aggregation_index=metrics['aggregation_index'],
-                 equivalent_area=metrics['equivalent_area'])
+                 equivalent_area=metrics['equivalent_area'],
+                 num_tracks=0)
 
-        # if tracks.num_detections[0] > 0:
-        #    print 'Sending track data'
-        #    a['tracks'] = tracks.
+        try:
+            if tracks.num_tracks > 0:
+                a['num_tracks'] = tracks.num_tracks
+                a['tracks'] = tracks.targets
+        except:
+            pass
+        #for i in range(len(self.tracks)):
+        #    self.center_range += randint(-2, 2)
+        #    self.center_beam += randint(-1, 1)
+        #    self.is_new_track = False
+        #    self.tracks[i] = (25, self.center_range, self.center_beam, self.is_new_track)
 
-        for i in range(len(self.tracks)):
-            self.center_range += randint(-2, 2)
-            self.center_beam += randint(-1, 1)
-            self.is_new_track = False
-            self.tracks[i] = (25, self.center_range, self.center_beam, self.is_new_track)
-
-        a['tracks'] = self.tracks
+        #a['tracks'] = self.tracks
         ts = datetime.datetime.fromtimestamp(f.ping_sec[0]).strftime('%H:%M:%S')
         ts += '.%d' % f.ping_millisec[0]
         a['ts'] = ts
