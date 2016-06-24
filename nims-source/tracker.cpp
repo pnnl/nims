@@ -342,9 +342,9 @@ std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
         TracksMessage msg_trks(msg_det.frame_num, msg_det.ping_num, msg_det.ping_time, tracks);
             mq_send(mq_ui, (const char *)&msg_trks, sizeof(msg_trks), 0); // non-blocking
             mq_send(mq_socket, (const char *)&msg_trks, sizeof(msg_trks), 0);
-            NIMS_LOG_DEBUG << "sent tracks message  ping_time = " << msg_trks.ping_time 
-                           << ", ping_num = " << msg_trks.ping_num_sonar 
-                           << ", num_tracks = " << msg_trks.num_tracks;
+ //           NIMS_LOG_DEBUG << "sent tracks message  ping_time = " << msg_trks.ping_time 
+ //                          << ", ping_num = " << msg_trks.ping_num_sonar 
+ //                          << ", num_tracks = " << msg_trks.num_tracks;
 
 if (TEST)
     ofs2 << msg_trks;
@@ -352,8 +352,8 @@ if (TEST)
     TracksMessage msg_complete(msg_det.frame_num, msg_det.ping_num, msg_det.ping_time, completed);            
     mq_send(mq_arc, (const char *)&msg_complete, sizeof(msg_complete), 0); // non-blocking
 
-        NIMS_LOG_DEBUG << "sent completed tracks message (" << sizeof(msg_complete)
-                << " bytes);  num_tracks = " << msg_complete.num_tracks;
+ //       NIMS_LOG_DEBUG << "sent completed tracks message (" << sizeof(msg_complete)
+ //               << " bytes);  num_tracks = " << msg_complete.num_tracks;
     
 
 

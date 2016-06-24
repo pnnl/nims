@@ -60,6 +60,7 @@ private:
     boost::posix_time::ptime t_epoch_;
     // scale and offset for converting electrical angles to deg.
     float A_along_, B_along_, A_athwart_, B_athwart_;
+    long pcount_;
     EK60Params params_;
 }; // DataSourceEK60
    

@@ -19,7 +19,7 @@
 #include "yaml-cpp/yaml.h"
 
 #include "data_source_m3.h"
-#include "data_source_blueview.h"
+//#include "data_source_blueview.h"
 #include "data_source_ek60.h"
 #include "frame_buffer.h"
 #include "nims_ipc.h" 
@@ -54,7 +54,7 @@ int main (int argc, char * argv[]) {
 	string sonar_host_addr;
   // TODO: make this virtual, like source
   EK60Params ek60_params; // EK60 parameters
-  BlueViewParams bv_params; // BlueView data directory
+  //BlueViewParams bv_params; // BlueView data directory
 	string fb_name;
     try 
     {
@@ -64,6 +64,7 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "SONAR_TYPE: " << sonar_type;
         sonar_host_addr = config["SONAR_HOST_ADDR"].as<string>();
         NIMS_LOG_DEBUG << "SONAR_HOST_ADDR: " << sonar_host_addr;
+        /*
         if (sonar_type == NIMS_SONAR_BLUEVIEW)
         {
           YAML::Node params = config["SONAR_BLUEVIEW"];
@@ -72,7 +73,7 @@ int main (int argc, char * argv[]) {
           bv_params.datadir = params["directory"].as<string>();
           bv_params.pulse_rate_hz = params["ping_rate_hz"].as<int>();
         }
-
+        */
         if (sonar_type == NIMS_SONAR_EK60)
         {
           YAML::Node params = config["SONAR_EK60"];
@@ -122,10 +123,12 @@ int main (int argc, char * argv[]) {
             NIMS_LOG_DEBUG << "opening M3 sonar as datasource";
             input = new DataSourceM3(sonar_host_addr);
             break;
+            /*
  	    case NIMS_SONAR_BLUEVIEW :
             NIMS_LOG_DEBUG << "opening BlueView sonar as datasource";
             input = new DataSourceBlueView(bv_params);
             break;
+            */
 	    case NIMS_SONAR_EK60 :
             NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
             input = new DataSourceEK60(sonar_host_addr, ek60_params);
@@ -183,7 +186,7 @@ int main (int argc, char * argv[]) {
            NIMS_LOG_DEBUG << frame.header << endl;
            fb.PutNewFrame(frame);
            ++frame_count;
-        }
+        } // 
     }
         
 	NIMS_LOG_DEBUG << "Ending runloop; SIGINT: " << sigint_received;

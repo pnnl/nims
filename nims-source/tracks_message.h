@@ -30,6 +30,7 @@
 // external application.
 
 struct __attribute__ ((__packed__)) Track
+//struct  Track
 {
 	uint16_t id;           // unique track identifier
 	float size_sq_m;       // avg size in square meters
@@ -145,6 +146,7 @@ struct __attribute__ ((__packed__)) Track
 }; // Track
 
 struct __attribute__ ((__packed__)) TracksMessage 
+//struct  TracksMessage 
 {
     uint32_t  frame_num;   // NIMS internal ping number from FrameHeader
     uint32_t  ping_num_sonar; // sonar ping number

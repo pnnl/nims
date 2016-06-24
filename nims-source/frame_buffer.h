@@ -26,7 +26,8 @@ const int kMaxFramesInBuffer = 100;
 
 // packed for sharing compatibility; we may want to manually align members
 // by padding
-struct __attribute__ ((__packed__)) FrameHeader
+//struct __attribute__ ((__packed__)) FrameHeader
+struct  FrameHeader
 {
     // NB: braces allow C++0x initializer lists to set POD arrays to 0
     char      device[64] { };  // may want a predefined list?

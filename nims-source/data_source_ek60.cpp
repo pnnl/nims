@@ -36,8 +36,12 @@ using namespace std;
 #define LONG int32_t
 #define BYTE int8_t
 
-// (10 log 2)/256
-#define POWER_SCALE 0.011758984205624
+// (10*log10(2)/256
+const double POWER_SCALE = 0.011758984205624;
+// 180 degrees /128 electrical units
+const double ANGLE_SCALE = 1.40625; 
+// 8-bit resolution
+const int NUM_VIRTUAL_BEAMS = 256;
 /*
  Sample datagram
  The sample datagram contains sample data from just one transducer channel.
@@ -71,15 +75,16 @@ DataSourceEK60::DataSourceEK60(std::string const &host_addr, EK60Params const &p
 
     // initialize time base
     t_epoch_ = pt::ptime(greg::date(1970,1,1),pt::time_duration(0,0,0));
+    pcount_ = 0;
 
     // initialize angle scaling
     // transducer-dependent, 
     // for three examples I have, the sensitivity is the same for both directions
     // sensitivity is a user-settable parameter, 0 to 100
     // offset is user-settable, -10 to 10
-    A_along_ = (180.0/128.0)/params.along_sensitivity;
+    A_along_ = ANGLE_SCALE/params_.along_sensitivity;
     B_along_ = params.along_offset;
-    A_athwart_ = (180.0/128.0)/params.athwart_sensitivity;
+    A_athwart_ = ANGLE_SCALE/params .athwart_sensitivity;
     B_athwart_ = params.athwart_offset;
 
     params_ = params;
@@ -104,13 +109,18 @@ int DataSourceEK60::connect()
         NIMS_LOG_ERROR << "socket() failed";
         return -1;
     }
+    // set this so bind doesn't fail because address is in use from last attempt
+    setsockopt(input_,SOL_SOCKET,SO_REUSEADDR, nullptr, 0);
     // bind to the port to receive incoming messages
     if (bind(input_, (struct sockaddr *)&host_, sizeof(host_)) == -1)
     {
         NIMS_LOG_ERROR << "bind() failed";
+        close(input_);
+        input_ = -1; // reset this so we'll try again
         return -1;
     }
-
+/*
+// NOTE: the parameter datagram is only sent when params change
     // get parameter datagrams
         sockaddr_in sender;
         socklen_t socklen = sizeof(sender);
@@ -122,7 +132,7 @@ int DataSourceEK60::connect()
             return -1;    
         }
         NIMS_LOG_DEBUG << "read " << n << " bytes from " << inet_ntoa(sender.sin_addr) << ": " << string(buf_, 12)<< endl;
-
+*/
     strncpy(header_.device, "Simrad EK60 echo sounder", sizeof(header_.device));
     
     header_.version  = 0;
@@ -139,12 +149,15 @@ int DataSourceEK60::connect()
     header_.winstart_sec   = 0; // not used
     header_.winlen_sec     = 0; // not used
  
-    // create virtual beams to represent angles within single beam
-    header_.num_beams      = 256; // 8-bit resolution
+    // create virtual beams to represent angles within a single beam
+    header_.num_beams      = NUM_VIRTUAL_BEAMS; 
    for (int m=0; m<header_.num_beams; ++m)
     {
-        header_.beam_angles_deg[m] = A_along_*(-128.0 + m) + params_.along_offset;;
+        header_.beam_angles_deg[m] = ANGLE_SCALE/params_.along_sensitivity*(-128.0 + m) 
+           + params_.along_offset;
     }
+
+
     header_.freq_hz           = 0;
 
     // PE,22114619,/TRANSCEIVER MENU/Transceiver-1 Menu/Pulse Length=0.512 ms
@@ -181,7 +194,7 @@ int DataSourceEK60::GetPing(Frame* pframe)
 If power and angle are both selected in the EK500 Datagram dialog, first angle 
 datagrams are sent then power.  The datagrams will have the same timestamp.  
 All the datagrams for each type will be sent consecutively followed by the next
-type.
+type.  This is true if there are multiple transducers.
 */
     char* buf_power = nullptr;
     char* buf_angle = nullptr;
@@ -203,7 +216,7 @@ if (!(data_bytes>0)) {
     pframe->header = header_; // copy constant part of header
     
     // TODO:  need to assign a ping number since there is none in datagram
-    pframe->header.ping_num = 0;
+    pframe->header.ping_num = ++pcount_;
 
     // time of ping in seconds since midnight 1-Jan-1970
     // NOTE:  Assumes sonar host computer is set to same timezone
@@ -272,7 +285,7 @@ while (!got_it)
     if (bytes_so_far > 0) free(buf_data);
     buf_data = nullptr;
     bytes_so_far = 0;
-    int last_pkt = -1; // sequence number of last packet received
+    int last_pkt = 0; // sequence number of last packet received
 
     BYTE eod = 0x00; // end of data flag
     while (eod == 0x00) // more packets, 0x80 indicates last packet
@@ -304,8 +317,10 @@ while (!got_it)
         memcpy(&firstbyte, buf_+14, sizeof(firstbyte));
         memcpy(&bytes_in_pkt, buf_+16, sizeof(bytes_in_pkt));
  
+ NIMS_LOG_DEBUG << "pkt num = " << (short)pkt_num << ", firstbyte = " << firstbyte << ", bytes_in_pkt = " << bytes_in_pkt;
+
         // check for lost packets
-        if (pkt_num > last_pkt + 1)
+        if ((int)pkt_num > last_pkt + 1)
         {   
             //last_pkt = -1;
             NIMS_LOG_WARNING << "dropped packet, waiting for next ping";

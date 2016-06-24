@@ -30,6 +30,7 @@
 // or marine mammals or some other object moving
 // through the sonar field of view.
 struct __attribute__ ((__packed__)) Detection
+//struct  Detection
 {
     double timestamp; // seconds since midnight 1-Jan-1970
     // spatial shape information
@@ -79,7 +80,8 @@ std::ostream& operator<<(std::ostream& strm, const Detection& d)
 };
 */
 
-struct __attribute__ ((__packed__)) DetectionMessage
+//struct __attribute__ ((__packed__)) DetectionMessage
+struct  DetectionMessage
 {
     uint32_t  frame_num; // frame number from FrameBuffer
     uint32_t  ping_num; // sonar ping number 

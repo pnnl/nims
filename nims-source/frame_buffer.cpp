@@ -27,7 +27,8 @@
 using namespace std;
 
 struct __attribute__ ((__packed__)) FrameMsg {
-    // Python code unpacks these as long long and unsigned long long,
+// struct  FrameMsg {
+   // Python code unpacks these as long long and unsigned long long,
     // respectively, so we used fixed-length types.
     int64_t  frame_number;
     uint64_t mapped_data_size;
@@ -438,9 +439,9 @@ long FrameBufferReader::GetNextFrame(Frame* next_frame)
         fd = shm_open(msg.shm_open_name, O_RDONLY, S_IRUSR);
    }
     
-     NIMS_LOG_DEBUG << "FrameBufferReader: getting frame " 
-                   << msg.frame_number << " in " << msg.shm_open_name
-                   << ", " << msg.mapped_data_size << " bytes";
+  //   NIMS_LOG_DEBUG << "FrameBufferReader: getting frame " 
+  //                 << msg.frame_number << " in " << msg.shm_open_name
+  //                 << ", " << msg.mapped_data_size << " bytes";
     // size of mmap region
     assert(msg.mapped_data_size > sizeof(Frame));
      
