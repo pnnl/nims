@@ -3,6 +3,8 @@
 #include <fstream>
 #include <string>
 #include <stdlib.h>
+#include <thread> // sleep_for()
+#include <chrono> // time
 //networking
 #include <netinet/in.h>
 #include <sys/types.h>
@@ -319,7 +321,7 @@ vector<size_t> index_map()
 	return index;
 }
 
-void do_replay(string host, int port, string filename, float rate)
+void do_replay(string host, int port, string filename, float rate, bool loop)
 {
 	struct stat sb;
 	int fd = open(filename.c_str(), O_RDONLY);
@@ -385,7 +387,10 @@ void do_replay(string host, int port, string filename, float rate)
 	frame * f;
 	int hdrsize=sizeof(Packet_Header_Struct) + sizeof(Packet_Footer_Struct) + sizeof(Data_Header_Struct);
 
-	float tosleep = 1.0 / rate;
+	// NOTE:  sleep takes an integer number of seconds so this
+	//        float gets truncated to 0.
+	//float tosleep = 1.0 / rate;
+	long int tosleep = (1.0 / rate)*1000;
 
 	while (1)
 	{
@@ -398,14 +403,18 @@ void do_replay(string host, int port, string filename, float rate)
 			printf("-- pingid: %d\n", last_ping);
 			cur_p = base_p + index[i];
 			f = (frame *) cur_p;
-			f->data_header.dwPingNumber = last_ping++;
+			last_ping++;
+			if (loop) f->data_header.dwPingNumber = last_ping;
 			int dsize = f->data_header.nNumSamples * f->data_header.nNumBeams * sizeof(Ipp32fc_Type);
 			int n = write(childfd, (char *) f, dsize + hdrsize);
 			if (n <= 0)
 				error_and_die("Error Writing to Socket.");
-			sleep(tosleep);
+			//sleep(tosleep);
+			this_thread::sleep_for(chrono::milliseconds(tosleep));
 
 		}
+
+		if (!loop) break;
 
 		for (int i = 0; i < index.size(); i++)
 		{
@@ -417,7 +426,8 @@ void do_replay(string host, int port, string filename, float rate)
 			int n = write(childfd, (char *) f, dsize + hdrsize);
 			if (n <= 0)
 				error_and_die("Error Writing to Socket.");
-			sleep(tosleep);
+			//sleep(tosleep);
+			this_thread::sleep_for(chrono::milliseconds(tosleep));
 		}
 
 	}
@@ -427,7 +437,7 @@ void do_replay(string host, int port, string filename, float rate)
 
 void usage_and_die()
 {
-	cout << "Usage: m3sim -m [ record | serve ] -r hz -h hostaddr -p port -f filename " << endl;
+	cout << "Usage: m3sim -m [ record | serve ] -r hz -h hostaddr -p port -f filename -l " << endl;
 	exit(1);
 }
 
@@ -438,10 +448,11 @@ int main(int argc, char * argv[]) {
 	string hostaddr;
 	int port = 20001;
 	float rate = 1;
+	bool loop = false;
 	//opterr = 0;
 	int c;
 	printf("\n");
-	while ((c = getopt (argc, argv, "m:p:f:h:r:")) != -1)
+	while ((c = getopt (argc, argv, "m:p:f:h:r:l:")) != -1)
 	{
 
 		switch (c)
@@ -465,6 +476,8 @@ int main(int argc, char * argv[]) {
 			case 'r':
 				rate = atof(optarg);
 				break;
+				case 'l':
+				loop = true;
 			case '?':
 				printf("? %s\n", optarg);
 				usage_and_die();
@@ -479,7 +492,7 @@ int main(int argc, char * argv[]) {
 		do_record(hostaddr, port, filename);
 
 	else
-		do_replay(hostaddr, port, filename, rate);
+		do_replay(hostaddr, port, filename, rate, loop);
 
     return 0;
 }
