@@ -250,11 +250,12 @@ int DataSourceM3::GetPing(Frame* pframe)
     
     ssize_t bytes_read = 0;
     
+    /*
     NIMS_LOG_DEBUG << __func__;
     NIMS_LOG_DEBUG << "packet header size is " << sizeof(Packet_Header_Struct);
     NIMS_LOG_DEBUG << "data header size is " << sizeof(Data_Header_Struct);
     NIMS_LOG_DEBUG << "packet footer size is " << sizeof(Packet_Footer_Struct);
-
+    */
     // Read the packet header.
      bytes_read = recv(input_, (char *)&packet_header, sizeof(packet_header),MSG_WAITALL);
      if ( bytes_read != sizeof(packet_header) ) {
@@ -276,7 +277,7 @@ int DataSourceM3::GetPing(Frame* pframe)
     if ( packet_header.data_type != PKT_DATA_TYPE_BEAMFORMED )
         ERROR_MSG_EXIT("Error wrong packet type.");
 
-    NIMS_LOG_DEBUG << "packet header body size is " << ntohl(packet_header.packet_body_size);
+   // NIMS_LOG_DEBUG << "packet header body size is " << ntohl(packet_header.packet_body_size);
     
     // Read data header.
     bytes_read = recv(input_, (char *)&header, sizeof(header),MSG_WAITALL);
@@ -285,27 +286,27 @@ int DataSourceM3::GetPing(Frame* pframe)
         NIMS_LOG_ERROR << "bytes_read =  " << bytes_read;
         ERROR_MSG_EXIT("Error reading data header.");
     }
-
+/*
     NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
     NIMS_LOG_DEBUG << "num samples is " << header.nNumSamples;
     NIMS_LOG_DEBUG << "num beams is " << header.nNumBeams;
     NIMS_LOG_DEBUG << "header:" << endl << header;
-
+*/
     num_bytes_bf_data = sizeof(Ipp32fc_Type)*(header.nNumSamples)*(header.nNumBeams);
-    NIMS_LOG_DEBUG << "num_bytes_bf_data = " << num_bytes_bf_data;
+    //NIMS_LOG_DEBUG << "num_bytes_bf_data = " << num_bytes_bf_data;
 
     bfData = (Ipp32fc_Type*)malloc(num_bytes_bf_data);
     if ( bfData == nullptr )
         ERROR_MSG_EXIT("Error allocating memory for data.");
         
-    NIMS_LOG_DEBUG << "reading data...";
+    //NIMS_LOG_DEBUG << "reading data...";
     bytes_read = recv(input_, (char *)bfData, num_bytes_bf_data, MSG_WAITALL);
     if ( bytes_read != num_bytes_bf_data ) {
         nims_perror("incorrect number of bytes from recv()");
         NIMS_LOG_ERROR << "bytes_read =  " << bytes_read;
         ERROR_MSG_EXIT("Error reading data.");
     }
-    NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
+    //NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
 
     // Read packet footer.
     bytes_read = recv(input_, (char *)&packet_footer, sizeof(packet_footer), MSG_WAITALL);
@@ -315,8 +316,8 @@ int DataSourceM3::GetPing(Frame* pframe)
         ERROR_MSG_EXIT("Error reading footer.");
     }
     
-    NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
-    NIMS_LOG_DEBUG << "packet footer body size is " << packet_footer.packet_body_size;
+    //NIMS_LOG_DEBUG << "bytes_read =  " << bytes_read;
+    //NIMS_LOG_DEBUG << "packet footer body size is " << packet_footer.packet_body_size;
     
     // Check packet size.
     if ( packet_header.packet_body_size != packet_footer.packet_body_size )
@@ -324,7 +325,7 @@ int DataSourceM3::GetPing(Frame* pframe)
         
     // Okay, good to go.
     
-    NIMS_LOG_DEBUG << "    extracting header";
+    //NIMS_LOG_DEBUG << "    extracting header";
     
     strncpy(pframe->header.device, "Kongsberg M3 Multibeam sonar", 
             sizeof(pframe->header.device));
@@ -348,7 +349,7 @@ int DataSourceM3::GetPing(Frame* pframe)
     pframe->header.pulselen_microsec = header.dwPulseLength;
     pframe->header.pulserep_hz = header.fPulseRepFreq;
    
-    NIMS_LOG_DEBUG << "    extracting data";
+    //NIMS_LOG_DEBUG << "    extracting data";
     // copy data to frame as real intensity value
     size_t frame_data_size = sizeof(framedata_t)*(header.nNumSamples)*(header.nNumBeams);
     pframe->malloc_data(frame_data_size);

@@ -75,13 +75,15 @@ mqd_t CreateMessageQueue(const string &name, size_t message_size, bool non_block
     mqd_t ret = mq_open(name.c_str(), opts, mode, &attr);
     if (-1 == ret)
         nims_perror("CreateMessageQueue mq_open");
-    
+
+    NIMS_LOG_DEBUG << "Created msg queue " << name << " with id " << ret 
+                   << ", non-block = " << non_block << ", msg size = " << message_size;
     return ret;
 }
 
 void SubprocessCheckin(pid_t pid)
 {
-    mqd_t mq = CreateMessageQueue(MQ_SUBPROCESS_CHECKIN_QUEUE, sizeof(pid_t));
+    mqd_t mq = CreateMessageQueue(MQ_SUBPROCESS_CHECKIN_QUEUE, sizeof(pid_t), true);
         
     if (-1 == mq) {
         exit(1);

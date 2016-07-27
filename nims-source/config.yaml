@@ -42,10 +42,11 @@ TRACKER_SOCKET_NAME: nims_tracker_socket
 SONAR_TYPE: 1
 
 # Used for M3, BlueView and EK60
-SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
+SONAR_HOST_ADDR: 127.0.0.1 # m3sim
+#SONAR_HOST_ADDR: 130.20.41.143 # triton laptop
 #SONAR_HOST_ADDR: 130.20.41.194 # shari's laptop
 #SONAR_HOST_ADDR: 192.168.1.45 # shari's BlueView
-#SONAR_HOST_ADDR: 130.20.85.189 # arm
+#SONAR_HOST_ADDR: 130.20.85.189 # adam
 
 SONAR_BLUEVIEW:
    # Process files instead of live instrument stream

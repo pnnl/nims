@@ -352,6 +352,7 @@ void do_replay(string host, int port, string filename, float rate, bool loop)
 	if (parentfd < 0)
 		error_and_die("error: opening socket");
 	optval = 1;
+	printf("created socket\n");
 	setsockopt(parentfd, SOL_SOCKET, SO_REUSEADDR,
 			   (const void *)&optval , sizeof(int));
 	bzero((char *) &serveraddr, sizeof(serveraddr));
@@ -361,14 +362,16 @@ void do_replay(string host, int port, string filename, float rate, bool loop)
 	if (bind(parentfd, (struct sockaddr *) &serveraddr,
 			 sizeof(serveraddr)) < 0)
 		error_and_die("error: on binding");
+	printf("listening for connect request...\n");
 	if (listen(parentfd, 5) < 0) /* allow 5 requests to queue up */
 		error_and_die("error: on listen");
-
+    printf("got request\n");
 	clientlen = sizeof(clientaddr);
 
 	childfd = accept(parentfd, (struct sockaddr *) &clientaddr, (socklen_t *) &clientlen);
 	if (childfd < 0)
 		error_and_die("error: on accept");
+	/*
 	hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
 						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
 	if (hostp == NULL)
@@ -378,6 +381,10 @@ void do_replay(string host, int port, string filename, float rate, bool loop)
 		error_and_die("error: on inet_ntoa\n");
 	printf("server established connection with %s (%s)\n",
 		   hostp->h_name, hostaddrp);
+	*/
+
+	printf("server established connection with %s \n",
+		   host.c_str());
 
 
 
@@ -476,8 +483,9 @@ int main(int argc, char * argv[]) {
 			case 'r':
 				rate = atof(optarg);
 				break;
-				case 'l':
+			case 'l':
 				loop = true;
+				break;
 			case '?':
 				printf("? %s\n", optarg);
 				usage_and_die();

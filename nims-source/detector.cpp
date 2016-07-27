@@ -166,9 +166,11 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
     bg.beam_angles_deg = vector<float>(ping.header.beam_angles_deg, 
                            ping.header.beam_angles_deg+ping.header.num_beams);
     NIMS_LOG_DEBUG << "beam angles from " << bg.beam_angles_deg[0] << " to " << bg.beam_angles_deg.back();
+
     float range_bin_size = (ping.header.range_max_m - ping.header.range_min_m)/(ping.header.num_samples-1);
     for (int k=0; k<ping.header.num_samples; ++k)
         bg.range_bins_m.push_back(ping.header.range_min_m + k*range_bin_size);
+    
     NIMS_LOG_DEBUG << "range bins from " << bg.range_bins_m[0] << " to " << bg.range_bins_m.back();
     bg.N = (int)(ping.header.pulserep_hz * bg_secs);
     bg.oldest_frame = 0;
@@ -188,7 +190,9 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
         Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
         ping_data.copyTo(bg.pings.row(k));
     }
+    NIMS_LOG_DEBUG << "got " << bg.N << " frames for moving average";
     reduce(bg.pings, bg.ping_mean, 0, CV_REDUCE_AVG);
+     NIMS_LOG_DEBUG << "moving average " << bg.ping_mean.at<framedata_t>(bg.total_samples/2);
 
         // Initialize the moving std dev.
         // v = sum( (x(k) - u)^2 ) / (N-1)
@@ -199,6 +203,9 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
     reduce(sq_diff, ping_var, 0, CV_REDUCE_SUM);
     ping_var = ping_var/(bg.N-1);
     sqrt(ping_var, bg.ping_stdv);
+    NIMS_LOG_DEBUG << "moving std dev " << bg.ping_stdv.at<framedata_t>(bg.total_samples/2);
+
+    return 0;
 
 } // initialize_background
 
@@ -239,16 +246,16 @@ int detect_objects(const Background& bg, const Frame& ping,
     Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
     Mat foregroundMask = ((ping_data - bg.ping_mean) / bg.ping_stdv) > thresh_stdevs;
     int nz = countNonZero(foregroundMask);
-    NIMS_LOG_DEBUG << "ping " << ping.header.ping_num << ": number of samples above threshold is "<< nz << " ("
-                   << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
+    //NIMS_LOG_DEBUG << "ping " << ping.header.ping_num << ": number of samples above threshold is "<< nz << " ("
+     //              << ceil( ((float)nz/bg.total_samples) * 100.0 ) << "%)";
     if (nz > 0)
     {
         PixelGrouping objects;
-        NIMS_LOG_DEBUG << "grouping pixels";
+        //NIMS_LOG_DEBUG << "grouping pixels";
         group_pixels(ping_data.reshape(0,(int)ping.header.num_samples), foregroundMask.reshape(0,(int)ping.header.num_samples), 
             min_size, objects);
         int n_obj = objects.size();
-        NIMS_LOG_DEBUG << ping.header.ping_num << " number of detected objects: " << n_obj;
+       // NIMS_LOG_DEBUG << ping.header.ping_num << " number of detected objects: " << n_obj;
         
         double ts = (double)ping.header.ping_sec + (double)ping.header.ping_millisec/1000.0;
 
@@ -370,17 +377,18 @@ int main (int argc, char * argv[]) {
         if ( initialize_background(bg, bg_secs, fb)<0 )
         {
            // ??? arm: is log and continue the correct behavior?
+           // !!! sam:  no, it's not
             NIMS_LOG_ERROR << "Error initializing background!";
 
         }
-        NIMS_LOG_DEBUG << "Moving average and std dev initialized";
-        
+         
         // need to exit if we got a SIGINT
         if (sigint_received) {
             NIMS_LOG_WARNING << "exiting due to SIGINT";
             return 0;
         }
         
+       NIMS_LOG_DEBUG << "Moving average and std dev initialized";
     // Get one ping to get header info.
     Frame next_ping;
     fb.GetNextFrame(&next_ping);
@@ -425,9 +433,9 @@ int main (int argc, char * argv[]) {
         }
         NIMS_LOG_DEBUG << "got frame " << frame_index;
         // Update background
-        NIMS_LOG_DEBUG << "Updating mean background";
+        //NIMS_LOG_DEBUG << "Updating mean background";
         update_background(bg, next_ping);
-
+/*
         double min_val,max_val;
        // minMaxIdx(bg.pings.row(bg.N-1), &min_val, &max_val);
        // NIMS_LOG_DEBUG << "ping data values from " << min_val << " to " << max_val;
@@ -435,6 +443,7 @@ int main (int argc, char * argv[]) {
         NIMS_LOG_DEBUG << "mean background values from " << min_val << " to " << max_val;
         minMaxIdx(bg.ping_stdv, &min_val, &max_val);
         NIMS_LOG_DEBUG << "std dev background values from " << min_val << " to " << max_val;
+*/
         /*
         if (VIEW)
         {
@@ -448,7 +457,7 @@ int main (int argc, char * argv[]) {
         }
         */    
         // Detect objects
-        NIMS_LOG_DEBUG << "Detecting objects";
+        //NIMS_LOG_DEBUG << "Detecting objects";
 
         vector<Detection> detections;
         int n_obj = detect_objects(bg, next_ping, thresh_stdevs, min_size, detections);  

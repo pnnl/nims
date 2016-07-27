@@ -205,7 +205,7 @@ std::ostream& operator<<(std::ostream& strm, const TracksMessage& tm)
             NIMS_LOG_ERROR << "error receiving message from detector";
             NIMS_LOG_WARNING << "sigint_received is " << sigint_received;
         }
-        NIMS_LOG_DEBUG << "received detections message with " 
+        NIMS_LOG_DEBUG << "received ping " << msg_det.ping_num << " detections message with " 
                        << msg_det.num_detections << " detections";
         if (ret > 0 & msg_det.num_detections > 0)
         {

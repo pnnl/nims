@@ -172,8 +172,8 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     std::string shared_name(shm_prefix_);
     shared_name += boost::lexical_cast<std::string>(frame_count_++);
     
-    NIMS_LOG_DEBUG << "FrameBufferWriter: putting frame " 
-                   << frame_count_ << "(ping " << new_frame.header.ping_num << ")" << " in " << shared_name;
+   // NIMS_LOG_DEBUG << "FrameBufferWriter: putting frame " 
+   //                << frame_count_ << "(ping " << new_frame.header.ping_num << ")" << " in " << shared_name;
         
     /*
      Create -rw------- since we don't need executable pages.
@@ -232,28 +232,27 @@ long FrameBufferWriter::PutNewFrame(const Frame &new_frame)
     NIMS_LOG_DEBUG << "sending frame messages to " << mq_readers_.size() << " readers";
     //FrameMsg msg(frame_count_, map_length, shared_name);
     FrameMsg msg(frame_count_, map_length, shared_name);
-    struct timespec tm;
-    clock_gettime(CLOCK_REALTIME, &tm); // get the current time
+//NIMS_LOG_DEBUG << "size of frame msg is " << sizeof(msg)  << " bytes";
+  //struct timespec tm;
+   // clock_gettime(CLOCK_REALTIME, &tm); // get the current time
     for (int k=0; k<mq_readers_.size(); ++k)
     {
-        // TODO:  if a reader queue is full, then mq_send blocks, so one slow reader
-        //        could hold up other processes.  Could set O_NONBLOCK flag...
-        // O_NONBLOCK is not good because we wantreaders to block if queue is empty.
-        // If queue is full and time is past, then we'll return immediately.
-        if (0 != mq_timedsend(mq_readers_[k], (char *)(&msg), sizeof(msg), 0, &tm)) 
-        {
+        //if (0 != mq_timedsend(mq_readers_[k], (char *)(&msg), sizeof(msg), 0, &tm))
+        if (0 != mq_send(mq_readers_[k], (char *)(&msg), sizeof(msg), 0))
+       {
             // TODO:  Need to handle an error here more comprehensively. 
             //        If there is problem with queue, may need to remove it from the list.
             nims_perror("mq_send() in FrameBufferInterface::PutNewFrame");
         }
+        //NIMS_LOG_DEBUG << "sent msg to queue id " << mq_readers_[k];
     } // for mq_readers_
     (void) pthread_mutex_unlock(&mqr_lock_);
     
     // unlink oldest shared frame and save the name of new frame
     int ind = frame_count_ % kMaxFramesInBuffer;
     shm_unlink(shm_names_[ind].c_str());
-    NIMS_LOG_DEBUG << "Replacing framebuffer slot " << ind << " (" << shm_names_[ind]
-       << ") with (" << shared_name << ")";
+    //NIMS_LOG_DEBUG << "Replacing framebuffer slot " << ind << " (" << shm_names_[ind]
+    //   << ") with (" << shared_name << ")";
     shm_names_[ind] = shared_name;
 
     return frame_count_;
