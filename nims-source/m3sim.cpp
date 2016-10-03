@@ -411,6 +411,7 @@ void do_replay(string host, int port, string filename, float rate, bool loop)
 			cur_p = base_p + index[i];
 			f = (frame *) cur_p;
 			last_ping++;
+            f->data_header.fPulseRepFreq = rate;
 			if (loop) f->data_header.dwPingNumber = last_ping;
 			int dsize = f->data_header.nNumSamples * f->data_header.nNumBeams * sizeof(Ipp32fc_Type);
 			int n = write(childfd, (char *) f, dsize + hdrsize);
@@ -428,6 +429,7 @@ void do_replay(string host, int port, string filename, float rate, bool loop)
 			printf("-- pingid: %d\n", last_ping);
 			cur_p = base_p + index[index.size()-1-i];
 			f = (frame *) cur_p;
+            f->data_header.fPulseRepFreq = rate;
 			f->data_header.dwPingNumber = last_ping++;
 			int dsize = f->data_header.nNumSamples * f->data_header.nNumBeams * sizeof(Ipp32fc_Type);
 			int n = write(childfd, (char *) f, dsize + hdrsize);

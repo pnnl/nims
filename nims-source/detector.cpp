@@ -28,8 +28,9 @@
  namespace fs = boost::filesystem;
  using namespace cv;
 
-bool TEST=false;
-
+// for testing
+bool TEST=false; // output csv files
+bool VIEW=true; // output ping images
 
 std::ostream& operator<<(std::ostream& strm, const Detection& d)
 {
@@ -173,6 +174,7 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
     
     NIMS_LOG_DEBUG << "range bins from " << bg.range_bins_m[0] << " to " << bg.range_bins_m.back();
     bg.N = (int)(ping.header.pulserep_hz * bg_secs);
+    NIMS_LOG_DEBUG << "using " << bg.N << " frames for backgroud";
     bg.oldest_frame = 0;
 
 
@@ -187,6 +189,7 @@ int initialize_background(Background& bg, float bg_secs, FrameBufferReader& fb)
             return -1;
         }
         // Create a cv::Mat wrapper for the ping data
+        NIMS_LOG_DEBUG << "got background frame " << k;
         Mat ping_data(1,bg.total_samples,bg.cv_type,ping.data_ptr());
         ping_data.copyTo(bg.pings.row(k));
     }
@@ -291,13 +294,13 @@ int detect_objects(const Background& bg, const Frame& ping,
         write_mat_to_file<framedata_t>(ping_data, string(ss.str() + "_ping.csv"));
         write_mat_to_file<framedata_t>(bg.ping_mean, string(ss.str() + "_mean.csv"));
         write_mat_to_file<framedata_t>(bg.ping_stdv, string(ss.str() + "_stdv.csv"));
-        
+    /*    
         ofstream ofs( string(ss.str() + "_det.csv").c_str() ); 
-        //ofs << ptw;
-        for (int d=0; d<detections.size(); ++ d)
+        ofs << "time, bearing, range, elevation, width, length, height, rotation1, rotation2, ts_min, ts_max, ts_sum"
+        for (int d=0; d<detections.size(); ++d)
             ofs << detections[d];
         ofs.close();
-        
+    */    
     }
     return detections.size();
 } // detect_objects
@@ -345,7 +348,6 @@ int main (int argc, char * argv[]) {
     
      
     // For testing
-    bool VIEW = false; // display new ping images
     /*
     const char *WIN_PING="Ping Image";
     const char *WIN_MEAN="Mean Intensity Image";
@@ -421,6 +423,13 @@ int main (int argc, char * argv[]) {
     mqd_t mq_det2 = CreateMessageQueue(MQ_DETECTOR_VIEWER_QUEUE, 
         sizeof(DetectionMessage), true); // non-blocking
     
+    // for TEST
+    ofstream ofs;
+    if (TEST)
+    {
+        ofs.open( "detections.csv" ); 
+        ofs << "ping, time, bearing, range, elevation, width, length, height, rotation1, rotation2, ts_min, ts_max, ts_sum" << endl;
+    }
     //-------------------------------------------------------------------------
     // MAIN LOOP
     
@@ -488,6 +497,11 @@ int main (int argc, char * argv[]) {
              drawContours(imc, contours, -1, Scalar(0,0,255));
              }
              */
+        if (TEST)
+        {
+           for (int d=0; d<n_obj; ++ d)
+                ofs << next_ping.header.ping_num << "," << detections[d];
+        }
         
         if (VIEW)
         {
@@ -515,12 +529,14 @@ int main (int argc, char * argv[]) {
             //NIMS_LOG_DEBUG << "im_out from " << v1 << " to " << v2;
 
             stringstream pngfilepath;
-            pngfilepath <<  "ping-" << frame_index % 30 << ".png";
+            pngfilepath <<  "ping-" << frame_index << ".png";
             imwrite(pngfilepath.str(), im_out);
         }
 
     } // while getting frames
-        
+       
+    if (TEST)   ofs.close();
+
     cout << endl << "Ending " << argv[0] << endl << endl;
     return 0;
 }
