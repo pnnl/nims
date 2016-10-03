@@ -73,3 +73,17 @@ df = det$V8[-1] - det$V8[-length(det$V8)]
 # tracker
 # 016-07-25 11:19:13.932520 [debug] tracker (24581)   received detections message with 85 detections
 # 2016-07-25 11:19:13.932605 [debug] tracker (24581)  0 active tracks:
+
+# cat tracker*.log | grep 'received ping' > tracker.log
+trk <- read.table("tracker.log")
+# just keep date time and frame number
+trk <- trk[ , c("V1", "V2", "V8")]
+# convert factors to char
+i <- sapply(trk, is.factor)
+trk[i] <- lapply(trk[i], as.character)
+
+# convert into time and calc difference
+t <- as.POSIXct(paste(trk$V1,trk$V2),format='%Y-%m-%d %H:%M:%OS')
+dt <- t[-1] - t[-length(t)]
+
+
