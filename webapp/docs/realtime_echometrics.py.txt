@@ -1,0 +1,77 @@
+Module realtime_echometrics
+---------------------------
+
+Variables
+---------
+O_CREAT
+
+O_RDONLY
+
+O_RDWR
+
+StringTypes
+
+log_format
+
+logger
+
+Functions
+---------
+accept_new_client(mq)
+    When a process connects to the request queue, this function is called to connect to the private queue for that
+    process.  Throws an exception if it can't connect.
+    Args:
+        mq: The echometrics request queue
+
+    Returns:The private messagequeue associated with the clint or None.
+
+background_removal(bs, frequency, min_range, max_range, pulse_len, sound_speed=1484.0)
+    Based on the Robertis algorithm, take backscatter in db, discover the average noise level and remove it from
+    the data.
+    Args:
+        bs: The array-like of backscatter data
+        frequency: Transducer frequency
+        min_range: The minimum range to average noise at.
+        max_range: The maximum range to average noise at.
+        pulse_len: Tau in seconds
+        sound_speed: Sound velocity in m/s
+
+    Returns: Backscatter with noise removed.
+
+calculate_echometrics(frame_buffers, depth_to_bin)
+    Given a set of pings, calculate the echometrics values based on the depth bin provided.
+    Args:
+        frame_buffers: array-like of single beam data (ping_bin x num_samples)
+        depth_to_bin: the depth bins to average on
+
+    Returns: A dict of metric values as described by Urmy 2012
+
+compress_beams(buf)
+    Multibeam data (the M3 in particular) needs to have its beams averaged per ping.
+    The m3 also comes in as linear data so it is logified before processign.
+    Args:
+        buf: the multi-beam ping to compress
+
+    Returns: the framebuffer with the compressed beam image.
+
+do_exit(mq)
+    Executed when the program is finished.
+    It is generally not useful to call on it's own as it's job is to clean up message queues and shut the application.
+    Args:
+        mq: A list of message queues to close.
+
+fetch_framebuffer(mq)
+    When the frame_buffer message queue is ready for read, this function is called to read the data and cast it
+    to a frame object.
+    Args:
+        mq: The message queue containing the frame.
+
+    Returns:frames.frame_buffer
+
+main()
+
+signal_handler(signal, data)
+    Handles the ctrl-c keyboard input and kills the loop
+    Args:
+        signal: the signal fired
+        data:  none

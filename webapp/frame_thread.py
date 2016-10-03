@@ -8,16 +8,13 @@ import signal
 import sys
 import threading
 import time
-import traceback
 from mmap import mmap
-
-# 3rd party
 from posix_ipc import MessageQueue, SharedMemory, O_CREAT, O_RDONLY, unlink_message_queue
 from posix_ipc import ExistentialError
 import numpy as np
-import echometrics
-# user
 import frames
+import select
+import ast
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)-15s : %(levelname)s : line %(lineno)-4d in %(module)s.%(funcName)s   > %(message)s'
@@ -26,7 +23,7 @@ logger = logging.getLogger('frame_thread')
 
 
 class FrameThread(threading.Thread):
-    def __init__(self, clients, target=None, group=None):
+    def __init__(self, config, clients, target=None, group=None):
         """
         Instances a thread to communicate with the transducer translation and tracking modules.
 
@@ -37,8 +34,13 @@ class FrameThread(threading.Thread):
         group: none
         """
         threading.Thread.__init__(self, name="mqThread", target=target, group=group)
+        self.config = config
+
         self.display_q_name = "/nim_display_" + repr(os.getpid())
+        self.em_q_name = '/nims_em_' + repr(os.getpid())
         self.display_q = None
+        self.em_q = None
+
         logger.info('Instantiated')
         self.clients = clients
         self.once = 0
@@ -58,6 +60,8 @@ class FrameThread(threading.Thread):
         try:
             logger.info('Unlinking MessageQueue::' + self.display_q_name)
             unlink_message_queue(self.display_q_name)
+
+            unlink_message_queue(self.em_q_name)
         except ExistentialError as e:
             pass
         finally:
@@ -66,150 +70,105 @@ class FrameThread(threading.Thread):
     def run(self):  # overrides threading.Thread.run()
         """
         Overrides threading.Thread.run()
-        Creates initial connection to expected message queues, receives frames, calculates echometrics and
-        disperses the data to the web server for hand off.
+        Creates initial connection to expected message queues; echometrics, frames, and tracks.  It polls each one
+        waiting for the read-ready flag to be set and consumes the data.  It reformats the data into an object and
+        writes it out to clients who are registered.
 
         Returns
         -------
         None
         """
 
-        logger.info('Creating message_queue: ' + self.display_q_name)
+        logger.info('Creating message_queues: ' + self.display_q_name)
         display_q = MessageQueue(self.display_q_name, O_CREAT)
+        em_q = MessageQueue(self.em_q_name, O_CREAT)
 
         # TODO:  READ THE NIMS FRAMEBUFFER NAME FROM THE YAML
-        try:
-            logger.info('Connecting to /nims_framebuffer')
-            framebuffer_q = MessageQueue("/nims_framebuffer", O_RDONLY)
+        try: # connect to nims ingestor to get backscatter data
+            nims_framebuffer = '/' + self.config['FRAMEBUFFER_NAME']
+            logger.info('Connecting to ' + nims_framebuffer)
+            framebuffer_q = MessageQueue(nims_framebuffer, O_RDONLY)
             framebuffer_q.send(self.display_q_name)
             logger.info(" - sent queue: " + self.display_q_name)
         except ExistentialError as e:
-            logger.info(' - Could not connect to /nims_framebuffer::' + e.__repr__())
+            logger.info(' - Could not connect to ' + nims_framebuffer + '::' + e.__repr__())
 
-        try:
-            logger.info('Connecting to /nims_tracker')
-            trackbuffer_q = MessageQueue("/nims_tracker", O_RDONLY)
+        try: # connect to nims tracker to get track data (probably out of sync)
+            tracker_name = '/' + self.config['TRACKER_NAME']
+            logger.info('Connecting to ' + tracker_name)
+            trackbuffer_q = MessageQueue(tracker_name, O_RDONLY)
         except ExistentialError as e:
-            logger.info(' - Could not connect to /nims_tracker::' + e.__repr__())
+            logger.info(' - Could not connect to ' + tracker_name + '::' + e.__repr__())
 
+
+        try: # connect to the echometrics queue for periodic em data
+            em_queue_name = self.config['ECHOMETRICS']['queue_name']
+
+            logger.info('Connecting to ' + em_queue_name)
+            em_request_q = MessageQueue(em_queue_name, O_RDONLY)
+            em_request_q.send(self.em_q_name)
+        except:
+            logger.info(' - Could not connect to ' + em_queue_name)
+
+        poller = select.poll()
+        poller.register(em_q.mqd, select.POLLIN)
+        poller.register(display_q.mqd, select.POLLIN)
+        poller.register(trackbuffer_q.mqd, select.POLLIN)
 
         time.sleep(1)  # apparently necessary to create this latency for the frame_buffer app?
 
         while True:
-            num_bins = 10
-            echo_bins = []
+            frame_buffer = None
+            track_buffer = None
+            em_buffer = None
 
-            #print 'Loop...'
-            frame = frames.frame_message(display_q.receive()[0])
-            if frame.valid is False:
-                logger.info('Received invalid message: ignoring')
-                continue
-            try:
-                logger.info(' -- Connecting to ' + frame.shm_location)
-                shm_frame = SharedMemory(frame.shm_location, O_RDONLY, size=frame.frame_length)
-            except StandardError as e:
-                logger.info(' -- Error connecting to', frame.shm_location, '::', e.__repr__())
-                continue
+            mq_state = poller.poll()
+            for state in mq_state:
+                mqd = state[0]
+                if mqd == em_q.mqd:
+                    buf = em_q.receive()[0]
+                    em_buffer = ast.literal_eval(buf)
+                elif mqd == display_q.mqd:
+                    frame = frames.frame_message(display_q.receive()[0])
+                    if frame.valid is False:
+                        logger.info('Received invalid message: ignoring')
+                        continue
+                    try:
+                        #logger.info(' -- Connecting to ' + frame.shm_location)
+                        shm_frame = SharedMemory(frame.shm_location, O_RDONLY, size=frame.frame_length)
+                    except StandardError as e:
+                        logger.info(' -- Error connecting to', frame.shm_location, '::', e.__repr__())
+                        continue
+                    mapped = mmap(shm_frame.fd, shm_frame.size)
+                    shm_frame.close_fd()
+                    frame_buffer = frames.frame_buffer(mapped.read(frame.frame_length))
+                    mapped.close()
+                    if frame_buffer.valid is False:
+                        logger.info(' -- Error Parsing Frame')
+                        continue
 
-            #logger.info('Connecting to memory map')
-            mapped = mmap(shm_frame.fd, shm_frame.size)
-            shm_frame.close_fd()
-            frame_buffer = frames.frame_buffer(mapped.read(frame.frame_length))
-            mapped.close()
-            if frame_buffer.valid is False:
-                logger.info(' -- Error Parsing Frame')
-                continue
+                    image = np.array(frame_buffer.image)
+                    image = image.reshape((frame_buffer.num_samples[0], frame_buffer.num_beams[0]))
+                    image = image[0:-1:4, ::]
+                    frame_buffer.image = image.flatten().tolist()
+                    frame_buffer.num_samples = (frame_buffer.num_samples[0] /4,0)
 
-            # self.frames[frame_buffer.ping_num[0]] = frame_buffer
-            logger.info('Calculating EchoMetrics')
-
-            # here we bin.
-            # let's for the sake of argument says 10 by depth / 10?
-            echo_metrics = calculate_echometrics(frame_buffer)
-
-
-
-            # try to get tracks? should print out the tracks if we recv them
-            #print 'getting tracks...'
-            try:
-                tracks = frames.track_message(trackbuffer_q.receive(.1)[0])
-            except:
-                tracks = None
-            #print 'got tracks....'
+                elif mqd == trackbuffer_q.mqd:
+                    track_buffer = frames.track_message(trackbuffer_q.receive()[0])
 
             clients = copy.copy(self.clients)
-            logger.info('Sending frame to clients')
             for client in clients:
                 try:
-                    print 'tracks type:', type(tracks)
-                    print 'metrics type:', type(echo_metrics)
-                    print 'buffer type:', type(frame_buffer)
-                    client.send_data(frame_buffer, echo_metrics, tracks)
+                    if frame_buffer:
+                        client.send_image(frame_buffer)
+                    if track_buffer:
+                        client.send_tracks(track_buffer)
+                    if em_buffer:
+                        client.send_metrics(em_buffer)
+
                 except StandardError as e:
-                    logger.info("Error sending image to client")
+                    logger.info("Error sending data to client")
                     print sys.exc_info()
                     continue
 
         return
-
-def average_multibeam(frame_buffer):
-    try:
-        image_data = frame_buffer.image
-        num_beams = frame_buffer.num_beams[0]
-        num_samples = frame_buffer.num_samples[0]
-        array = np.array(image_data).reshape(num_samples, num_beams, )
-        echo = np.average(array)
-        return echo
-
-    except AttributeError as e:
-        print average_multibeam.__name__, "failed to parse frame_buffer:", e
-        import traceback
-        line_no = traceback.extract_stack()[-1][1]
-        print 'line:', line_no
-        return None
-
-def calculate_echometrics_by_bin(echogram, depth_bin):
-    return
-
-def calculate_echometrics(frame_buffer):
-    """
-    Parameters
-    ----------
-    frame_buffer:class:frames.frame_buffer
-
-    Returns
-    -------
-    metrics:dict
-    """
-
-    try:
-        image_data = frame_buffer.image
-        num_beams = frame_buffer.num_beams[0]
-        num_samples = frame_buffer.num_samples[0]
-        range_max = frame_buffer.range_max_m[0]
-    except AttributeError as e:
-        print calculate_echometrics.__name__, "failed to parse frame_buffer:", e
-        import traceback
-        line_no = traceback.extract_stack()[-1][1]
-        print 'line:', line_no
-        return None
-
-    x_index = range(1, num_beams + 1)
-    range_step = float(range_max) / num_samples
-
-    y_range = [i * range_step for i in range(0, num_samples)]
-    #y_range = range(0 , num_samples, range_step)
-    #y_range = [1, num_samples, 10]
-    array = np.array(image_data).reshape(num_samples, num_beams, )
-
-    echo = echometrics.Echogram(array, np.array(y_range), index=np.array(x_index))
-    sv = np.average(echometrics.sv_avg(echo))
-    metrics = dict(depth_integral=np.average(echometrics.depth_integral(echo)),
-                   avg_sv=sv,
-                   center_of_mass=np.average(echometrics.center_of_mass(echo)),
-                   inertia=np.average(echometrics.inertia(echo)),
-                   proportion_occupied=np.average(echometrics.proportion_occupied(echo)),
-                   aggregation_index=np.average(echometrics.aggregation_index(echo)),
-                   equivalent_area=np.average(echometrics.equivalent_area(echo)))
-
-    return metrics

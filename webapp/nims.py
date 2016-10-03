@@ -52,9 +52,14 @@ class ConfigHandler(tornado.web.RequestHandler):
     def get(self, *args, **kwargs):
         self.render("config.html", host=self.request.host)
 
-
-# Web Connections from index.html callback here
 def register_echo_client(echo_client, torf):
+    """
+    Web clients register via this function to recieve data updates.
+    Args:
+        echo_client: the web client
+        torf: flag representing new connection or regained connection
+    """
+    global globalYAML
     if torf:
         echo_clients.add(echo_client)
         logger.info("New connection to EchoWebSocket.")
@@ -62,11 +67,16 @@ def register_echo_client(echo_client, torf):
         echo_clients.discard(echo_client)
         logger.info("Lost connection to EchoWebSocket.")
 
-    logger.info(str(len(config_clients) + len(echo_clients)) + " concurrent users.")
+    logger.info(str(len(echo_clients) + len(echo_clients)) + " concurrent users.")
+    echo_client.send_config(globalYAML)
 
-
-# Web Connections from config.html callback here
 def register_config_client(config_client, torf):
+    """
+    Web config clients register via this function receive and send config updates.
+    Args:
+        config_client: the web client
+        torf:  flag representing new connection or regained connection
+    """
     if torf:
         config_clients.add(config_client)
         print("New connection to ClientWebSocket", config_client)
@@ -78,21 +88,37 @@ def register_config_client(config_client, torf):
 
 
 def edit_global_config(yaml=None, who=None):
+    """
+    This function is called to push changes to the global config.
+    Args:
+        yaml: the new dictionary / json config
+        who: the client pushing the change, set so it doesn't receive its own push.
+
+    Returns:
+
+    """
     global globalYAML
     if yaml is None:
         return globalYAML
     else:
+        globalYAML = yaml
         for client in config_clients:
             if client != who:
                 client.send_data(globalYAML)
+        for client in echo_clients:
+            client.send_config(globalYAML)
+
         write_yaml_config()
         # tell nims/ingester/tracker to reload config
-        os.system("/usr/bin/killall -HUP nims")
+        # os.system("/usr/bin/killall -HUP nims")
 
 
 def write_yaml_config():
+    """
+    Helper function to write the yaml config to disk.  Probably should have a lock on it.
+    """
     global globalYAML
-    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../"), "config.yaml")
+    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
     open(yaml_path, "w").write(ruamel.yaml.dump(globalYAML, Dumper=ruamel.yaml.RoundTripDumper))
 
 
@@ -102,7 +128,7 @@ def readYAMLConfig():
     :return:
     """
     global globalYAML
-    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../"), "config.yaml")
+    yaml_path = os.path.join(os.getenv("NIMS_HOME", "../build"), "config.yaml")
     try:
         globalYAML = ruamel.yaml.load(open(yaml_path, "r"), ruamel.yaml.RoundTripLoader)
     except:
@@ -116,6 +142,9 @@ def readYAMLConfig():
 
 
 def main():
+    """
+    Stands up the tornado server and launches the frame thread that recieves data from ingester, tracker, etc.
+    """
     global logger
     logger = logging.getLogger('webserver')
 
@@ -149,7 +178,7 @@ def main():
         "debug": DEBUG
     }
 
-    t = frame_thread.FrameThread(echo_clients, target="daemon")
+    t = frame_thread.FrameThread(globalYAML, echo_clients, target="daemon")
     t.daemon = True
     t.start()
 

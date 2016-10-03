@@ -5,6 +5,47 @@ var last_ping = 0;
 var paths = [];
 
 var app_config;
+var polar_map = undefined;
+
+function upper_bound(arr, val) {
+    if (arr.length == undefined)
+        return undefined;
+    for (var i = 0; i < arr.length; i++)
+        if (arr[i] > val)
+            return i;
+    return undefined;
+}
+
+function ping_to_polar_map(ping) {  // generate polar map
+    write_log('Generating polar transform.');
+    var min_range = ping.range_min;
+    var max_range = ping.range_max;
+    var num_samples = ping.num_samples;
+    var num_beams = ping.num_beams;
+    var angles_deg = ping.beam_angles;
+
+    var span = max_range - min_range;
+    var meters_per_sample = span / num_samples;
+    var samples_per_meter = num_samples / span;
+
+    var rows = Math.floor(max_range * samples_per_meter); // to offset from ducer, add extra length
+    var edge_rad = (90 - (ping.sector_size / 2)) * (Math.PI / 180.0);
+    var cols = Math.floor(max_range * Math.cos(edge_rad) * 2 * samples_per_meter);
+
+    polar_map = new Array(rows).fill(new Array(cols));
+
+    for (var c = 0; c < num_samples; c++) {
+        var range = min_range + (c * meters_per_sample);
+        for (var r = 0; r < num_beams; r++) {
+            var theta = angles_deg[r] * (Math.PI / 180.0);
+            var x = range * Math.cos(theta);
+            var y = range * Math.sin(theta);
+            polar_map[c][r] = [x, y];
+        }
+    }
+
+    return polar_map;
+}
 
 /* ----------------------------------------------------------------------------
  - Name:
@@ -13,7 +54,7 @@ var app_config;
  - Output:
  ---------------------------------------------------------------------------- */
 function handle_web_socket() {
-    console.log("handle_web_socket")
+    console.log("handle_web_socket");
 
     if (initial_connection == true) {
         write_log("Established initial connection to NIMS.");
@@ -22,46 +63,46 @@ function handle_web_socket() {
         color_map = generate_heat_map();
         graphs =
         {
-            Sv_area: new graph_object("Area Backscattering Strength (Sa)"),
-            Sv_volume: new graph_object("Vol. Backscattering Strength (Sv)"),
-            center_of_mass: new graph_object("Center of Mass"),
-            inertia: new graph_object("Inertia", 25),
-            proportion_occupied: new graph_object("Proportion Occupied", .1),
-            equivalent_area: new graph_object("Equivalent Area"),
-            aggregate_index: new graph_object("Aggregation Index", .1)
+            Sv_area: new graph_object("Area Backscattering Strength (Sa)", 1,"threshold_avgsv"  ),
+            Sv_volume: new graph_object("Vol. Backscattering Strength (Sv)", 1, "threshold_sv"),
+            center_of_mass: new graph_object("Center of Mass", 1,"threshold_center_of_mass" ),
+            inertia: new graph_object("Inertia", 25, "threshold_inertia" ),
+            proportion_occupied: new graph_object("Proportion Occupied", .1, "threshold_prop_occ"),
+            equivalent_area: new graph_object("Equivalent Area", 1, "threshold_equiv_area"),
+            aggregate_index: new graph_object("Aggregation Index", .1, "threshold_avgsv")
         };
 
         image = render_static_image();
         //display_image(image, "BSCAN");
 
-        var device = "Unknown Transducer Model"
-        var version = "xx"
-        var pingid = "xxxx"
-        var soundspeed = "xxxx"
-        var num_samples = "xxxx"
-        var range_min = "xx"
-        var range_max = "xx"
-        var num_beams = "xxx"
-        var freq = "xxxxxxxx"
-        var pulse_len = "xx"
-        var pulse_rep = "xx"
-        var ts = "xxxxxxxxx"
+        var device = "Unknown Transducer Model";
+        var version = "xx";
+        var pingid = "xxxx";
+        var soundspeed = "xxxx";
+        var num_samples = "xxxx";
+        var range_min = "xx";
+        var range_max = "xx";
+        var num_beams = "xxx";
+        var freq = "xxxxxxxx";
+        var pulse_len = "xx";
+        var pulse_rep = "xx";
+        var ts = "xxxxxxxxx";
 
-        var elem = document.getElementById("meta")
-        var inner = "<fieldset><legend>Sonar Settings</legend>"
-        inner += "<span><pre>" + device + ", version " + version + "</span>\n"
-        inner += "<span><pre>     Ping ID: " + pingid + "\t\t"
-        inner += "   Ping Time: " + ts + "</span>\n"
-        inner += "<span><pre>        Freq: " + freq + "\t\t"
-        inner += " Sound Speed: " + soundspeed + "</span>\n"
-        inner += "<span><pre>   Range Min: " + range_min + "\t\t"
-        inner += "   Range Max: " + range_max + "</span>\n"
-        inner += "<span><pre>   Num Beams: " + num_beams + "\t\t"
-        inner += " Num Samples: " + num_samples + "</span>\n"
-        inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t"
-        inner += "   Pulse Rep: " + pulse_rep + "</span>\n"
-        inner += "</fieldset>"
-        elem.innerHTML = inner
+        var elem = document.getElementById("meta");
+        var inner = "<fieldset><legend>Sonar Settings</legend>";
+        inner += "<span><pre>" + device + ", version " + version + "</span>\n";
+        inner += "<span><pre>     Ping ID: " + pingid + "\t\t";
+        inner += "   Ping Time: " + ts + "</span>\n";
+        inner += "<span><pre>        Freq: " + freq + "\t\t";
+        inner += " Sound Speed: " + soundspeed + "</span>\n";
+        inner += "<span><pre>   Range Min: " + range_min + "\t\t";
+        inner += "   Range Max: " + range_max + "</span>\n";
+        inner += "<span><pre>   Num Beams: " + num_beams + "\t\t";
+        inner += " Num Samples: " + num_samples + "</span>\n";
+        inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t";
+        inner += "   Pulse Rep: " + pulse_rep + "</span>\n";
+        inner += "</fieldset>";
+        elem.innerHTML = inner;
 
         return;
     }
@@ -78,32 +119,40 @@ function handle_web_socket() {
  - Output: a graph object
  - Desc: Generates a graph for ChartJS with some default values
  ---------------------------------------------------------------------------- */
-function graph_object(graph_name, y_interval) {
+function graph_object(graph_name, y_interval, threshold_key) {
     y_interval = typeof y_interval != 'undefined' ? y_interval : 10;
     console.log(graph_name + ":" + y_interval);
     this.name = graph_name;
     this.points = [];
+    this.threshold = [];
+    this.threshold_key = threshold_key
     this.graph = new CanvasJS.Chart(graph_name,
         {
             exportEnabled: true,
             zoomEnabled: true,
             axisX: {
-                interval: 100,
+                interval: 25,
                 title: "Ping",
                 labelAngle: 45,
             },
 
             axisY: {
-                interval: y_interval,
+                //interval: y_interval,
                 title: graph_name
             },
 
             title: {text: graph_name},
 
-            data: [{
+            data: [
+            {
                 type: "line",
                 dataPoints: this.points
-            }]
+            },
+            {
+                type: "line",
+                dataPoints: this.threshold
+            }
+            ]
 
         });
     this.graph.render();
@@ -113,17 +162,25 @@ function graph_object(graph_name, y_interval) {
 
 graph_object.prototype.append = function (x_val, y_val, num_values) {
     num_values = typeof num_values !== 'undefined' ? num_values : 50;
+    y_thresh = app_config['ECHOMETRICS'][this.threshold_key]
+    y_thresh = parseInt(y_thresh)
     this.points.push({x: x_val, y: y_val});
-    if (this.points.length > num_values)
+    if (!isNaN(y_thresh))
+        this.threshold.push({x: x_val, y: y_thresh});
+    if (this.points.length > num_values) {
         this.points.shift();
+        this.threshold.shift();
+    }
     this.graph.render();
 };
 
 graph_object.prototype.reset = function () {
-    while (this.points.length > 0)
+    while (this.points.length > 0) {
         this.points.shift();
-    this.graph.render();
-}
+        this.threshold.shift();
+    }
+        this.graph.render();
+};
 /* ----------------------------------------------------------------------------
  - Name: generate_heat_map()
  - Desc: creates a red scale rgb array from 0 to 256; maps intensity to rgb
@@ -142,24 +199,33 @@ function generate_heat_map() {
 }
 
 function exportConfig() {
-    write_log("Wrote new configuration.")
+    write_log("Wrote new configuration.");
     // read every row in the table, edit the config, stringify it, send it
     var tracker_table = document.getElementById('tracker_table');
     var rowNum = 2;
     for (var i = rowNum; i < tracker_table.rows.length; i++) {
-        // cell0+1 = tracker data, cell3+4 = other non-editables.  So lets ignore them for now.
+        // cell0+1 = tracker data, cell3+4 = echometrics
         row = tracker_table.rows[i];
-        app_config['TRACKER'][row.cells[0].innerText.trim()] = row.cells[1].innerText.trim();
+        key = row.cells[0].innerText.trim()
+        if (key.length > 0) {
+            app_config['TRACKER'][key] = row.cells[1].innerText.trim();
+            write_log('writing key: ' + key)
+        }
+        key = row.cells[2].innerText.trim()
+        if (key.length > 0) {
+            write_log('writing key: ' + key);
+            app_config['ECHOMETRICS'][key] = row.cells[3].innerText.trim();
+        }
     }
 
 
-    config = JSON.stringify(app_config)
+    config = JSON.stringify(app_config);
     ws.send(config)
 
 }
 
 function write_log(message) {
-    var elem = document.getElementById("log")
+    var elem = document.getElementById("log");
     log.innerHTML = "<pre>     " + message + " :: " + Date() + "</pre>";
 }
 function process_config(data) {
@@ -167,10 +233,11 @@ function process_config(data) {
     write_log("Received new configuration data.");
 
     app_config = JSON.parse(data);
-    console.log("app_config:" + app_config)
+    console.log("app_config:" + app_config);
 
     var track_config = app_config['TRACKER'];
-    var application = app_config['APPLICATIONS']
+    var application = app_config['APPLICATIONS'];
+    var metrics = app_config['ECHOMETRICS']
     // remove all existing rows and populate with new data
     var tracker_table = document.getElementById('tracker_table');
     var rowCount = tracker_table.rows.length;
@@ -179,18 +246,16 @@ function process_config(data) {
 
     length = track_config.length;
     for (var key in track_config) {
-        console.log("key=" + key)
         if (key == "")
-            continue
+            continue;
         if (track_config.hasOwnProperty(key)) {
-            //console.log(key + " -> " + track_config[key]);
-            var row = tracker_table.insertRow()
+            var row = tracker_table.insertRow();
             var cell1 = row.insertCell(0);
-            cell1.bgColor = "CadetBlue"
-            cell1.align = "right"
-            cell1.innerHTML = "<pre>" + key
+            cell1.bgColor = "CadetBlue";
+            cell1.align = "right";
+            cell1.innerHTML = "<pre>" + key;
             var cell2 = row.insertCell(1);
-            cell2.align = "left"
+            cell2.align = "left";
             cell2.innerHTML = "<pre>" + String(track_config[key]);
             cell2.contentEditable = "true"
 
@@ -199,116 +264,67 @@ function process_config(data) {
 
 
     var rowNum = 2; // first td
-    for (var key in app_config) {
-        if (key == "TRACKER")
-            continue;
-        if (!app_config.hasOwnProperty(key)) {
-            continue;
-        }
-        console.log("key=" + key)
-        if (key == "APPLICATIONS") {
-            var apps = app_config['APPLICATIONS']; // apps is an array for some reason ...
-            for (var i = 0; i < apps.length; i++) // for every app running
-            {
-                app = apps[i]
-                var arg_string = app["name"];
-                for (var j = 0; j < app["args"].length; j++)
-                    arg_string = arg_string + " " + app["args"][j];
-                console.log(arg_string);
-
-                if (rowNum >= tracker_table.rows.length)
-                    tracker_table.insertRow();
-                var row = tracker_table.rows[rowNum];
-
-
-                var cell3 = row.insertCell(2);
-                cell3.bgColor = "CadetBlue";
-                cell3.innerHTML = "<pre>" + "APPLICATION"
-                cell3.align = "right"
-                var cell4 = row.insertCell(3);
-                cell4.bgColor = "LightSeaGreen";
-                cell4.innerHTML = "<pre>" + arg_string;
-                rowNum++;
-            }
-
-            continue;
-
-        }
-        console.log("table length:" + tracker_table.rows.length)
+    for (var key in metrics) {
+        if (key == "queue_name")
+            continue
         if (rowNum >= tracker_table.rows.length) {
             row = tracker_table.insertRow();
-            var cell = row.insertCell(0)
+            var cell = row.insertCell(0);
+            cell.bgColor = "CadetBlue";
+            cell = row.insertCell(1);
             cell.bgColor = "CadetBlue"
-            cell = row.insertCell(1)
-            cell.bgColor = "CadetBlue"
-
-
         }
         else {
             var row = tracker_table.rows[rowNum];
         }
-        console.log("rownum:" + rowNum)
-
 
         var cell3 = row.insertCell(2);
         cell3.bgColor = "CadetBlue";
-        cell3.innerHTML = "<pre>" + key
-        cell3.align = "right"
+        cell3.innerHTML = "<pre>" + key;
+        cell3.align = "right";
         var cell4 = row.insertCell(3);
-        cell4.bgColor = "LightSeaGreen";
-        cell4.innerHTML = "<pre>" + app_config[key];
-        cell4.align = "left"
+        //cell4.bgColor = "LightSeaGreen";
+        cell4.innerHTML = "<pre>" + metrics[key];
+        cell4.align = "left";
+        cell4.contentEditable = "true"
         rowNum++;
 
     }
 }
+
+function process_input(jsonobj) {
+    var data = JSON.parse(jsonobj);
+    if (data.type == 'ping')
+        process_ping(data);
+    else if (data.type == 'metrics')
+        process_metrics(data);
+    else if (data.type == 'tracks')
+        process_tracks(data);
+    else if (data.type == 'config')
+        app_config = data
+    else
+        write_log('Recieved unknow data type')
+}
+
 /* ----------------------------------------------------------------------------
  - Name: process_ping()
  - Desc: processes JSON ping data and updates the screen
  - Input: data: JSON ping data
  - Output: none
  ----------------------------------------------------------------------------- */
-function process_ping(data) {
-    var obj = JSON.parse(data)
-    console.log('Tracks:' + obj.num_tracks);
-    write_meta_data(obj);
-
-
-    // here we want to add our paths in before we render image.
-    tracks = obj.tracks;
-    if (tracks != undefined)
-    {
-        for (var i = 0; i < tracks.length; i++) {
-            var track = tracks[i];
-            var track_id = track[0];
-            for (var j = 0; j < paths.length; j++) {
-                paths[j].age++;
-                if (paths[j].age > 10) {
-                    paths[j].age = 10;
-                    paths[j].points.shift();
-                }
-
-                path = paths[j];
-                var found = false;
-                if (path.id == track_id) {
-                    var point = [track[1], track[2]];
-                    path.points.push(point);
-                    found = true;
-                }
-                if (found == false) {
-                    var new_path = {id: track_id, age: 1, points: [[track[1], track[2]]]};
-                    paths.push(path);
-                }
-
-            }
-        }
-    } else { console.log("No tracks recorded this ping."); }
+function process_ping(ping_data) {
+    write_meta_data(ping_data);
+    if (polar_map == undefined)
+        polar_map = ping_to_polar_map(ping_data);
 
     //var image = render_ppi_image(obj);
-    var image = render_bscan_image(obj);
-    display_image(image, "BSCAN", obj);
+    var image = render_bscan_image(ping_data);
+    display_image(image, "BSCAN", ping_data);
 
-    if (obj.pingid < last_ping) {
+}
+
+function process_metrics(metrics) {
+    if (metrics.pingid < last_ping) {
         graphs.Sv_area.reset();
         graphs.Sv_volume.reset();
         graphs.center_of_mass.reset();
@@ -317,17 +333,47 @@ function process_ping(data) {
         graphs.aggregate_index.reset();
         graphs.proportion_occupied.reset();
 
+    } // handles test data looping and temporarily borking up the graphs
+
+    last_ping = metrics.pingid;
+    graphs.Sv_area.append(metrics.pingid, metrics.sv_area);
+    graphs.Sv_volume.append(metrics.pingid, metrics.sv_volume);
+    graphs.center_of_mass.append(metrics.pingid, metrics.center_of_mass);
+    graphs.inertia.append(metrics.pingid, metrics.inertia);
+    graphs.equivalent_area.append(metrics.pingid, metrics.equivalent_area);
+    graphs.aggregate_index.append(metrics.pingid, metrics.aggregation_index);
+    graphs.proportion_occupied.append(metrics.pingid, metrics.proportion_occupied);
+}
+
+function process_tracks(track_data) {
+    tracks = track_data.tracks;
+    write_log('got track data')
+    if (track_data.num_tracks == 0)
+        return;
+    write_log('had tracks')
+    for (var i = 0; i < tracks.length; i++) {
+        var track = tracks[i];
+        var track_id = track[0];
+        for (var j = 0; j < paths.length; j++) {
+            paths[j].age++;
+            if (paths[j].age > 10) {
+                paths[j].age = 10;
+                paths[j].points.shift();
+            }
+
+            path = paths[j];
+            var found = false;
+            if (path.id == track_id) {
+                var point = [track[1], track[2]];
+                path.points.push(point);
+                found = true;
+            }
+            if (found == false) {
+                var new_path = {id: track_id, age: 1, points: [[track[1], track[2]]]};
+                paths.push(path);
+            }
+        }
     }
-
-    last_ping = obj.pingid;
-    graphs.Sv_area.append(obj.pingid, obj.sv_area);
-    graphs.Sv_volume.append(obj.pingid, obj.sv_volume);
-    graphs.center_of_mass.append(obj.pingid, obj.center_of_mass);
-    graphs.inertia.append(obj.pingid, obj.inertia);
-    graphs.equivalent_area.append(obj.pingid, obj.equivalent_area);
-    graphs.aggregate_index.append(obj.pingid, obj.aggregation_index);
-    graphs.proportion_occupied.append(obj.pingid, obj.proportion_occupied);
-
 }
 
 /* ----------------------------------------------------------------------------
@@ -335,11 +381,12 @@ function process_ping(data) {
  - Desc: takes an image an lays it out on the website
  - Input: Image array (rgb values)
  str: image_type (PPI, BSCAN, WATER_COLUMN)
- - Output: None	
+ - Output: None
  ----------------------------------------------------------------------------- */
 function display_image(image, image_type, obj) {
     // ignoring image type for now
     var img = document.createElement('img');
+
     img.src = generateBMPDataURL(image);
     img.alt = "Your browser doesn't support data URLs.";
     img.title = "PPI Display";
@@ -398,96 +445,69 @@ function display_image(image, image_type, obj) {
             ctx.fillText(label, i * interval - 10, 487);
 
         }
-        label = max_angle + " deg"
+        label = max_angle + " deg";
         //ctx.FillText(label, i * interval - 40, 487);
 
         ctx.stroke(axis);
 
         //return;
-        ctx = c.getContext('2d')
+        ctx = c.getContext('2d');
         var tracks = obj.tracks;
-        if ( tracks == undefined ) return;
+        if (tracks == undefined) return;
 
 
         beam_width = sector_size / num_beams; // this is actually variable ;(
-        beams = []
-        for (var i = 0; i < num_beams; i++)
-        {
+        beams = [];
+        for (var i = 0; i < num_beams; i++) {
             beams.push(min_angle + (i * beam_width))
         } // later we'll do a beams reduce.
 
         for (var i = 0; i < tracks.length; i++) {
-            track = tracks[i]
+            track = tracks[i];
+            console.log("track" + track);
             width = track["width"];
             height = track["height"];
 
             px = Math.abs(track["min_bearing_deg"] - track['max_bearing_deg']) / 2;
             px = track['min_bearing_deg'] + px;
+            console.log('bearing = ' + px);
             px = Math.abs(px - min_angle) / sector_size;
+            console.log(' % = ' + px);
 
             px = px * 500;
 
             py = (track["min_range_m"] + (.5 * height)) / max_range;
-            py = 500- (py  * 500);
+            py = 500 - (py * 500);
 
+
+            //  ctx.save();
+            //  ctx.scale(1, height / width);
             ctx.beginPath();
-            ctx.moveTo(px, py - height / 2)
+            ctx.moveTo(px, py - height / 2);
             ctx.bezierCurveTo(px + width / 2, py - height / 2,
-                              px + width /2 , py + height / 2,
-                              px, py + height / 2);
+                px + width / 2, py + height / 2,
+                px, py + height / 2);
 
             ctx.bezierCurveTo(px - width / 2, py + height / 2,
-                              px - width / 2, py - height / 2,
-                              px, py - height / 2);
+                px - width / 2, py - height / 2,
+                px, py - height / 2);
 
             xangle = track['min_bearing_deg'] + Math.abs(track["min_bearing_deg"] - track['max_bearing_deg']) / 2;
-            xangle = xangle.toPrecision(3)
-            yrange =  (track["min_range_m"] + track["max_range_m"]) / 2
-            yrange = range.toPrecision(3)
-
-            label = track['id']
+            xangle = xangle.toPrecision(3);
+            yrange = (track["min_range_m"] + track["max_range_m"]) / 2;
+            yrange = range.toPrecision(3);
+            console.log('range = ' + track['min_range_m']);
+            label = track['id'];
             ctx.fillText(label, px, py - 2);
+            //ctx.arc(px, py, width, 0, 2 * Math.PI, false);
+            //  ctx.restore()
+
 
             ctx.strokeStyle = '#ffffff';
             ctx.stroke();
             ctx.globalAlpha = 1;
-            ctx.closePath()
+            ctx.closePath();
 
-            // now draw the path
-            // find my path first
-            id = track['id'];
-            path = 0
-            for (t = 0; t < paths.length; t++)
-            {
-                if (paths[t]['id']==id)
-                {
-                    path == paths[t];
-                    break;
-                }
-            }
-            if (path == 0)
-                continue;
-            points = path['points'];
-            trackpath = new Path2D();
-            trackpath.moveTo(px, py);
-            for (var p = points.length - 1; p >-0; p--) // points per track per target (p = rng,brng)
-            {
-                pnt = points[p]
-                rng = pnt[0]
-                brng = pnt[1]
-
-                diff = Math.abs(min_angle - brng);
-                brng = (diff / sector_size) * 500;
-                span = (max_range - min_range);
-                diff = rng - min_range;
-                rng = (diff / span) * 500;
-
-                trackpath.lineTo(brng, rng);
-
-
-            }
-            ctx.stroke()
-            ctx.closePath()
             //}
         }
         //ctx.arc(250, 250, 20, 0, 2 * Math.PI, false);
@@ -525,46 +545,47 @@ function write_meta_data(data) {
     var inner = "<fieldset><legend>Sonar Settings</legend>";
     inner += "<span><pre>" + device + ", version " + version + "</span>\n";
     inner += "<span><pre>         Ping ID: " + pingid + "\t\t";
-    inner += "   Ping Time (HMS): " + data.ts + "</span>\n";
+    inner += "  Ping Time (HMS): " + data.ts + "</span>\n";
     inner += "<span><pre>       Freq (hz): " + freq + "\t";
-    inner += " Sound Speed (m/s): " + soundspeed + "</span>\n";
+    inner += "Sound Speed (m/s): " + soundspeed + "</span>\n";
     inner += "<span><pre>   Range Min (m): " + range_min + "\t\t";
-    inner += "     Range Max (m): " + range_max + "</span>\n";
+    inner += "    Range Max (m): " + range_max + "</span>\n";
     inner += "<span><pre>       Num Beams: " + num_beams + "\t\t";
-    inner += "       Num Samples: " + num_samples + "</span>\n";
+    inner += "      Num Samples: " + num_samples + "</span>\n";
     inner += "<span><pre>  Pulse Len (ms): " + pulse_len + "\t\t";
-    inner += "    Pulse Rep (hz): " + pulse_rep + "</span>\n";
-    inner += "</fieldset>"
+    inner += "   Pulse Rep (hz): " + pulse_rep + "</span>\n";
+    inner += "</fieldset>";
 
-    console.log("inner = " + inner)
+    console.log("inner = " + inner);
     elem.innerHTML = inner;
-    return;
+
 }
 
 function render_bscan_image(ping_data) {
+
     data = ping_data.intensity;
-    numX = ping_data.num_beams;
-    numY = ping_data.num_samples;
+    numS = ping_data.num_samples;
+    numB = ping_data.num_beams;
 
 
-    rows = [];
-    for (var y = 0; y < numY; y++) {  // samples
+    cols = [];
+    for (var s = 0, k=0; s < numS; s+=3, k+=1) { // s cols, b rows
         row = [];
-        for (var x = 0; x < numX; x++) { // beams
-            var xx = (numX - 1) - x;     // reversing order
-            var target = data[xx + (y * numX)];
+        for (var b = 0; b < numB; b++) {
+            var bb = (numB - 1) - b; // lr flip
+            var target = data[bb + (s * numB)];
             var key = Math.floor(target * 500); // magic number
             if (key < 0)
                 key = 0;
             if (key > 1000)
                 key = 1000;
 
-            row[x] = color_map[key];
+            row[b] = color_map[key];
         }
-        rows[y] = row
-    }
+        cols[k] = row
 
-    return rows;
+    }
+    return cols;
 }
 /* ----------------------------------------------------------------------------
  - Name: create_ppi_image
@@ -677,34 +698,34 @@ function render_static_image() {
  --------------------------------------------------------------------------- */
 function onBodyLoad() {
 
-    var device = ""
-    var version = ""
-    var pingid = ""
-    var soundspeed = ""
-    var num_samples = ""
-    var range_min = ""
-    var range_max = ""
-    var num_beams = ""
-    var freq = ""
-    var pulse_len = ""
-    var pulse_rep = ""
-    var ts = ""
+    var device = "";
+    var version = "";
+    var pingid = "";
+    var soundspeed = "";
+    var num_samples = "";
+    var range_min = "";
+    var range_max = "";
+    var num_beams = "";
+    var freq = "";
+    var pulse_len = "";
+    var pulse_rep = "";
+    var ts = "";
 
-    var elem = document.getElementById("meta")
-    var inner = ""
-    inner += "<span><pre>" + device + ", version " + version + "</span>\n"
-    inner += "<span><pre>     Ping ID: " + pingid + "\t\t"
-    inner += "   Ping Time: " + ts + "</span>\n"
-    inner += "<span><pre>        Freq: " + freq + "\t\t"
-    inner += " Sound Speed: " + soundspeed + "</span>\n"
-    inner += "<span><pre>   Range Min: " + range_min + "\t\t"
-    inner += "   Range Max: " + range_max + "</span>\n"
-    inner += "<span><pre>   Num Beams: " + num_beams + "\t\t"
-    inner += " Num Samples: " + num_samples + "</span>\n"
-    inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t"
-    inner += "   Pulse Rep: " + pulse_rep + "</span>\n"
+    var elem = document.getElementById("meta");
+    var inner = "";
+    inner += "<span><pre>" + device + ", version " + version + "</span>\n";
+    inner += "<span><pre>     Ping ID: " + pingid + "\t\t";
+    inner += "   Ping Time: " + ts + "</span>\n";
+    inner += "<span><pre>        Freq: " + freq + "\t\t";
+    inner += " Sound Speed: " + soundspeed + "</span>\n";
+    inner += "<span><pre>   Range Min: " + range_min + "\t\t";
+    inner += "   Range Max: " + range_max + "</span>\n";
+    inner += "<span><pre>   Num Beams: " + num_beams + "\t\t";
+    inner += " Num Samples: " + num_samples + "</span>\n";
+    inner += "<span><pre>   Pulse Len: " + pulse_len + "\t\t";
+    inner += "   Pulse Rep: " + pulse_rep + "</span>\n";
 
-    elem.innerHTML = inner
+    elem.innerHTML = inner;
 
 
     test_img = generate_test_image();
@@ -752,7 +773,7 @@ function _collapseData(rows, row_padding) {
     var i,
         rows_len = rows.length,
         j,
-        pixels_len = rows_len ? rows.length : 0,
+        pixels_len = rows_len ? rows[0].length : 0,
         pixel,
         padding = '',
         result = [];
@@ -762,7 +783,7 @@ function _collapseData(rows, row_padding) {
     }
 
     for (i = 0; i < rows_len; i++) {
-        for (j = 0; j < rows[i].length; j++) {
+        for (j = 0; j < pixels_len; j++) {
             pixel = rows[i][j];
             try {
                 result.push(String.fromCharCode(pixel[2]) +
@@ -771,9 +792,9 @@ function _collapseData(rows, row_padding) {
             }
             catch (err) {
                 console.log("ERROR: " + err.message);
-                //  console.log("Pixel at i,j:" + i + "," + j);
-                //  console.log(pixel);
-                continue;
+                  console.log("Pixel at i,j:" + i + "," + j);
+                  console.log(pixel);
+
             }
         }
         result.push(padding);

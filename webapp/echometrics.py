@@ -13,10 +13,10 @@ except ImportError:
 class Echogram(object):
     '''
     echogram(data, depth, index, scale=decibel, threshold=[-80, 0], bad_data=None):)
-    
+
     Representation of an echogram.  A wrapper class for a
     depth-time masked array.
-    
+
     Parameters
     ----------
     data : array-like
@@ -41,13 +41,17 @@ class Echogram(object):
         self.index = index
         self.bad_data = bad_data
         self.scale = scale
+        if self.scale == 'linear':
+            data = to_dB(data)
+            self.scale = 'decibel'
         self.threshold = threshold
         # Make sure everything is the right size before proceeding
         self.__check_dimensions()
         self.dz = abs(self.depth[1] - self.depth[0])
         self.data = np.ma.masked_outside(self.data, threshold[0], threshold[1])
-    
+
     def __check_dimensions(self):
+
         assert len(self.depth) == self.data.shape[0], \
             "Size of depth array does not match data."
         assert len(self.index) == self.data.shape[1], \
@@ -60,7 +64,7 @@ class Echogram(object):
         if self.bad_data is not None:
             assert self.bad_data.shape == self.data.shape, \
                 "data and bad_data must have same shape."
-    
+
     def show(self):
         '''
         Plot an image of the echogram.
@@ -70,11 +74,11 @@ class Echogram(object):
             return
         plt.imshow(self.data, aspect='auto')
         # make axes ticks be depth and time/location
-    
+
     def set_scale(self, scale):
         '''
         Set the scale of the echogram (decibel or linear units).
-        
+
         Parameters
         ----------
         scale : string
@@ -90,11 +94,11 @@ class Echogram(object):
                 # TODO: set threshold scale
             elif scale == 'decibel':
                 self.data = 10 * np.log10(self.data)
-    
+
     def set_threshold(self, threshold=None):
         '''
         Set the threshold of the echogram, for display and metric calculations.
-        
+
         Parameters
         ----------
         threshold : sequence
@@ -107,16 +111,16 @@ class Echogram(object):
             self.threshold = threshold
             self.data = np.ma.masked_outside(self.data,
                 min(threshold), max(threshold))
-    
+
     def flip(self):
         self.data = np.flipud(self.data)
         self.depth = np.flipud(self.depth)
-    
+
     # def show(self, display_range=20, *args, **kwargs):
     #         '''
     #         Plots the echogram.
     #         '''
-    #         tmin, tmax = min(self.datetimes), max(self.datetimes) 
+    #         tmin, tmax = min(self.datetimes), max(self.datetimes)
     #         zmin, zmax = min(self.z), max(self.z)
     #         display_threshold = min(self.threshold)
     #         ax = imshow(self.data, aspect='auto',
@@ -132,7 +136,7 @@ def read_flat(file, index, depth, value, sep=',', **kwargs):
     '''
     Create an echogram object from a text file in "flat" format--i.e., with
     one sample (interval and depth) per row.
-    
+
     Parameters
     ----------
     file : string
@@ -146,7 +150,7 @@ def read_flat(file, index, depth, value, sep=',', **kwargs):
     sep : string
         Delimiter separating columns.  Default is a comma.
     **kwargs : additional arguments passed to Echogram()
-    
+
     Returns
     -------
     An echometrics.Echogram object.
@@ -162,7 +166,7 @@ def read_flat(file, index, depth, value, sep=',', **kwargs):
 def read_mat(file, names, **kwargs):
     '''
     Create an echogram object from a .MAT file exported from Echoview.
-    
+
     Parameters
     ----------
     file : string
@@ -173,26 +177,26 @@ def read_mat(file, names, **kwargs):
         for keys 'data', 'depth', and 'index'
     **kwargs
         Other names arguments to Echogram() (e.g. bad_data, scale, threshold).
-    
+
     Returns
     -------
     An echometrics.Echogram object.
     '''
     # TODO: check `names` dict for having correct keys
     mat_data = io.loadmat(file)
-    return Echogram(mat_data[names['data']].T, mat_data[names['depth']], 
+    return Echogram(mat_data[names['data']].T, mat_data[names['depth']],
                     mat_data[names['index']], **kwargs)
 
 
 def to_linear(x):
     '''
     Utility function to convert values in linear units to decibels (10 * log10(x))
-    
+
     Parameters
     ----------
     x : array_like
         Input data.
-    
+
     Examples
     --------
     to_linear(-10) --> 0.1
@@ -203,7 +207,7 @@ def to_linear(x):
 def to_dB(x):
     '''
     Utility to covert linear values to decibels (10**(x / 10.))
-    
+
     Parameters
     ----------
     x : array_like
@@ -225,22 +229,20 @@ def remove_outliers(echo, percentile, size):
 
 
 def depth_integral(echo, range=None, dB_result=True):
-    '''
-    Returns the depth-integrated Sv of the echogram (Sa) as a vector.
-	
-	Parameters
-	----------
-	echo : Echogram
-		Input echogram object.
-	range : tuple
-		maximum, minimum depths over which to integrate.
-	dB_result : bool
-	    If true (the default), return result as backscattering strength
-	    (i.e. in decibel form)
-    '''
-    if range is None:
+
+    # echo.depth is a vector of depth bins.  it's length = num_samples
+    if range is None: # if no range, assume the whole column - correct
         range = max(echo.depth), min(echo.depth)
+
+    # sample is going to be a masking vector.  It will slice horizontally, removing depths
+    # we are not interested in (as defined by range).  This is wrong to do, but the answer
+    # is right.
     sample = np.logical_and(min(range) < echo.depth, echo.depth <= max(range))
+
+    # here is where I think it gets more sketchy.
+    # echo.data[sample, :] returns a new echogram in the range we asked for.
+    # np.sum will sum vertically and add up the intensity in a ping
+    # we get a new vector whos axis is pings and values are intensity.  [p1, p2, p3 ... ]
     integral = np.sum(to_linear(echo.data[sample, :]), axis=0) * echo.dz
     if dB_result:
         integral = to_dB(integral)
@@ -249,7 +251,7 @@ def depth_integral(echo, range=None, dB_result=True):
 def sv_avg(echo, dB_result=True):
     '''
     Returns the depth-averaged volumetric backscatter from an echogram.
-    
+
     Parameters
     ----------
     echo : echometrics.Echogram
@@ -267,7 +269,7 @@ def center_of_mass(echo):
     '''
     Returns the center of mass of an Echogram (the expected value
     of depth in each ping weighted by the sv at each depth).
-    
+
     Parameters
     ----------
     echo : ecometrics.Echogram
@@ -280,7 +282,7 @@ def inertia(echo):
     '''
     Calulate the inertia (a measure of spread or dispersion around the center of
     mass) for an Echogram.
-    
+
     Parameters
     ----------
     echo : ecometrics.Echogram
@@ -295,7 +297,7 @@ def inertia(echo):
 def proportion_occupied(echo):
     '''
     Returns the proportion of each ping that is above the echogram's threshold.
-    
+
     Parameters
     ----------
     echo : ecometrics.Echogram
@@ -308,7 +310,7 @@ def proportion_occupied(echo):
 def aggregation_index(echo):
     '''
     Calculate Bez and Rivoirard's (2002) Index of Aggregation.
-    
+
     Parameters
     ----------
     echo : ecometrics.Echogram
@@ -321,7 +323,7 @@ def equivalent_area(echo):
     '''
     Calculate the equivalent area for each ping in an echogram (the area that would
     be occupied if all cells had the same density.)
-    
+
     Parameters
     ----------
     echo : ecometrics.Echogram
@@ -339,7 +341,7 @@ def layer_mask(echo, gauss_size=(19,19), med_size=(19, 19), dilate_size=(19, 19)
     def padded_diff(a):
         empty_row = np.zeros(a.shape[1]) + np.nan
         return np.vstack((empty_row, np.diff(a, axis=0)))
-    
+
     old_threshold = echo.threshold
     echo.set_threshold([echo_threshold - 1, 0])
     zerodata = np.copy(echo.data.data)
@@ -357,7 +359,7 @@ def layer_mask(echo, gauss_size=(19,19), med_size=(19, 19), dilate_size=(19, 19)
 def nlayers(echo, layer=None, gauss_size=(19,19), med_size=(19, 19), dilate_size=(19, 19), slope_threshold=0.02, echo_threshold=-110):
     '''
     Counts the layers present in an echogram.
-    
+
     Parameters
     ----------
     echo: Echogram object
@@ -376,17 +378,17 @@ def nlayers(echo, layer=None, gauss_size=(19,19), med_size=(19, 19), dilate_size
         to -80.
     Notes
     -----
-    The returned array is set equal to nan where the entire water column is 
+    The returned array is set equal to nan where the entire water column is
     marked as bad data.
-      
+
     Depending on the resolution of the data and the particular system, you may
     need to futz with the parameters to get good results.  For one (possibly
     excessive) approach to futzing, see:
-    
+
     Urmy, S.S., Horne, J.K., and Barbee, D.H., 2012.  Measuring the vertical
     distributional variability of pelagic fauna in Monterey Bay. ICES Journal of
     Marine Science 69 (2): 184-196.
-    
+
     As a general starting point, the convolution filters should be set to about
     half the width of the layer features you are interested in.  The slope
     threshold should in general be as small as it can before it starts missing
@@ -405,18 +407,18 @@ def calc_metrics(echo, metric_funcs):
     '''
     Applies multiple metric functions to an echogram, returning all values in an
     array with the same index as the echogram.
-    
+
     Parameters
     ----------
     echo : Echogram object
         Echogram from which the metrics are calculated.
     metric_funcs : list
         List of functions to apply to the echogram.
-    
+
     Returns
     -------
     A pandas DataFrame holding the metrics, with the same index as the echogram.
-    
+
     Notes
     -----
     This function currently can't do either of the layer-detection functions.

@@ -1,0 +1,263 @@
+Module echometrics
+------------------
+
+Functions
+---------
+aggregation_index(echo)
+    Calculate Bez and Rivoirard's (2002) Index of Aggregation.
+
+    Parameters
+    ----------
+    echo : ecometrics.Echogram
+        Input Echogram object.
+
+calc_metrics(echo, metric_funcs)
+    Applies multiple metric functions to an echogram, returning all values in an
+    array with the same index as the echogram.
+
+    Parameters
+    ----------
+    echo : Echogram object
+        Echogram from which the metrics are calculated.
+    metric_funcs : list
+        List of functions to apply to the echogram.
+
+    Returns
+    -------
+    A pandas DataFrame holding the metrics, with the same index as the echogram.
+
+    Notes
+    -----
+    This function currently can't do either of the layer-detection functions.
+
+center_of_mass(echo)
+    Returns the center of mass of an Echogram (the expected value
+    of depth in each ping weighted by the sv at each depth).
+
+    Parameters
+    ----------
+    echo : ecometrics.Echogram
+        Input Echogram object.
+
+depth_integral(echo, range=None, dB_result=True)
+
+equivalent_area(echo)
+    Calculate the equivalent area for each ping in an echogram (the area that would
+    be occupied if all cells had the same density.)
+
+    Parameters
+    ----------
+    echo : ecometrics.Echogram
+        Input Echogram object.
+
+inertia(echo)
+    Calulate the inertia (a measure of spread or dispersion around the center of
+    mass) for an Echogram.
+
+    Parameters
+    ----------
+    echo : ecometrics.Echogram
+        Input Echogram object.
+
+layer_mask(echo, gauss_size=(19, 19), med_size=(19, 19), dilate_size=(19, 19), slope_threshold=0.02, echo_threshold=-110)
+    Detect layers on an echogram.
+    Returns a boolean array the same size as echo.data
+
+nlayers(echo, layer=None, gauss_size=(19, 19), med_size=(19, 19), dilate_size=(19, 19), slope_threshold=0.02, echo_threshold=-110)
+    Counts the layers present in an echogram.
+
+    Parameters
+    ----------
+    echo: Echogram object
+    layer : 2-d array
+        Boolean array the same size as echo.data, designating which parts of the
+        echogram are considered to be in a layer.
+    gauss_size, med_size, dilate_size : tuple
+        Length-2 sequences giving the height and width of convolution filters
+        used in the layer-detection algorithm.  All default to (19, 19).
+    slope_threshold : float
+        The threshold below which the first derivative of Sv with respect to depth
+        is considered "flat" for the purposes of the detection algorithm.
+        Defaults to 0.02.
+    echo_threshold : float
+        Acoustic threshold to use as the floor in the layer detection. Defaults
+        to -80.
+    Notes
+    -----
+    The returned array is set equal to nan where the entire water column is
+    marked as bad data.
+
+    Depending on the resolution of the data and the particular system, you may
+    need to futz with the parameters to get good results.  For one (possibly
+    excessive) approach to futzing, see:
+
+    Urmy, S.S., Horne, J.K., and Barbee, D.H., 2012.  Measuring the vertical
+    distributional variability of pelagic fauna in Monterey Bay. ICES Journal of
+    Marine Science 69 (2): 184-196.
+
+    As a general starting point, the convolution filters should be set to about
+    half the width of the layer features you are interested in.  The slope
+    threshold should in general be as small as it can before it starts missing
+    layers.
+
+proportion_occupied(echo)
+    Returns the proportion of each ping that is above the echogram's threshold.
+
+    Parameters
+    ----------
+    echo : ecometrics.Echogram
+        Input Echogram object.
+
+read_flat(file, index, depth, value, sep=',', **kwargs)
+    Create an echogram object from a text file in "flat" format--i.e., with
+    one sample (interval and depth) per row.
+
+    Parameters
+    ----------
+    file : string
+        Name of file to read in.
+    index : string, or list of strings
+        Name or names of column(s) containing the indexing values.
+    depth : string
+        Name of the column containing the depth values
+    value : string
+        Name of the column
+    sep : string
+        Delimiter separating columns.  Default is a comma.
+    **kwargs : additional arguments passed to Echogram()
+
+    Returns
+    -------
+    An echometrics.Echogram object.
+
+read_mat(file, names, **kwargs)
+    Create an echogram object from a .MAT file exported from Echoview.
+
+    Parameters
+    ----------
+    file : string
+        Name of file to read in.
+    names : dictionary
+        Dictionary matching the names of the fields in the .MAT file
+        to the names expected by the Echogram constructor.  Must have entries
+        for keys 'data', 'depth', and 'index'
+    **kwargs
+        Other names arguments to Echogram() (e.g. bad_data, scale, threshold).
+
+    Returns
+    -------
+    An echometrics.Echogram object.
+
+remove_outliers(echo, percentile, size)
+    Masks all data values that fall above the given percentile value
+    for the area around each pixel given by size.
+
+sv_avg(echo, dB_result=True)
+    Returns the depth-averaged volumetric backscatter from an echogram.
+
+    Parameters
+    ----------
+    echo : echometrics.Echogram
+        Input echogram object.
+    dB_result : bool
+            If true (the default), return result as mean volume backscattering strength
+            (i.e. in decibel form)
+
+to_dB(x)
+    Utility to covert linear values to decibels (10**(x / 10.))
+
+    Parameters
+    ----------
+    x : array_like
+        Input data
+    Examples
+    --------
+    to_dB(0.1) --> -10.0
+    to_db(1.0e-5) --> -50.0
+
+to_linear(x)
+    Utility function to convert values in linear units to decibels (10 * log10(x))
+
+    Parameters
+    ----------
+    x : array_like
+        Input data.
+
+    Examples
+    --------
+    to_linear(-10) --> 0.1
+    to_linear(-50) --> 1.0e-5
+
+Classes
+-------
+Echogram 
+    echogram(data, depth, index, scale=decibel, threshold=[-80, 0], bad_data=None):)
+
+    Representation of an echogram.  A wrapper class for a
+    depth-time masked array.
+
+    Parameters
+    ----------
+    data : array-like
+        2-d array of backscatter values (an echogram).  Depth should be along
+        the vertical axis, with time/distance on the horizontal one.
+    index : array-like
+        Array of indexing values (e.g. time, distance, lat/lon) locating the
+        pings in the echogram.  May be any type.
+    scale: string
+        Indicates whether echogram is in log or linear units.
+        Must be either "log" or "linear".
+    threshold: [lower, upper]
+        Defaults to [-80, 0].  Values above and below which a mask is
+        applied to the data matrix.
+    bad_data : bool array
+        Array the same size as data, indicating which cells are marked as bad data.
+        NOTE: This is not currently implemented and will be ignored in calculations.
+
+    Ancestors (in MRO)
+    ------------------
+    echometrics.Echogram
+    __builtin__.object
+
+    Instance variables
+    ------------------
+    bad_data
+
+    data
+
+    depth
+
+    dz
+
+    index
+
+    scale
+
+    threshold
+
+    Methods
+    -------
+    __init__(self, data, depth, index, scale='decibel', threshold=[0, -110], bad_data=None)
+
+    flip(self)
+
+    set_scale(self, scale)
+        Set the scale of the echogram (decibel or linear units).
+
+        Parameters
+        ----------
+        scale : string
+            Scale to which the echogram will be converted.  Must be either "dB" or
+            "linear".  If the echogram is already in that form, nothing is changed.
+
+    set_threshold(self, threshold=None)
+        Set the threshold of the echogram, for display and metric calculations.
+
+        Parameters
+        ----------
+        threshold : sequence
+            Any length-2 sequence containing the upper and lower threshold. The
+            order ([hi, lo] or [lo, hi]) does not matter.
+
+    show(self)
+        Plot an image of the echogram.

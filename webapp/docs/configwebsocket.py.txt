@@ -1,0 +1,638 @@
+Module configwebsocket
+----------------------
+
+Classes
+-------
+ConfigWebSocket 
+    Ancestors (in MRO)
+    ------------------
+    configwebsocket.ConfigWebSocket
+    tornado.websocket.WebSocketHandler
+    tornado.web.RequestHandler
+    __builtin__.object
+
+    Class variables
+    ---------------
+    SUPPORTED_METHODS
+
+    Instance variables
+    ------------------
+    cookies
+        An alias for
+        `self.request.cookies <.httputil.HTTPServerRequest.cookies>`.
+
+    current_user
+        The authenticated user for this request.
+
+        This is set in one of two ways:
+
+        * A subclass may override `get_current_user()`, which will be called
+          automatically the first time ``self.current_user`` is accessed.
+          `get_current_user()` will only be called once per request,
+          and is cached for future access::
+
+              def get_current_user(self):
+                  user_cookie = self.get_secure_cookie("user")
+                  if user_cookie:
+                      return json.loads(user_cookie)
+                  return None
+
+        * It may be set as a normal variable, typically from an overridden
+          `prepare()`::
+
+              @gen.coroutine
+              def prepare(self):
+                  user_id_cookie = self.get_secure_cookie("user_id")
+                  if user_id_cookie:
+                      self.current_user = yield load_user(user_id_cookie)
+
+        Note that `prepare()` may be a coroutine while `get_current_user()`
+        may not, so the latter form is necessary if loading the user requires
+        asynchronous operations.
+
+        The user object may any type of the application's choosing.
+
+    locale
+        The locale for the current session.
+
+        Determined by either `get_user_locale`, which you can override to
+        set the locale based on, e.g., a user preference stored in a
+        database, or `get_browser_locale`, which uses the ``Accept-Language``
+        header.
+
+        .. versionchanged: 4.1
+           Added a property setter.
+
+    settings
+        An alias for `self.application.settings <Application.settings>`.
+
+    xsrf_token
+        The XSRF-prevention token for the current user/session.
+
+        To prevent cross-site request forgery, we set an '_xsrf' cookie
+        and include the same '_xsrf' value as an argument with all POST
+        requests. If the two do not match, we reject the form submission
+        as a potential forgery.
+
+        See http://en.wikipedia.org/wiki/Cross-site_request_forgery
+
+        .. versionchanged:: 3.2.2
+           The xsrf token will now be have a random mask applied in every
+           request, which makes it safe to include the token in pages
+           that are compressed.  See http://breachattack.com for more
+           information on the issue fixed by this change.  Old (version 1)
+           cookies will be converted to version 2 when this method is called
+           unless the ``xsrf_cookie_version`` `Application` setting is
+           set to 1.
+
+        .. versionchanged:: 4.3
+           The ``xsrf_cookie_kwargs`` `Application` setting may be
+           used to supply additional cookie options (which will be
+           passed directly to `set_cookie`). For example,
+           ``xsrf_cookie_kwargs=dict(httponly=True, secure=True)``
+           will set the ``secure`` and ``httponly`` flags on the
+           ``_xsrf`` cookie.
+
+    Methods
+    -------
+    __init__(self, application, request, **kwargs)
+
+    add_header(self, name, value)
+        Adds the given response header and value.
+
+        Unlike `set_header`, `add_header` may be called multiple times
+        to return multiple values for the same header.
+
+    check_etag_header(self)
+        Checks the ``Etag`` header against requests's ``If-None-Match``.
+
+        Returns ``True`` if the request's Etag matches and a 304 should be
+        returned. For example::
+
+            self.set_etag_header()
+            if self.check_etag_header():
+                self.set_status(304)
+                return
+
+        This method is called automatically when the request is finished,
+        but may be called earlier for applications that override
+        `compute_etag` and want to do an early check for ``If-None-Match``
+        before completing the request.  The ``Etag`` header should be set
+        (perhaps with `set_etag_header`) before calling this method.
+
+    check_origin(self, origin)
+        Override to enable support for allowing alternate origins.
+
+        The ``origin`` argument is the value of the ``Origin`` HTTP
+        header, the url responsible for initiating this request.  This
+        method is not called for clients that do not send this header;
+        such requests are always allowed (because all browsers that
+        implement WebSockets support this header, and non-browser
+        clients do not have the same cross-site security concerns).
+
+        Should return True to accept the request or False to reject it.
+        By default, rejects all requests with an origin on a host other
+        than this one.
+
+        This is a security protection against cross site scripting attacks on
+        browsers, since WebSockets are allowed to bypass the usual same-origin
+        policies and don't use CORS headers.
+
+        To accept all cross-origin traffic (which was the default prior to
+        Tornado 4.0), simply override this method to always return true::
+
+            def check_origin(self, origin):
+                return True
+
+        To allow connections from any subdomain of your site, you might
+        do something like::
+
+            def check_origin(self, origin):
+                parsed_origin = urllib.parse.urlparse(origin)
+                return parsed_origin.netloc.endswith(".mydomain.com")
+
+        .. versionadded:: 4.0
+
+    check_xsrf_cookie(self)
+        Verifies that the ``_xsrf`` cookie matches the ``_xsrf`` argument.
+
+        To prevent cross-site request forgery, we set an ``_xsrf``
+        cookie and include the same value as a non-cookie
+        field with all ``POST`` requests. If the two do not match, we
+        reject the form submission as a potential forgery.
+
+        The ``_xsrf`` value may be set as either a form field named ``_xsrf``
+        or in a custom HTTP header named ``X-XSRFToken`` or ``X-CSRFToken``
+        (the latter is accepted for compatibility with Django).
+
+        See http://en.wikipedia.org/wiki/Cross-site_request_forgery
+
+        Prior to release 1.1.1, this check was ignored if the HTTP header
+        ``X-Requested-With: XMLHTTPRequest`` was present.  This exception
+        has been shown to be insecure and has been removed.  For more
+        information please see
+        http://www.djangoproject.com/weblog/2011/feb/08/security/
+        http://weblog.rubyonrails.org/2011/2/8/csrf-protection-bypass-in-ruby-on-rails
+
+        .. versionchanged:: 3.2.2
+           Added support for cookie version 2.  Both versions 1 and 2 are
+           supported.
+
+    clear(self)
+        Resets all headers and content for this response.
+
+    clear_all_cookies(self, path='/', domain=None)
+        Deletes all the cookies the user sent with this request.
+
+        See `clear_cookie` for more information on the path and domain
+        parameters.
+
+        .. versionchanged:: 3.2
+
+           Added the ``path`` and ``domain`` parameters.
+
+    clear_cookie(self, name, path='/', domain=None)
+        Deletes the cookie with the given name.
+
+        Due to limitations of the cookie protocol, you must pass the same
+        path and domain to clear a cookie as were used when that cookie
+        was set (but there is no way to find out on the server side
+        which values were used for a given cookie).
+
+    clear_header(self, name)
+        Clears an outgoing header, undoing a previous `set_header` call.
+
+        Note that this method does not apply to multi-valued headers
+        set by `add_header`.
+
+    close(self, code=None, reason=None)
+        Closes this Web Socket.
+
+        Once the close handshake is successful the socket will be closed.
+
+        ``code`` may be a numeric status code, taken from the values
+        defined in `RFC 6455 section 7.4.1
+        <https://tools.ietf.org/html/rfc6455#section-7.4.1>`_.
+        ``reason`` may be a textual message about why the connection is
+        closing.  These values are made available to the client, but are
+        not otherwise interpreted by the websocket protocol.
+
+        .. versionchanged:: 4.0
+
+           Added the ``code`` and ``reason`` arguments.
+
+    compute_etag(self)
+        Computes the etag header to be used for this request.
+
+        By default uses a hash of the content written so far.
+
+        May be overridden to provide custom etag implementations,
+        or may return None to disable tornado's default etag support.
+
+    create_signed_value(self, name, value, version=None)
+        Signs and timestamps a string so it cannot be forged.
+
+        Normally used via set_secure_cookie, but provided as a separate
+        method for non-cookie uses.  To decode a value not stored
+        as a cookie use the optional value argument to get_secure_cookie.
+
+        .. versionchanged:: 3.2.1
+
+           Added the ``version`` argument.  Introduced cookie version 2
+           and made it the default.
+
+    create_template_loader(self, template_path)
+        Returns a new template loader for the given path.
+
+        May be overridden by subclasses.  By default returns a
+        directory-based loader on the given path, using the
+        ``autoescape`` and ``template_whitespace`` application
+        settings.  If a ``template_loader`` application setting is
+        supplied, uses that instead.
+
+    data_received(self, chunk)
+        Implement this method to handle streamed request data.
+
+        Requires the `.stream_request_body` decorator.
+
+    decode_argument(self, value, name=None)
+        Decodes an argument from the request.
+
+        The argument has been percent-decoded and is now a byte string.
+        By default, this method decodes the argument as utf-8 and returns
+        a unicode string, but this may be overridden in subclasses.
+
+        This method is used as a filter for both `get_argument()` and for
+        values extracted from the url and passed to `get()`/`post()`/etc.
+
+        The name of the argument is provided if known, but may be None
+        (e.g. for unnamed groups in the url regex).
+
+    delete(self, *args, **kwargs)
+
+    finish(self, *args, **kwargs)
+
+    flush(self, *args, **kwargs)
+
+    get(self, *args, **kwargs)
+
+    get_argument(self, name, default=<object object at 0x7fb7fd414a00>, strip=True)
+        Returns the value of the argument with the given name.
+
+        If default is not provided, the argument is considered to be
+        required, and we raise a `MissingArgumentError` if it is missing.
+
+        If the argument appears in the url more than once, we return the
+        last value.
+
+        The returned value is always unicode.
+
+    get_arguments(self, name, strip=True)
+        Returns a list of the arguments with the given name.
+
+        If the argument is not present, returns an empty list.
+
+        The returned values are always unicode.
+
+    get_body_argument(self, name, default=<object object at 0x7fb7fd414a00>, strip=True)
+        Returns the value of the argument with the given name
+        from the request body.
+
+        If default is not provided, the argument is considered to be
+        required, and we raise a `MissingArgumentError` if it is missing.
+
+        If the argument appears in the url more than once, we return the
+        last value.
+
+        The returned value is always unicode.
+
+        .. versionadded:: 3.2
+
+    get_body_arguments(self, name, strip=True)
+        Returns a list of the body arguments with the given name.
+
+        If the argument is not present, returns an empty list.
+
+        The returned values are always unicode.
+
+        .. versionadded:: 3.2
+
+    get_browser_locale(self, default='en_US')
+        Determines the user's locale from ``Accept-Language`` header.
+
+        See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.4
+
+    get_compression_options(self)
+        Override to return compression options for the connection.
+
+        If this method returns None (the default), compression will
+        be disabled.  If it returns a dict (even an empty one), it
+        will be enabled.  The contents of the dict may be used to
+        control the memory and CPU usage of the compression,
+        but no such options are currently implemented.
+
+        .. versionadded:: 4.1
+
+    get_cookie(self, name, default=None)
+        Gets the value of the cookie with the given name, else default.
+
+    get_current_user(self)
+        Override to determine the current user from, e.g., a cookie.
+
+        This method may not be a coroutine.
+
+    get_login_url(self)
+        Override to customize the login URL based on the request.
+
+        By default, we use the ``login_url`` application setting.
+
+    get_query_argument(self, name, default=<object object at 0x7fb7fd414a00>, strip=True)
+        Returns the value of the argument with the given name
+        from the request query string.
+
+        If default is not provided, the argument is considered to be
+        required, and we raise a `MissingArgumentError` if it is missing.
+
+        If the argument appears in the url more than once, we return the
+        last value.
+
+        The returned value is always unicode.
+
+        .. versionadded:: 3.2
+
+    get_query_arguments(self, name, strip=True)
+        Returns a list of the query arguments with the given name.
+
+        If the argument is not present, returns an empty list.
+
+        The returned values are always unicode.
+
+        .. versionadded:: 3.2
+
+    get_secure_cookie(self, name, value=None, max_age_days=31, min_version=None)
+        Returns the given signed cookie if it validates, or None.
+
+        The decoded cookie value is returned as a byte string (unlike
+        `get_cookie`).
+
+        .. versionchanged:: 3.2.1
+
+           Added the ``min_version`` argument.  Introduced cookie version 2;
+           both versions 1 and 2 are accepted by default.
+
+    get_secure_cookie_key_version(self, name, value=None)
+        Returns the signing key version of the secure cookie.
+
+        The version is returned as int.
+
+    get_status(self)
+        Returns the status code for our response.
+
+    get_template_namespace(self)
+        Returns a dictionary to be used as the default template namespace.
+
+        May be overridden by subclasses to add or modify values.
+
+        The results of this method will be combined with additional
+        defaults in the `tornado.template` module and keyword arguments
+        to `render` or `render_string`.
+
+    get_template_path(self)
+        Override to customize template path for each handler.
+
+        By default, we use the ``template_path`` application setting.
+        Return None to load templates relative to the calling file.
+
+    get_user_locale(self)
+        Override to determine the locale from the authenticated user.
+
+        If None is returned, we fall back to `get_browser_locale()`.
+
+        This method should return a `tornado.locale.Locale` object,
+        most likely obtained via a call like ``tornado.locale.get("en")``
+
+    get_websocket_protocol(self)
+
+    head(self, *args, **kwargs)
+
+    initialize(self, register_socket, global_config)
+        Proxy for __init__.  The baseclass tornado.websocket.WebSocketHandler sometimes has funky signature problems.
+        Args:
+            register_socket: A function to register the client when the socket opens.
+            global_config: The dictionary representing the NIMS config file.
+
+    log_exception(self, typ, value, tb)
+        Override to customize logging of uncaught exceptions.
+
+        By default logs instances of `HTTPError` as warnings without
+        stack traces (on the ``tornado.general`` logger), and all
+        other exceptions as errors with stack traces (on the
+        ``tornado.application`` logger).
+
+        .. versionadded:: 3.1
+
+    on_close(self)
+        Close out the socket when it's dropped.
+
+    on_connection_close(self)
+
+    on_finish(self)
+        Called after the end of a request.
+
+        Override this method to perform cleanup, logging, etc.
+        This method is a counterpart to `prepare`.  ``on_finish`` may
+        not produce any output, as it is called after the response
+        has been sent to the client.
+
+    on_message(self, message)
+        When a message is recieved from the webclient, it will be an update to the config file.  We convert to JSON and
+        forward the new configuration on to other clients as well as rewriting the config file.
+        Args:
+            message: unicode string representing the k,v pairs.
+
+    on_pong(self, data)
+        Invoked when the response to a ping frame is received.
+
+    open(self)
+        When the websocket opens, this function registers the client to have data written to it.
+
+    options(self, *args, **kwargs)
+
+    patch(self, *args, **kwargs)
+
+    ping(self, data)
+        Send ping frame to the remote end.
+
+    post(self, *args, **kwargs)
+
+    prepare(self)
+        Called at the beginning of a request before  `get`/`post`/etc.
+
+        Override this method to perform common initialization regardless
+        of the request method.
+
+        Asynchronous support: Decorate this method with `.gen.coroutine`
+        or `.return_future` to make it asynchronous (the
+        `asynchronous` decorator cannot be used on `prepare`).
+        If this method returns a `.Future` execution will not proceed
+        until the `.Future` is done.
+
+        .. versionadded:: 3.1
+           Asynchronous support.
+
+    put(self, *args, **kwargs)
+
+    redirect(self, *args, **kwargs)
+
+    render(self, template_name, **kwargs)
+        Renders the template with the given arguments as the response.
+
+    render_string(self, template_name, **kwargs)
+        Generate the given template with the given arguments.
+
+        We return the generated byte string (in utf8). To generate and
+        write a template as a response, use render() above.
+
+    require_setting(self, name, feature='this feature')
+        Raises an exception if the given app setting is not defined.
+
+    reverse_url(self, name, *args)
+        Alias for `Application.reverse_url`.
+
+    select_subprotocol(self, subprotocols)
+        Invoked when a new WebSocket requests specific subprotocols.
+
+        ``subprotocols`` is a list of strings identifying the
+        subprotocols proposed by the client.  This method may be
+        overridden to return one of those strings to select it, or
+        ``None`` to not select a subprotocol.  Failure to select a
+        subprotocol does not automatically abort the connection,
+        although clients may close the connection if none of their
+        proposed subprotocols was selected.
+
+    send_data(self, config)
+        Forward the new JSON config to the webclient.
+        Args:
+            config:
+
+    send_error(self, *args, **kwargs)
+
+    set_cookie(self, *args, **kwargs)
+
+    set_default_headers(self)
+        Override this to set HTTP headers at the beginning of the request.
+
+        For example, this is the place to set a custom ``Server`` header.
+        Note that setting such headers in the normal flow of request
+        processing may not do what you want, since headers may be reset
+        during error handling.
+
+    set_etag_header(self)
+        Sets the response's Etag header using ``self.compute_etag()``.
+
+        Note: no header will be set if ``compute_etag()`` returns ``None``.
+
+        This method is called automatically when the request is finished.
+
+    set_header(self, *args, **kwargs)
+
+    set_nodelay(self, value)
+        Set the no-delay flag for this stream.
+
+        By default, small messages may be delayed and/or combined to minimize
+        the number of packets sent.  This can sometimes cause 200-500ms delays
+        due to the interaction between Nagle's algorithm and TCP delayed
+        ACKs.  To reduce this delay (at the expense of possibly increasing
+        bandwidth usage), call ``self.set_nodelay(True)`` once the websocket
+        connection is established.
+
+        See `.BaseIOStream.set_nodelay` for additional details.
+
+        .. versionadded:: 3.1
+
+    set_secure_cookie(self, name, value, expires_days=30, version=None, **kwargs)
+        Signs and timestamps a cookie so it cannot be forged.
+
+        You must specify the ``cookie_secret`` setting in your Application
+        to use this method. It should be a long, random sequence of bytes
+        to be used as the HMAC secret for the signature.
+
+        To read a cookie set with this method, use `get_secure_cookie()`.
+
+        Note that the ``expires_days`` parameter sets the lifetime of the
+        cookie in the browser, but is independent of the ``max_age_days``
+        parameter to `get_secure_cookie`.
+
+        Secure cookies may contain arbitrary byte values, not just unicode
+        strings (unlike regular cookies)
+
+        .. versionchanged:: 3.2.1
+
+           Added the ``version`` argument.  Introduced cookie version 2
+           and made it the default.
+
+    set_status(self, *args, **kwargs)
+
+    static_url(self, path, include_host=None, **kwargs)
+        Returns a static URL for the given relative static file path.
+
+        This method requires you set the ``static_path`` setting in your
+        application (which specifies the root directory of your static
+        files).
+
+        This method returns a versioned url (by default appending
+        ``?v=<signature>``), which allows the static files to be
+        cached indefinitely.  This can be disabled by passing
+        ``include_version=False`` (in the default implementation;
+        other static file implementations are not required to support
+        this, but they may support other options).
+
+        By default this method returns URLs relative to the current
+        host, but if ``include_host`` is true the URL returned will be
+        absolute.  If this handler has an ``include_host`` attribute,
+        that value will be used as the default for all `static_url`
+        calls that do not pass ``include_host`` as a keyword argument.
+
+    write(self, *args, **kwargs)
+
+    write_error(self, status_code, **kwargs)
+        Override to implement custom error pages.
+
+        ``write_error`` may call `write`, `render`, `set_header`, etc
+        to produce output as usual.
+
+        If this error was caused by an uncaught exception (including
+        HTTPError), an ``exc_info`` triple will be available as
+        ``kwargs["exc_info"]``.  Note that this exception may not be
+        the "current" exception for purposes of methods like
+        ``sys.exc_info()`` or ``traceback.format_exc``.
+
+    write_message(self, message, binary=False)
+        Sends the given message to the client of this Web Socket.
+
+        The message may be either a string or a dict (which will be
+        encoded as json).  If the ``binary`` argument is false, the
+        message will be sent as utf8; in binary mode any byte string
+        is allowed.
+
+        If the connection is already closed, raises `WebSocketClosedError`.
+
+        .. versionchanged:: 3.2
+           `WebSocketClosedError` was added (previously a closed connection
+           would raise an `AttributeError`)
+
+        .. versionchanged:: 4.3
+           Returns a `.Future` which can be used for flow control.
+
+    xsrf_form_html(self)
+        An HTML ``<input/>`` element to be included with all POST forms.
+
+        It defines the ``_xsrf`` input value, which we check on all POST
+        requests to prevent cross-site request forgery. If you have set
+        the ``xsrf_cookies`` application setting, you must include this
+        HTML within all of your HTML forms.
+
+        In a template, this method should be called with ``{% module
+        xsrf_form_html() %}``
+
+        See `check_xsrf_cookie()` above for more information.

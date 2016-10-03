@@ -13,7 +13,7 @@
     console.log('Connecting to {{host}}');
     ws.onmessage = function (evt) {
         console.log("recvd message");
-        process_ping(evt.data)
+        process_input(evt.data)
     };
 
     ws.onclose = function (evt) { window.location.reload();};
@@ -32,7 +32,7 @@
 <ul class="menu">
     <li class="menu"><a class="menu" href="index.html">NIMS Interface</a></li>
     <li class="menu"><a class="menu" href="config.html">Control Panel</a></li>
-</ul class="menu">
+</ul>
 
 <div class="main_grid">
     <!-- Main body content -->

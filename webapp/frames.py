@@ -10,15 +10,34 @@ import sys
 class frame_buffer:
 
     def __init__(self, buff):
+        """
+        Reads a byte array and converts it to the frame buffer specified by ingester
+        Args:
+            buff: a byte array
+        """
         self.valid = self.parse_buffer(buff)
 
     def unpacker(self, fmt, buff):
+        """
+        Healper function for unpacking the byte array.
+        Args:
+            fmt: a format string
+            buff: the buffer containing the data to unpack
+
+        Returns: Unpacked data specified in the format string and the remainder of the buffer.
+        """
         size = calcsize(fmt)
         return unpack(fmt, buff[:size]), buff[size:]
 
     def parse_buffer(self, buff):
+        """
+        The function that actually unpacks the fields.
+        Args:
+            buff: the byte array, passed in from __init__()
+
+        Returns: boolean representing a valid packet or invalid packet
+        """
         try:
-            #print "buffer len:", len(buff)
             self.device, buff = self.unpacker('c' * 64, buff)
             self.device = "".join(self.device)
             self.version, buff = self.unpacker('I', buff)
@@ -46,16 +65,12 @@ class frame_buffer:
             print "Failed to parse buff:", sys.exc_info()
             return False
 
-    def print_field(self, field, v):
-        if v == None:
-            return
-        v = v[0]
-        spaces= 14 - len(field)
-        print ""*spaces-1, field,":",v[0] 
 
     def print_header(self):
+        """
+        Helper function to print the frame fields.
+        """
         print ""
-        #print "          device:", self.device[0]
         print "         version:", self.version[0]
         print "     ping number:", self.ping_num[0]
         print "        ping sec:", self.ping_sec[0]
@@ -67,7 +82,6 @@ class frame_buffer:
         print "    window start:", self.winstart_sec[0]
         print "   window length:",  self.winlen_sec[0]
         print "       num beams:", self.num_beams[0]
-        #print "     beam angles:", self.beam_angles_deg
         print "       freq (hz):", self.freq_hz[0]
         print "  pulse len (ms):", self.pulselen_microsec[0]
         print "  pulse rep (hz):", self.pulserep_hz[0]
@@ -76,13 +90,33 @@ class frame_buffer:
 
 class frame_message:
     def __init__(self, message):
+        """
+        Frame message identifies a shared memory location and size for the new frame.
+        Args:
+            message: buffer containing the qq64s set of bytes
+        """
         self.valid = self.parse_message(message)
 
     def unpacker(self, fmt, buff):
+        """
+        Healper function for unpacking the byte array.
+        Args:
+            fmt: a format string
+            buff: the buffer containing the data to unpack
+
+        Returns: Unpacked data specified in the format string and the remainder of the buffer.
+        """
         s = calcsize(fmt)
         return unpack(fmt, buff[:s]), buff[s:]
 
     def parse_message(self, message):
+        """
+        Parses the byte array into it's constituent fields
+        Args:
+            message: byte array
+
+        Returns: Boolean representing valid or not valid.
+        """
         try:
             self.frame_number, message = self.unpacker('q', message)
             self.frame_length, message = self.unpacker('Q', message)
@@ -102,9 +136,7 @@ class frame_message:
             return False
 
     def print_message(self):
-        print "frame number:", self.frame_number
-        print "frame length:", self.frame_length
-        print "shm location:", self.shm_location
+        return
 
 #----------------------------------------------------------------------------
 
@@ -113,17 +145,38 @@ class track_message:
 
 
     def __init__(self, message):
+        """
+        Track message contains the tracks ping by ping.  it works different than the other message queues as there is
+        only one of them for some reason.
+        Args:
+            message: byte array to parse
+        """
         self.targets = []
         self.valid = self.parse_message(message)
         self.max_detections = 100
 
 
     def unpacker(self, fmt, buff):
+        """
+        Healper function for unpacking the byte array.
+        Args:
+            fmt: a format string
+            buff: the buffer containing the data to unpack
+
+        Returns: Unpacked data specified in the format string and the remainder of the buffer.
+        """
         s = calcsize(fmt)
         return unpack(fmt, buff[:s])[0], buff[s:]
 
     def parse_message(self, message):
-        # message format:  III[SHffffffffffHfffffffff]
+        """
+        parses the track message into its consituent parts.
+        Args:
+            message:  byte array of format: III[SHffffffffffHfffffffff]
+
+        Returns: boolean represent valid or invalid
+
+        """
         try:
             # first 3x32 bit ints are the track header
             self.frame_num, message = self.unpacker('I', message)
@@ -160,7 +213,6 @@ class track_message:
                 target['length'], message = self.unpacker('f', message)
                 target['height'], message = self.unpacker('f', message)
 
-                #print 'Target:', target
                 self.targets.append(target)
 
             return True

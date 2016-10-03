@@ -1,0 +1,109 @@
+Module frames
+-------------
+
+Classes
+-------
+frame_buffer 
+    Ancestors (in MRO)
+    ------------------
+    frames.frame_buffer
+
+    Instance variables
+    ------------------
+    valid
+
+    Methods
+    -------
+    __init__(self, buff)
+        Reads a byte array and converts it to the frame buffer specified by ingester
+        Args:
+            buff: a byte array
+
+    parse_buffer(self, buff)
+        The function that actually unpacks the fields.
+        Args:
+            buff: the byte array, passed in from __init__()
+
+        Returns: boolean representing a valid packet or invalid packet
+
+    print_header(self)
+        Helper function to print the frame fields.
+
+    unpacker(self, fmt, buff)
+        Healper function for unpacking the byte array.
+        Args:
+            fmt: a format string
+            buff: the buffer containing the data to unpack
+
+        Returns: Unpacked data specified in the format string and the remainder of the buffer.
+
+frame_message 
+    Ancestors (in MRO)
+    ------------------
+    frames.frame_message
+
+    Instance variables
+    ------------------
+    valid
+
+    Methods
+    -------
+    __init__(self, message)
+        Frame message identifies a shared memory location and size for the new frame.
+        Args:
+            message: buffer containing the qq64s set of bytes
+
+    parse_message(self, message)
+        Parses the byte array into it's constituent fields
+        Args:
+            message: byte array
+
+        Returns: Boolean representing valid or not valid.
+
+    print_message(self)
+
+    unpacker(self, fmt, buff)
+        Healper function for unpacking the byte array.
+        Args:
+            fmt: a format string
+            buff: the buffer containing the data to unpack
+
+        Returns: Unpacked data specified in the format string and the remainder of the buffer.
+
+track_message 
+    Ancestors (in MRO)
+    ------------------
+    frames.track_message
+
+    Instance variables
+    ------------------
+    max_detections
+
+    targets
+
+    valid
+
+    Methods
+    -------
+    __init__(self, message)
+        Track message contains the tracks ping by ping.  it works different than the other message queues as there is
+        only one of them for some reason.
+        Args:
+            message: byte array to parse
+
+    parse_message(self, message)
+        parses the track message into its consituent parts.
+        Args:
+            message:  byte array of format: III[SHffffffffffHfffffffff]
+
+        Returns: boolean represent valid or invalid
+
+    print_message(self)
+
+    unpacker(self, fmt, buff)
+        Healper function for unpacking the byte array.
+        Args:
+            fmt: a format string
+            buff: the buffer containing the data to unpack
+
+        Returns: Unpacked data specified in the format string and the remainder of the buffer.
