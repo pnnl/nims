@@ -33,7 +33,7 @@ set(Bvtsdk_DIR "${CMAKE_SOURCE_DIR}/../vendorsrc/bvt_sdk_4.2.0.9446")
 find_library(Bvtsdk_LIB bvtsdk ${Bvtsdk_DIR}/lib NO_DEFAULT_PATH)
 
 # NOTE: video component is needed for Kalman filter
-find_package(OpenCV REQUIRED COMPONENTS core highgui imgproc video)
+find_package(OpenCV REQUIRED COMPONENTS core highgui imgcodecs imgproc video)
 
 # NOTE: order of these matters for log_setup/log/thread, filesystem needs to be at the end
 find_package(Boost REQUIRED COMPONENTS system program_options log_setup log thread filesystem date_time)

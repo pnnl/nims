@@ -21,7 +21,7 @@
 #include <cmath> // modf
 #include <thread> // sleep_for
 #include <cv.h> // opencv
-#include <highgui.h> // imwrite for TEST
+//#include <highgui.h> // imwrite for TEST
 
 # include "frame_buffer.h"
 #include "log.h"
@@ -259,7 +259,7 @@ int DataSourceBlueView::GetPing(Frame* pframe)
     flip(im2,im2, 0);
 
     // TEST
-     imwrite("MatGetBits.png", im1);
+    // imwrite("MatGetBits.png", im1);
 
     BVTMagImage_Destroy(img);
     BVTPing_Destroy(ping);
