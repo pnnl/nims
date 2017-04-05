@@ -28,19 +28,16 @@
 \lstset{style=BashInputStyle}
 
 \section{Initial Setup}
-
-This part applies to nims2, since that's the one that I set up
-from scratch.
-Plugged ethernet cable into port nearest the edge, and registered
-on the PNNL network by trying to get to google.com using Firefox. 
+This document describes the configuration of a fitPC running
+Linux Mint 17 as a NIMS.
 In the network control panel, set the
-dhcp client ID to ``nims2'' so PNNL's DNS server picks it up.
+dhcp client ID to ``nims1'' so DNS server picks it up.
 
 Setting the hostname requires changing it in \path{/etc/hosts}
 \begin{lstlisting}
-    sudo echo nims2 > /etc/hostname
+    sudo echo nims1 > /etc/hostname
 \end{lstlisting}
-and also editing \path{/etc/hosts} to point 127.0.1.1 at nims2:
+and also editing \path{/etc/hosts} to point 127.0.1.1 at nims1:
 \begin{lstlisting}
     127.0.0.1	localhost
     127.0.1.1	nims1
