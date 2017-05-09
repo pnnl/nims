@@ -53,8 +53,9 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${Bvtsdk_DIR}/include)
 
 set(Common_SOURCES log.cpp nims_ipc.cpp)
+set(data_SOURCES data_source_m3.cpp data_source_ek60.cpp data_source_blueview.cpp data_source_amp-m3.cpp)
 
-add_executable(ingester ingester.cpp data_source_m3.cpp data_source_ek60.cpp data_source_blueview.cpp frame_buffer.cpp ${Common_SOURCES})
+add_executable(ingester ingester.cpp frame_buffer.cpp ${data_SOURCES} ${Common_SOURCES})
 add_executable(detector detector.cpp pixelgroup.cpp frame_buffer.cpp ${Common_SOURCES})
 add_executable(tracker tracker.cpp tracked_object.cpp ${Common_SOURCES})
 add_executable(nims nims.cpp task.cpp ${Common_SOURCES})
