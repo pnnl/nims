@@ -16,6 +16,7 @@
 
 #include <string>
 #include <boost/filesystem.hpp>
+#include <fstream>
 
 namespace fs = boost::filesystem;
 
@@ -55,6 +56,7 @@ Notes:
 */
 struct AmpM3Params {
   std::string datadir; // path for files to process
+  std::string file; // specific file to process
 };
 
 class DataSourceAMP_M3 : public DataSource {
@@ -72,6 +74,9 @@ private:
     bool files_;
     fs::path dir_path_;
     std::vector<fs::path> file_list_;
+    std::ifstream header_;
+    std::ifstream beamlist_;
+    std::ifstream intensity_;
 
 }; // DataSourceM3
 

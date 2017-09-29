@@ -38,8 +38,8 @@ TRACKER_NAME: nims_tracker
 TRACKER_SOCKET_NAME: nims_tracker_socket
 
 # Define the type of sonar device connected to the system.
-# 1 = M3, 2 = BlueView, 3 = EK60
-SONAR_TYPE: 1
+# 1 = M3, 2 = BlueView, 3 = EK60, 4 = AMP-M3
+SONAR_TYPE: 4
 
 # Used for M3, BlueView and EK60
 SONAR_HOST_ADDR: 127.0.0.1 # m3sim
@@ -69,6 +69,13 @@ SONAR_EK60:
   along_beamwidth: 6.78
   athwart_beamwidth: 6.83
   ping_rate_hz: 1
+
+SONAR_AMP-M3:
+  # Process files instead of live instrument stream
+  # Path to root of data tree
+  directory: ../data/AMP/2017_02_04/2017_02_04 01_05_51/m3/
+  # Specific file to process (file is named with UTC of acquisition)
+  file: 1486199133.612
 
 # Used by nims.py
 WEB_SERVER_PORT: 8080

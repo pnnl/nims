@@ -222,12 +222,12 @@ int DataSourceAMP_M3::connect()
     header_path /= "Header";
     fs::path beam_path = dir_path_;
     beam_path /= "BeaamList";
-    fs::path intensity_path_ = dir_path_;
-    intensity_path_ /= "Intensity";
+    fs::path intensity_path = dir_path_;
+    intensity_path /= "Intensity";
 
     file_list_.clear();
     fs::directory_iterator end_itr;
-     for (fs::directory_iterator it(intensity_path_); it != end_itr; ++it)
+     for (fs::directory_iterator it(intensity_path); it != end_itr; ++it)
      {
         if ( fs::is_regular_file(*it) && it->path().extension() == ".txt" )
             file_list_.push_back(it->path());
@@ -241,7 +241,7 @@ int DataSourceAMP_M3::connect()
 
     if (file_list_.size() == 0)
     {
-        NIMS_LOG_ERROR << "Error no data files found " << intensity_path_;
+        NIMS_LOG_ERROR << "Error no data files found " << intensity_path;
         return -1;
     }
     for (int i = 0; i < file_list_.size(); ++i)
@@ -264,6 +264,34 @@ int DataSourceAMP_M3::connect()
     // For now, we'll assume new format.
     string header_format;
     getline(header_format_file, header_format);
+
+    // open the data files
+    fs::path header_file = header_path;
+    header_file /= file_name;
+    header_.open(header_file.string());
+    if ( !header_.good() )
+    {
+         NIMS_LOG_ERROR << "Error reading header file " << header_file;
+        return -1;
+    }
+   
+    fs::path beamlist_file = beam_path;
+    beamlist_file /= file_name;
+    beamlist_.open(beamlist_file.string());
+    if ( !beamlist_.good() )
+    {
+         NIMS_LOG_ERROR << "Error reading beam list file " << beamlist_file;
+        return -1;
+    }
+   
+    fs::path intensity_file = intensity_path;
+    intensity_file /= file_name;
+    intensity_.open(header_file.string());
+    if ( !intensity_.good() )
+    {
+         NIMS_LOG_ERROR << "Error reading header file " << intensity_file;
+        return -1;
+    }
 
     input_ == 1;
     return 0;

@@ -21,6 +21,7 @@
 #include "data_source_m3.h"
 #include "data_source_blueview.h"
 #include "data_source_ek60.h"
+#include "data_source_amp-m3.h"
 #include "frame_buffer.h"
 #include "nims_ipc.h" 
 #include "log.h"
@@ -36,6 +37,7 @@ namespace fs = boost::filesystem;
 #define NIMS_SONAR_M3 1
 #define NIMS_SONAR_BLUEVIEW 2
 #define NIMS_SONAR_EK60 3
+#define NIMS_SONAR_AMP_M3 4
 
 
 int main (int argc, char * argv[]) {
@@ -54,7 +56,8 @@ int main (int argc, char * argv[]) {
 	string sonar_host_addr;
   // TODO: make this virtual, like source
   EK60Params ek60_params; // EK60 parameters
-BlueViewParams bv_params; // BlueView data directory
+  BlueViewParams bv_params; // BlueView data directory
+  AmpM3Params amp_m3_params;
 	string fb_name;
     try 
     {
@@ -94,6 +97,13 @@ BlueViewParams bv_params; // BlueView data directory
           ek60_params.ping_rate_hz = params["ping_rate_hz"].as<int>();
            NIMS_LOG_DEBUG << "ping_rate_hz: " << ek60_params.ping_rate_hz;
        }
+        if (sonar_type == NIMS_SONAR_AMP_M3)
+        {
+          YAML::Node params = config["SONAR_AMP-M3"];
+          amp_m3_params.datadir = params["directory"].as<string>();
+          amp_m3_params.file = params["file"].as<string>();
+        }
+
         fb_name = config["FRAMEBUFFER_NAME"].as<string>();
         NIMS_LOG_DEBUG << "FRAMEBUFFER_NAME: " << fb_name;
      }
@@ -133,6 +143,12 @@ BlueViewParams bv_params; // BlueView data directory
             NIMS_LOG_DEBUG << "opening EK60 sonar as datasource";
             input = new DataSourceEK60(sonar_host_addr, ek60_params);
             break;
+
+      case NIMS_SONAR_AMP_M3 :
+            NIMS_LOG_DEBUG << "opening AMP M3 sonar as datasource";
+            input = new DataSourceAMP_M3(amp_m3_params);
+            break;
+
        default :
              NIMS_LOG_ERROR << "unknown sonar type: " << sonar_type;
              return -1;
